@@ -232,6 +232,13 @@
   }
 
 
+  /* ── Fila seleccionada en Despachos/Pendientes ── */
+  tr.desp-selected td { background: rgba(0,229,255,.08) !important; box-shadow: inset 3px 0 0 var(--accent); }
+  tr.pend-selected td { background: rgba(255,215,0,.08) !important; box-shadow: inset 3px 0 0 var(--gold); }
+  tr.bod-selected  td { background: rgba(255,62,154,.08) !important; box-shadow: inset 3px 0 0 var(--pink); }
+  .accion-bar { display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 16px; }
+  .accion-bar .btn:disabled { opacity:.45; cursor:default !important; }
+
   /* ── Tabla herrajes pendientes en bloque pendientes ── */
   #pendHerrBody tr:nth-child(even){background:#0d1526;}
   #pendHerrBody tr:nth-child(odd){background:var(--card);}
@@ -377,7 +384,132 @@
   .notif-item .ni-sub{color:var(--sub);font-size:10px;}
   .notif-empty{padding:20px;text-align:center;color:var(--sub);font-size:11px;}
 </style>
-</head>
+
+<!-- ═══════════════════════════════════════════════════
+     LOGISTICS REDESIGN — STYLES
+═══════════════════════════════════════════════════ -->
+<style>
+/* Full-screen wrapper when module is active */
+#moduloLogistica {
+  position: fixed; inset: 0; overflow: hidden;
+  background: #080912; z-index: 10; display: none;
+}
+/* Root flex layout */
+.lm-root { display: flex; width: 100%; height: 100%; overflow: hidden; }
+
+/* ── Icon Sidebar ── */
+.lm-sidebar {
+  width: 48px; background: #060810; border-right: 1px solid #141e30;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 12px 0; gap: 4px; flex-shrink: 0;
+}
+.lm-sico {
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all .15s; color: #283650; font-size: 14px;
+}
+.lm-sico.active { background: #0b2035; color: #00c8ff; }
+.lm-sico:hover:not(.active) { background: #0d1526; color: #4b6080; }
+.lm-sdiv { width: 24px; height: 1px; background: #141e30; margin: 5px 0; }
+
+/* ── Main column ── */
+.lm-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+/* ── Topbar ── */
+.lm-topbar {
+  height: 46px; background: #07090f; border-bottom: 1px solid #141e30;
+  display: flex; align-items: center; padding: 0 16px; gap: 10px; flex-shrink: 0;
+}
+.lm-crumb {
+  color: #283650; font-size: 10px; font-family: 'Space Mono', monospace;
+  letter-spacing: 1.5px; text-transform: uppercase; white-space: nowrap;
+}
+.lm-crumb strong { color: #00c8ff; font-weight: 700; }
+.lm-topbar-r { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.lm-tbtn {
+  height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid #1c2a3e;
+  background: transparent; color: #4b6080; font-size: 10px;
+  font-family: 'Space Mono', monospace; cursor: pointer;
+  display: flex; align-items: center; gap: 5px; letter-spacing: .5px;
+  transition: all .15s; white-space: nowrap;
+}
+.lm-tbtn:hover { border-color: #2d3f5a; color: #8a9ab5; }
+.lm-tbtn.primary { border-color: rgba(0,200,255,.3); color: #00c8ff; background: rgba(0,200,255,.06); }
+.lm-tbtn.primary:hover { background: rgba(0,200,255,.12); }
+.lm-tbtn.ghost { border-color: transparent; color: #283650; }
+.lm-tbtn.ghost:hover { color: #4b6080; }
+/* Firebase status pill */
+.lm-fbpill {
+  display: flex; align-items: center; gap: 5px; padding: 0 9px; height: 22px;
+  border-radius: 20px; background: #0a0e1a; border: 1px solid #141e30;
+}
+.lm-fbpill-dot {
+  width: 5px; height: 5px; border-radius: 50%; background: #283650;
+  transition: background .3s; flex-shrink: 0;
+}
+.lm-fbpill-dot.on  { background: #a8ff3e; box-shadow: 0 0 5px #a8ff3e44; }
+.lm-fbpill-dot.off { background: #ff6b35; box-shadow: 0 0 5px #ff6b3544; animation: pulse-dot 1.5s infinite; }
+.lm-fbpill-txt { font-size: 9px; font-family: 'Space Mono', monospace; letter-spacing: .8px; color: #283650; }
+
+/* ── Body row ── */
+.lm-body { flex: 1; display: flex; overflow: hidden; }
+
+/* ── Nav panel ── */
+.lm-nav {
+  width: 168px; background: #060810; border-right: 1px solid #141e30;
+  padding: 12px 8px; flex-shrink: 0; display: flex; flex-direction: column;
+  gap: 1px; overflow-y: auto;
+}
+.lm-nav::-webkit-scrollbar { width: 3px; }
+.lm-nav::-webkit-scrollbar-thumb { background: #141e30; border-radius: 3px; }
+.lm-nav-lbl {
+  color: #1e2d44; font-size: 9px; font-family: 'Space Mono', monospace;
+  letter-spacing: 2px; text-transform: uppercase; padding: 12px 8px 5px; margin-top: 2px;
+}
+.lm-nav-lbl:first-child { margin-top: 0; }
+/* nav items — also carry class "tab" for showTab() compatibility */
+.lm-nitem {
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+  border-radius: 7px; cursor: pointer; color: #3d5270; font-size: 11px;
+  font-family: 'Space Mono', monospace; transition: all .12s;
+  border: none; background: transparent; width: 100%; text-align: left;
+  letter-spacing: .2px; position: relative;
+}
+.lm-nitem:hover:not(.active) { background: #0b1424; color: #7a90a8; }
+.lm-nitem.active { background: rgba(0,200,255,.08); color: #00c8ff; }
+.lm-nitem .ni { font-size: 11px; flex-shrink: 0; width: 13px; opacity: .7; }
+.lm-ndot { width: 4px; height: 4px; border-radius: 50%; margin-left: auto; flex-shrink: 0; }
+.lm-ndot.w { background: #ff6b35; }
+.lm-ndot.ok { background: #a8ff3e; }
+
+/* ── Content area ── */
+.lm-content {
+  flex: 1; padding: 16px 18px; overflow-y: auto;
+  background: #080912; display: flex; flex-direction: column; gap: 0;
+}
+.lm-content::-webkit-scrollbar { width: 4px; }
+.lm-content::-webkit-scrollbar-thumb { background: #141e30; border-radius: 4px; }
+
+/* ── KPI enhancements ── */
+.kpi { position: relative; }
+.kpi-bar { height: 2px; border-radius: 2px; background: #141e30; margin-top: 10px; }
+.kpi-bar-fill { height: 2px; border-radius: 2px; transition: width .6s ease; }
+.kpi.c1 .kpi-bar-fill { background: var(--accent); }
+.kpi.c2 .kpi-bar-fill { background: var(--accent2); }
+.kpi.c3 .kpi-bar-fill { background: var(--gold); }
+.kpi.c4 .kpi-bar-fill { background: var(--pink); }
+.kpi.c5 .kpi-bar-fill { background: var(--accent3); }
+.kpi-badge-change {
+  position: absolute; top: 11px; right: 11px; font-size: 9px;
+  padding: 2px 6px; border-radius: 20px; font-family: 'Space Mono', monospace; font-weight: 700;
+}
+.kpi-badge-change.up   { background: rgba(168,255,62,.1); color: var(--accent3); }
+.kpi-badge-change.down { background: rgba(255,107,53,.1); color: var(--accent2); }
+
+/* ── Responsive ── */
+@media (max-width: 800px) { .lm-sidebar { display: none; } .lm-nav { width: 130px; } }
+@media (max-width: 540px) { .lm-nav { display: none; } .lm-content { padding: 10px 12px; } }
+</style>
 <body>
 <!-- ═══════════════════════════════════════════════════
      SPLASH SCREEN — PORTADA
@@ -495,33 +627,71 @@
 <div class="toast" id="toast" style="border-color: var(--accent); color: var(--accent);">✓ PDF listo — presiona Ctrl+P para imprimir o guardar</div>
 
 <div id="moduloLogistica" style="display:none;">
-<div class="header">
-  <div class="header-left">
-    <div class="accent-bar"></div>
-    <div>
-      <h1>PANEL DE CONTROL — DESPACHOS</h1>
-      <div class="subtitle">EDITABLE · CONTROL OPERACIONAL · SEMANA ACTIVA</div>
+<div class="lm-root">
+
+  <!-- ── Icon Sidebar ── -->
+  <div class="lm-sidebar">
+    <div class="lm-sico active" title="Logística">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="4" width="9" height="7" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M10 6.5h2.2l2 2.5V11h-4.2V6.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="4" cy="12.5" r="1.4" stroke="currentColor" stroke-width="1.2"/><circle cx="12.5" cy="12.5" r="1.4" stroke="currentColor" stroke-width="1.2"/></svg>
+    </div>
+    <div class="lm-sico" title="Producción" onclick="volverPortada()">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="2.5" stroke="currentColor" stroke-width="1.3"/><path d="M7.5 1v1.5M7.5 12.5V14M1 7.5h1.5M12.5 7.5H14M2.9 2.9l1.1 1.1M11 11l1.1 1.1M11 2.9l-1.1 1.1M2.9 11l1.1 1.1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+    </div>
+    <div class="lm-sico" title="Operaciones" onclick="volverPortada()">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="1" width="5.5" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.3"/><rect x="8.5" y="1" width="5.5" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.3"/><rect x="1" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.3"/><rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.3"/></svg>
+    </div>
+    <div class="lm-sdiv"></div>
+    <div class="lm-sico" title="Inicio" onclick="volverPortada()" style="margin-top:auto;">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1.5 6.5L7.5 1.5L13.5 6.5V13.5H9.5V9.5H5.5V13.5H1.5V6.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
     </div>
   </div>
-  <!-- BOTÓN VOLVER A PORTADA -->
-  <button onclick="volverPortada()" title="Volver a inicio" style="background:transparent;border:1px solid #2a2a2a;border-radius:10px;padding:8px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .25s;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:1px;color:#4b5563;flex-shrink:0;"
-    onmouseover="this.style.borderColor='#f0ece4';this.style.color='#f0ece4';"
-    onmouseout="this.style.borderColor='#2a2a2a';this.style.color='#4b5563';">
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1L1 7L7 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><line x1="1" y1="7" x2="13" y2="7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-    INICIO
-  </button>
-  <div class="tabs">
-    <button class="tab" onclick="showTab('overview',this)">📊 Resumen</button>
-    <button class="tab" onclick="showTab('detalle',this)">📋 Detalle</button>
-    <button class="tab" onclick="showTab('semana',this)" style="border-color:var(--accent3);color:var(--accent3);">📅 Semana Actual</button>
-    <button class="tab" onclick="showTab('pendientes',this)">⏳ Pendientes</button>
-    <button class="tab" onclick="showTab('bodega',this)" style="border-color:var(--pink);color:var(--pink);">📦 Bodega</button>
-    <button class="tab" onclick="showTab('notas',this)" style="border-color:var(--gold);color:var(--gold);">📝 Notas</button>
-    <button class="tab" onclick="showTab('reporte',this)" style="border-color:var(--accent3);color:var(--accent3);">📑 Reporte</button>
-    <button class="tab solo-editor active" onclick="showTab('editor',this)" style="border-color:var(--pink);color:var(--pink);">✏️ Editor</button>
-    <button class="tab solo-editor" onclick="showTab('gestion_herrajes',this)" style="border-color:var(--gold);color:var(--gold);">🔩 Herrajes</button>
-  </div>
-</div>
+
+  <!-- ── Main ── -->
+  <div class="lm-main">
+
+    <!-- ── Topbar ── -->
+    <div class="lm-topbar">
+      <div class="lm-crumb">DESPACHOS / <strong>LOGÍSTICA</strong></div>
+      <div class="lm-topbar-r">
+        <!-- Firebase status -->
+        <div class="lm-fbpill">
+          <div class="lm-fbpill-dot" id="lmFbDot"></div>
+          <span class="lm-fbpill-txt" id="lmFbTxt">CONECTANDO</span>
+        </div>
+        <button class="lm-tbtn" id="lmBtnPdf" onclick="exportarPDF(window._lmActiveTab||'overview')">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1" width="7" height="9" rx="1" stroke="currentColor" stroke-width="1.2"/><path d="M3.5 4h4M3.5 6h4M3.5 8h2" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
+          PDF
+        </button>
+        <button class="lm-tbtn primary" id="lmBtnEditor" onclick="lmShowTab('editor')" style="display:none">✏ Editor</button>
+        <button class="lm-tbtn ghost" onclick="volverPortada()">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M5 1L1 5.5L5 10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><line x1="1" y1="5.5" x2="10" y2="5.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          INICIO
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Body ── -->
+    <div class="lm-body">
+
+      <!-- ── Nav ── -->
+      <nav class="lm-nav" id="lmNav">
+        <div class="lm-nav-lbl">VISTAS</div>
+        <button class="tab lm-nitem" id="lmtab-overview"    onclick="lmShowTab('overview')">   <span class="ni">◈</span> Resumen</button>
+        <button class="tab lm-nitem" id="lmtab-detalle"     onclick="lmShowTab('detalle')">    <span class="ni">≡</span> Despachos <div class="lm-ndot ok"></div></button>
+        <button class="tab lm-nitem" id="lmtab-semana"      onclick="lmShowTab('semana')">     <span class="ni">◷</span> Semana</button>
+        <div class="lm-nav-lbl">GESTIÓN</div>
+        <button class="tab lm-nitem" id="lmtab-pendientes"  onclick="lmShowTab('pendientes')"> <span class="ni">⏳</span> Pendientes <div class="lm-ndot w"></div></button>
+        <button class="tab lm-nitem" id="lmtab-bodega"      onclick="lmShowTab('bodega')">     <span class="ni">▣</span> Bodega <div class="lm-ndot w"></div></button>
+        <button class="tab lm-nitem" id="lmtab-gestion_herrajes" onclick="lmShowTab('gestion_herrajes')"><span class="ni">⬡</span> Herrajes</button>
+        <button class="tab lm-nitem" id="lmtab-notas"       onclick="lmShowTab('notas')">      <span class="ni">◎</span> Notas</button>
+        <div class="lm-nav-lbl">REPORTES</div>
+        <button class="tab lm-nitem" id="lmtab-reporte"     onclick="lmShowTab('reporte')">    <span class="ni">◑</span> Reporte</button>
+        <div class="lm-nav-lbl">ADMIN</div>
+        <button class="tab lm-nitem solo-editor" id="lmtab-editor" onclick="lmShowTab('editor')" style="display:none"><span class="ni">✏</span> Editor</button>
+      </nav>
+
+      <!-- ── Content ── -->
+      <div class="lm-content" id="lmContent">
 
 <!-- BANNER MODO LECTURA -->
 <div class="lectura-banner">
@@ -531,6 +701,7 @@
     <div style="color:var(--sub);font-size:10px;margin-top:2px;">Estás viendo este dashboard en modo lectura. No puedes editar ni agregar datos.</div>
   </div>
 </div>
+
 
 <!-- OVERVIEW -->
 <div id="overview" class="section">
@@ -552,23 +723,31 @@
   </div>
 
   <div class="kpi-grid">
-    <div class="kpi c1"><div class="kpi-label">🚚 Despachos Totales</div><div class="kpi-value" id="k1">102</div><div class="kpi-sub">Envio Completo</div></div>
-    <div class="kpi c2"><div class="kpi-label">🔧 Pendientes Semana</div><div class="kpi-value" id="k2">17</div><div class="kpi-sub">Total registros</div></div>
-    <div class="kpi c3"><div class="kpi-label">⚙️ En Proceso</div><div class="kpi-value" id="k3">8</div><div class="kpi-sub">Requieren atención</div></div>
-    <div class="kpi c4"><div class="kpi-label">📦 Bloqueados Bodega</div><div class="kpi-value" id="k4">6</div><div class="kpi-sub">Área no lista</div></div>
-    <div class="kpi c5"><div class="kpi-label">📅 Días con Despacho</div><div class="kpi-value" id="k5">26</div><div class="kpi-sub">Fechas únicas</div></div>
+    <div class="kpi c1"><span class="kpi-badge-change up" id="kch1"></span><div class="kpi-label">DESPACHOS TOTALES</div><div class="kpi-value" id="k1">102</div><div class="kpi-sub">Envío completo</div><div class="kpi-bar"><div class="kpi-bar-fill" id="kbar1" style="width:100%"></div></div></div>
+    <div class="kpi c2"><div class="kpi-label">PENDIENTES SEMANA</div><div class="kpi-value" id="k2">17</div><div class="kpi-sub">Total registros</div><div class="kpi-bar"><div class="kpi-bar-fill" id="kbar2" style="width:0%"></div></div></div>
+    <div class="kpi c3"><div class="kpi-label">EN PROCESO</div><div class="kpi-value" id="k3">8</div><div class="kpi-sub">Requieren atención</div><div class="kpi-bar"><div class="kpi-bar-fill" id="kbar3" style="width:0%"></div></div></div>
+    <div class="kpi c4"><div class="kpi-label">BLOQUEADOS BODEGA</div><div class="kpi-value" id="k4">6</div><div class="kpi-sub">Área no lista</div><div class="kpi-bar"><div class="kpi-bar-fill" id="kbar4" style="width:0%"></div></div></div>
+    <div class="kpi c5"><div class="kpi-label">DÍAS CON DESPACHO</div><div class="kpi-value" id="k5">26</div><div class="kpi-sub">Fechas únicas</div><div class="kpi-bar"><div class="kpi-bar-fill" id="kbar5" style="width:0%"></div></div></div>
   </div>
   <div class="charts-grid">
-    <div class="chart-card"><div class="chart-title">Distribución por Ciudad</div><canvas id="chartCiudad" height="610" style="box-sizing: border-box; display: block; height: 610px; width: 610px;" width="610"></canvas></div>
-    <div class="chart-card"><div class="chart-title">Despachos por Área</div><canvas id="chartArea" height="640" style="box-sizing: border-box; display: block; height: 640px; width: 610px;" width="610"></canvas></div>
-    <div class="chart-card"><div class="chart-title">Top Instaladores</div><canvas id="chartInst" height="330" style="box-sizing: border-box; display: block; height: 330px; width: 610px;" width="610"></canvas></div>
-    <div class="chart-card"><div class="chart-title">Despachos por Fecha</div><canvas id="chartFecha" height="360" style="box-sizing: border-box; display: block; height: 360px; width: 610px;" width="610"></canvas></div>
+    <div class="chart-card"><div class="chart-title">Distribución por Ciudad</div><canvas id="chartCiudad"></canvas></div>
+    <div class="chart-card" style="display:flex;flex-direction:column;"><div class="chart-title">Despachos por Área</div><canvas id="chartArea" style="max-height:220px;"></canvas></div>
+    <div class="chart-card"><div class="chart-title">Top Instaladores</div><canvas id="chartInst"></canvas></div>
+    <div class="chart-card"><div class="chart-title">Despachos por Fecha</div><canvas id="chartFecha"></canvas></div>
     <div class="chart-card full"><div class="chart-title">Top Clientes por Partidas Despachadas</div><canvas id="chartClientes"></canvas></div>
   </div>
 </div>
 
-<!-- DETALLE -->
+<!-- DETALLE / DESPACHOS -->
 <div id="detalle" class="section">
+  <!-- BARRA DE ACCIONES -->
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 16px;">
+    <button class="btn btn-add" onclick="openModal('desp')" style="display:flex;align-items:center;gap:5px;">
+      <svg width="11" height="11" viewBox="0 0 11 11"><line x1="5.5" y1="1" x2="5.5" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="1" y1="5.5" x2="10" y2="5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      Nuevo Despacho
+    </button>
+    <span style="color:var(--sub);font-size:10px;letter-spacing:.5px;">Clic → ver herrajes &nbsp;·&nbsp; Clic derecho → editar / eliminar</span>
+  </div>
   <!-- FILA 1: Modo de filtro (igual que Resumen) -->
   <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 18px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
     <span style="color:var(--muted);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;white-space:nowrap;">📋 VER:</span>
@@ -618,6 +797,15 @@
       <button onclick="exportarSemanaExcel()" style="background:rgba(168,255,62,.12);color:var(--accent3);border:1px solid var(--accent3);padding:8px 14px;border-radius:8px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:.5px;">⬇️ Exportar Excel</button>
       <button onclick="exportarSemanaPDF()" style="background:rgba(255,107,53,.12);color:var(--accent2);border:1px solid var(--accent2);padding:8px 14px;border-radius:8px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:.5px;">📄 Exportar PDF</button>
     </div>
+  </div>
+  <!-- Filtro fechas semana -->
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <span style="color:var(--muted);font-size:10px;letter-spacing:1px;text-transform:uppercase;">📅 Ver periodo:</span>
+    <input type="date" id="semFiltDesde" style="background:#0d1526;border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:11px;padding:6px 10px;border-radius:8px;outline:none;" onchange="renderSemana()">
+    <span style="color:var(--sub);font-size:10px;">→</span>
+    <input type="date" id="semFiltHasta" style="background:#0d1526;border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:11px;padding:6px 10px;border-radius:8px;outline:none;" onchange="renderSemana()">
+    <button onclick="semFiltReset()" style="background:rgba(0,229,255,.1);color:var(--accent);border:1px solid var(--accent);padding:6px 12px;border-radius:8px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:.5px;">↺ Semana actual</button>
+    <span id="semFiltLabel" style="color:var(--sub);font-size:10px;margin-left:auto;"></span>
   </div>
   <!-- KPIs semana -->
   <div class="kpi-grid" style="margin-bottom:14px;">
@@ -690,6 +878,26 @@
 
 <!-- PENDIENTES -->
 <div id="pendientes" class="section">
+  <!-- BARRA DE ACCIONES PENDIENTES -->
+  <div class="accion-bar">
+    <button class="btn btn-add" onclick="openModal('pend')" style="display:flex;align-items:center;gap:5px;">
+      <svg width="11" height="11" viewBox="0 0 11 11"><line x1="5.5" y1="1" x2="5.5" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="1" y1="5.5" x2="10" y2="5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      Nuevo Pendiente
+    </button>
+    <button id="btnPendEditar" class="btn" onclick="editPendCtx()" disabled style="background:transparent;color:var(--muted);border:1px solid var(--border);display:flex;align-items:center;gap:5px;cursor:default;">
+      <svg width="11" height="11" viewBox="0 0 11 11"><path d="M1 8.5L2.5 10L9 3.5L7.5 2L1 8.5Z" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linejoin="round"/><line x1="6" y1="3" x2="8" y2="5" stroke="currentColor" stroke-width="1.2"/></svg>
+      Editar
+    </button>
+    <button id="btnPendEliminar" class="btn" onclick="deletePendCtx()" disabled style="background:transparent;color:var(--muted);border:1px solid var(--border);display:flex;align-items:center;gap:5px;cursor:default;">
+      <svg width="11" height="11" viewBox="0 0 11 11"><line x1="1" y1="1" x2="10" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="10" y1="1" x2="1" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      Eliminar
+    </button>
+    <button id="btnPendEntregar" class="btn" onclick="entregarHerrCtx()" disabled style="background:transparent;color:var(--muted);border:1px solid var(--border);display:flex;align-items:center;gap:5px;cursor:default;">
+      <svg width="11" height="11" viewBox="0 0 11 11"><path d="M1 6L4 9L10 2" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Entregar Herrajes
+    </button>
+    <span id="pendSelInfo" style="color:var(--sub);font-size:10px;margin-left:4px;"></span>
+  </div>
   <div class="chart-card" style="margin-bottom:14px;">
     <div class="pend-header" style="margin-bottom:12px;">
       <div class="pend-title">🔧 PENDIENTES DE SEMANA <span id="ps-count" style="color:var(--accent2)">(17)</span></div>
@@ -752,6 +960,22 @@
 
 <!-- BODEGA -->
 <div id="bodega" class="section">
+  <!-- BARRA DE ACCIONES BODEGA -->
+  <div class="accion-bar">
+    <button class="btn btn-add" onclick="openModal('bodega')" style="display:flex;align-items:center;gap:5px;">
+      <svg width="11" height="11" viewBox="0 0 11 11"><line x1="5.5" y1="1" x2="5.5" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="1" y1="5.5" x2="10" y2="5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      Nueva Bodega
+    </button>
+    <button id="btnBodEditar" class="btn" onclick="editBodCtx()" disabled style="background:transparent;color:var(--muted);border:1px solid var(--border);display:flex;align-items:center;gap:5px;cursor:default;">
+      <svg width="11" height="11" viewBox="0 0 11 11"><path d="M1 8.5L2.5 10L9 3.5L7.5 2L1 8.5Z" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linejoin="round"/><line x1="6" y1="3" x2="8" y2="5" stroke="currentColor" stroke-width="1.2"/></svg>
+      Editar
+    </button>
+    <button id="btnBodEliminar" class="btn" onclick="deleteBodCtx()" disabled style="background:transparent;color:var(--muted);border:1px solid var(--border);display:flex;align-items:center;gap:5px;cursor:default;">
+      <svg width="11" height="11" viewBox="0 0 11 11"><line x1="1" y1="1" x2="10" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="10" y1="1" x2="1" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      Eliminar
+    </button>
+    <span id="bodSelInfo" style="color:var(--sub);font-size:10px;margin-left:4px;"></span>
+  </div>
   <div class="chart-card" style="border-color:rgba(255,62,154,.3);">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
       <div>
@@ -1079,7 +1303,44 @@
   </div>
 </div>
 
-</div><!-- fin moduloLogistica -->
+      </div><!-- /lm-content -->
+    </div><!-- /lm-body -->
+  </div><!-- /lm-main -->
+</div><!-- /lm-root -->
+
+<!-- ── Menú contextual clic derecho — Despachos ── -->
+<div id="despContextMenu" style="
+  display:none;position:fixed;z-index:9000;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:12px;padding:6px;min-width:180px;
+  box-shadow:0 8px 32px rgba(0,0,0,.55);
+  font-family:'Space Mono',monospace;font-size:11px;
+  animation:ctxFadeIn .12s ease;">
+  <div style="color:var(--sub);font-size:9px;letter-spacing:1.5px;padding:6px 10px 4px;text-transform:uppercase;border-bottom:1px solid var(--border);margin-bottom:4px;" id="despCtxLabel">DESPACHO</div>
+  <button id="despCtxEdit" onclick="despCtxAction('edit')" style="
+    display:flex;align-items:center;gap:9px;width:100%;background:transparent;
+    border:none;color:var(--accent);cursor:pointer;padding:9px 12px;border-radius:8px;
+    font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.5px;
+    transition:background .15s;">
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1 10L3 12L11 4L9 2L1 10Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><line x1="7.5" y1="3.5" x2="9.5" y2="5.5" stroke="currentColor" stroke-width="1.4"/></svg>
+    Editar despacho
+  </button>
+  <button id="despCtxDelete" onclick="despCtxAction('delete')" style="
+    display:flex;align-items:center;gap:9px;width:100%;background:transparent;
+    border:none;color:var(--pink);cursor:pointer;padding:9px 12px;border-radius:8px;
+    font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.5px;
+    transition:background .15s;">
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><polyline points="2,4 11,4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M4 4V10.5C4 11 4.5 11.5 5 11.5H8C8.5 11.5 9 11 9 10.5V4" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M5 4V2.5H8V4" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+    Eliminar despacho
+  </button>
+</div>
+
+<style>
+@keyframes ctxFadeIn{from{opacity:0;transform:scale(.95) translateY(-4px);}to{opacity:1;transform:scale(1) translateY(0);}}
+#despContextMenu button:hover{background:rgba(255,255,255,.06);}
+#despCtxEdit:hover{background:rgba(0,229,255,.1)!important;}
+#despCtxDelete:hover{background:rgba(255,62,154,.1)!important;}
+</style>
 <div id="moduloProduccion" style="display:none;">
   <!-- HEADER PRODUCCIÓN -->
   <div class="header" style="border-color:rgba(0,191,255,.3);">
@@ -4151,8 +4412,22 @@ function renderBodega(){
     g.innerHTML='<div style="text-align:center;padding:40px;color:var(--sub);font-size:11px;">Sin clientes en bodega actualmente</div>';
     return;
   }
-  DATA.bodega.forEach(p=>{
+  DATA.bodega.forEach((p,idx)=>{
     const d=document.createElement('div'); d.className='bodega-card';
+    d.style.cursor='pointer';
+    d.style.transition='all .15s';
+    d.onclick=function(){
+      document.querySelectorAll('.bodega-card').forEach(c=>{ c.style.outline='none'; c.style.boxShadow='none'; });
+      d.style.outline='2px solid var(--pink)';
+      d.style.boxShadow='0 0 0 3px rgba(255,62,154,.15)';
+      window._selectedBodIdx=idx;
+      const btnE=document.getElementById('btnBodEditar');
+      const btnD=document.getElementById('btnBodEliminar');
+      const info=document.getElementById('bodSelInfo');
+      if(btnE){btnE.disabled=false;btnE.style.color='var(--accent)';btnE.style.borderColor='var(--accent)';btnE.style.cursor='pointer';btnE.style.background='rgba(0,229,255,.12)';}
+      if(btnD){btnD.disabled=false;btnD.style.color='var(--pink)';btnD.style.borderColor='var(--pink)';btnD.style.cursor='pointer';btnD.style.background='rgba(255,62,154,.12)';}
+      if(info) info.textContent=p.cliente+' seleccionado';
+    };
     d.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start"><span style="color:#f9fafb;font-weight:700;font-size:13px">${p.cliente}</span><span class="badge b-block">BLOQUEADO</span></div><div style="color:#9ca3af;font-size:11px">📐 ${p.area}</div><div style="color:#6b7280;font-size:11px">🎨 ${p.color}</div><div style="color:var(--accent);font-size:10px">📍 ${p.ciudad}</div><div style="color:var(--pink);font-size:10px;margin-top:4px">⚠ ${p.motivo}</div>`;
     g.appendChild(d);
   });
@@ -4319,33 +4594,250 @@ function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];
 function renderCharts(){
   const desp=getFilteredDesp();
   updateKPIs();
-  const opts=()=>({plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#9ca3af',font:{family:'Space Mono',size:9}},grid:{color:'#1e2d40'}},y:{ticks:{color:'#9ca3af',font:{family:'Space Mono',size:10}},grid:{color:'#1e2d40'}}}});
 
+  // ── Paleta de la app ──
+  const A1='#00e5ff', A2='#ff6b35', A3='#a8ff3e', GOLD='#ffd700', PINK='#ff3e9a';
+  const PALETTE=[A1,A2,A3,GOLD,PINK,'#7c3aed','#06b6d4','#f59e0b','#10b981','#6366f1'];
+
+  // Opciones base silenciosas
+  const baseScaleOpts = (axisX=true) => ({
+    x: { display:axisX, ticks:{color:'#6b7280',font:{family:'Space Mono',size:9}}, grid:{color:'rgba(30,45,64,.6)'} },
+    y: { display:true, ticks:{color:'#6b7280',font:{family:'Space Mono',size:9}}, grid:{color:'rgba(30,45,64,.6)'} }
+  });
+
+  // ════════════════════════════════════════════════
+  // 1. DISTRIBUCIÓN POR CIUDAD — Barras horizontales
+  //    con valor embebido + gradiente
+  // ════════════════════════════════════════════════
   destroyChart('chartCiudad');
-  const cc={};desp.forEach(d=>{cc[d.ciudad]=(cc[d.ciudad]||0)+1;});
-  charts['chartCiudad']=new Chart(document.getElementById('chartCiudad'),{type:'doughnut',data:{labels:Object.keys(cc),datasets:[{data:Object.values(cc),backgroundColor:COLORS,borderWidth:2,borderColor:'#0a0e1a'}]},options:{plugins:{legend:{labels:{color:'#9ca3af',font:{family:'Space Mono',size:11}}}},cutout:'55%'}});
+  (()=>{
+    const cc={};desp.forEach(d=>{cc[d.ciudad]=(cc[d.ciudad]||0)+1;});
+    const sorted=Object.entries(cc).sort((a,b)=>b[1]-a[1]);
+    const labels=sorted.map(e=>e[0]);
+    const vals  =sorted.map(e=>e[1]);
+    const maxV  =Math.max(...vals,1);
+    const canvas=document.getElementById('chartCiudad');
+    const ctx=canvas.getContext('2d');
+    // Gradiente horizontal por barra (se aplica como array)
+    const grads=vals.map((_,i)=>{
+      const g=ctx.createLinearGradient(0,0,canvas.parentElement.clientWidth||300,0);
+      const c=PALETTE[i%PALETTE.length];
+      g.addColorStop(0,c+'cc');
+      g.addColorStop(1,c+'22');
+      return g;
+    });
+    charts['chartCiudad']=new Chart(canvas,{
+      type:'bar',
+      data:{labels,datasets:[{data:vals,backgroundColor:grads,borderRadius:8,borderSkipped:false}]},
+      options:{
+        indexAxis:'y',
+        animation:{duration:600,easing:'easeOutQuart'},
+        plugins:{
+          legend:{display:false},
+          tooltip:{enabled:false},
+          datalabels: undefined
+        },
+        scales:{
+          x:{display:false,max:maxV*1.35},
+          y:{ticks:{color:'#e5e7eb',font:{family:'Space Mono',size:11},padding:4},grid:{display:false},border:{display:false}}
+        },
+        layout:{padding:{right:10}},
+        // valor embebido via afterDraw
+        animation:{onComplete:function(){
+          const chart=this;
+          const ctx2=chart.ctx;
+          ctx2.save();
+          ctx2.font='700 11px Space Mono,monospace';
+          ctx2.fillStyle='#f9fafb';
+          ctx2.textBaseline='middle';
+          chart.data.datasets[0].data.forEach((val,i)=>{
+            const meta=chart.getDatasetMeta(0);
+            const bar=meta.data[i];
+            if(!bar) return;
+            const x=bar.x+8;
+            const y=bar.y;
+            ctx2.fillText(val+' despachos',x,y);
+          });
+          ctx2.restore();
+        }}
+      }
+    });
+  })();
 
-  destroyChart('chartArea');
-  const ac={};desp.forEach(d=>{const c=acat(d.area);ac[c]=(ac[c]||0)+1;});
-  const as=Object.entries(ac).sort((a,b)=>b[1]-a[1]);
-  charts['chartArea']=new Chart(document.getElementById('chartArea'),{type:'bar',data:{labels:as.map(e=>e[0]),datasets:[{data:as.map(e=>e[1]),backgroundColor:COLORS,borderRadius:6}]},options:{indexAxis:'y',...opts()}});
-
+  // ════════════════════════════════════════════════
+  // 2. TOP INSTALADORES — Barras horizontales con
+  //    avatar inicial + ranking numerado
+  // ════════════════════════════════════════════════
   destroyChart('chartInst');
-  const ic={};desp.filter(d=>d.instalador&&d.instalador!=='N/A'&&d.instalador!=='').forEach(d=>{ic[d.instalador]=(ic[d.instalador]||0)+1;});
-  const it=Object.entries(ic).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  charts['chartInst']=new Chart(document.getElementById('chartInst'),{type:'bar',data:{labels:it.map(e=>e[0].split(' ')[0]),datasets:[{data:it.map(e=>e[1]),backgroundColor:it.map((_,i)=>i===0?'#00e5ff':i===1?'#ff6b35':'#374151'),borderRadius:6}]},options:opts()});
+  (()=>{
+    const ic={};desp.filter(d=>d.instalador&&d.instalador!=='N/A'&&d.instalador!=='').forEach(d=>{ic[d.instalador]=(ic[d.instalador]||0)+1;});
+    const it=Object.entries(ic).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    const labels=it.map(e=>e[0]);
+    const vals  =it.map(e=>e[1]);
+    const maxV  =Math.max(...vals,1);
+    const RANK_COLORS=[GOLD,A1,A3,...PALETTE.slice(3)];
+    const canvas=document.getElementById('chartInst');
+    charts['chartInst']=new Chart(canvas,{
+      type:'bar',
+      data:{labels,datasets:[{
+        data:vals,
+        backgroundColor:RANK_COLORS.slice(0,vals.length).map(c=>c+'cc'),
+        borderRadius:8,borderSkipped:false
+      }]},
+      options:{
+        indexAxis:'y',
+        animation:{duration:700,easing:'easeOutExpo'},
+        plugins:{legend:{display:false},tooltip:{enabled:true,callbacks:{
+          label:(ctx)=>' '+ctx.parsed.x+' despachos'
+        }}},
+        scales:{
+          x:{display:false,max:maxV*1.4},
+          y:{ticks:{color:'#e5e7eb',font:{family:'Space Mono',size:10},padding:4},grid:{display:false},border:{display:false}}
+        },
+        animation:{onComplete:function(){
+          const chart=this;
+          const ctx2=chart.ctx;
+          ctx2.save();
+          chart.data.datasets[0].data.forEach((val,i)=>{
+            const meta=chart.getDatasetMeta(0);
+            const bar=meta.data[i];
+            if(!bar) return;
+            // Ranking badge (círculo numerado)
+            const rankX=bar.base-22;
+            const rankY=bar.y;
+            ctx2.fillStyle=RANK_COLORS[i%RANK_COLORS.length];
+            ctx2.beginPath();
+            ctx2.arc(rankX,rankY,10,0,Math.PI*2);
+            ctx2.fill();
+            ctx2.fillStyle='#0a0e1a';
+            ctx2.font='700 9px Space Mono,monospace';
+            ctx2.textAlign='center';
+            ctx2.textBaseline='middle';
+            ctx2.fillText(i+1,rankX,rankY);
+            // Valor al lado derecho
+            ctx2.fillStyle='#9ca3af';
+            ctx2.font='700 10px Space Mono,monospace';
+            ctx2.textAlign='left';
+            ctx2.fillText(val,bar.x+6,rankY);
+          });
+          ctx2.restore();
+        }}
+      }
+    });
+  })();
 
+  // ════════════════════════════════════════════════
+  // 3. DESPACHOS POR ÁREA — Donut con leyenda lateral
+  // ════════════════════════════════════════════════
+  destroyChart('chartArea');
+  (()=>{
+    const ac={};desp.forEach(d=>{const c=acat(d.area);ac[c]=(ac[c]||0)+1;});
+    const sorted=Object.entries(ac).sort((a,b)=>b[1]-a[1]);
+    const labels=sorted.map(e=>e[0]);
+    const vals  =sorted.map(e=>e[1]);
+    const bg    =PALETTE.slice(0,labels.length);
+    // Contenedor padre del canvas — necesitamos layout lateral
+    const card=document.getElementById('chartArea').closest('.chart-card');
+    card.style.display='flex';
+    card.style.flexDirection='column';
+    const canvas=document.getElementById('chartArea');
+    canvas.style.maxHeight='220px';
+    charts['chartArea']=new Chart(canvas,{
+      type:'doughnut',
+      data:{labels,datasets:[{data:vals,backgroundColor:bg.map(c=>c+'cc'),borderColor:'#0a0e1a',borderWidth:2,hoverOffset:8}]},
+      options:{
+        cutout:'62%',
+        animation:{duration:700,easing:'easeOutQuart'},
+        layout:{padding:8},
+        plugins:{
+          legend:{
+            display:true,
+            position:'right',
+            labels:{color:'#9ca3af',font:{family:'Space Mono',size:10},padding:10,usePointStyle:true,pointStyleWidth:10}
+          },
+          tooltip:{callbacks:{label:(ctx)=>` ${ctx.label}: ${ctx.parsed} (${Math.round(ctx.parsed/vals.reduce((a,b)=>a+b,0)*100)}%)`}}
+        }
+      }
+    });
+  })();
+
+  // ════════════════════════════════════════════════
+  // 4. DESPACHOS POR FECHA — Línea suavizada tension 0.4
+  //    área rellena semitransparente, puntos solo en hover
+  // ════════════════════════════════════════════════
   destroyChart('chartFecha');
-  const fc={};desp.forEach(d=>{if(d.fecha)fc[d.fecha]=(fc[d.fecha]||0)+1;});
-  const fs=Object.entries(fc).sort((a,b)=>toISO(a[0]).localeCompare(toISO(b[0])));
-  charts['chartFecha']=new Chart(document.getElementById('chartFecha'),{type:'line',data:{labels:fs.map(e=>disp(e[0])),datasets:[{data:fs.map(e=>e[1]),borderColor:'#a8ff3e',backgroundColor:'rgba(168,255,62,.1)',pointBackgroundColor:'#a8ff3e',pointRadius:4,tension:.3,fill:true}]},options:{plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#9ca3af',font:{family:'Space Mono',size:8},maxRotation:45},grid:{color:'#1e2d40'}},y:{ticks:{color:'#9ca3af',font:{family:'Space Mono',size:10}},grid:{color:'#1e2d40'}}}}});
+  (()=>{
+    const fc={};desp.forEach(d=>{if(d.fecha)fc[d.fecha]=(fc[d.fecha]||0)+1;});
+    const fs=Object.entries(fc).sort((a,b)=>toISO(a[0]).localeCompare(toISO(b[0])));
+    const canvas=document.getElementById('chartFecha');
+    const ctx=canvas.getContext('2d');
+    const grad=ctx.createLinearGradient(0,0,0,canvas.parentElement.clientHeight||200);
+    grad.addColorStop(0,'rgba(168,255,62,.35)');
+    grad.addColorStop(1,'rgba(168,255,62,.0)');
+    charts['chartFecha']=new Chart(canvas,{
+      type:'line',
+      data:{labels:fs.map(e=>disp(e[0])),datasets:[{
+        data:fs.map(e=>e[1]),
+        borderColor:A3,
+        backgroundColor:grad,
+        pointRadius:0,
+        pointHoverRadius:6,
+        pointHoverBackgroundColor:A3,
+        pointHoverBorderColor:'#0a0e1a',
+        pointHoverBorderWidth:2,
+        tension:0.4,
+        fill:true,
+        borderWidth:2
+      }]},
+      options:{
+        animation:{duration:800,easing:'easeOutQuart'},
+        interaction:{mode:'index',intersect:false},
+        plugins:{legend:{display:false},tooltip:{callbacks:{title:(items)=>items[0].label,label:(ctx)=>` ${ctx.parsed.y} despacho${ctx.parsed.y!==1?'s':''}`}}},
+        scales:{
+          x:{ticks:{color:'#6b7280',font:{family:'Space Mono',size:8},maxRotation:45,maxTicksLimit:10},grid:{color:'rgba(30,45,64,.6)'},border:{display:false}},
+          y:{ticks:{color:'#6b7280',font:{family:'Space Mono',size:9},stepSize:1},grid:{color:'rgba(30,45,64,.6)'},border:{display:false},beginAtZero:true}
+        }
+      }
+    });
+  })();
 
+  // ════════════════════════════════════════════════
+  // 5. TOP CLIENTES — Barras verticales con etiquetas
+  //    rotadas y gradiente por valor (más alto = más vivo)
+  // ════════════════════════════════════════════════
   destroyChart('chartClientes');
-  const clc={};desp.forEach(d=>{clc[d.cliente]=(clc[d.cliente]||0)+1;});
-  const ct=Object.entries(clc).sort((a,b)=>b[1]-a[1]).slice(0,12);
-  const cvs=document.getElementById('chartClientes');
-  cvs.style.height='200px';
-  charts['chartClientes']=new Chart(cvs,{type:'bar',data:{labels:ct.map(e=>e[0].length>16?e[0].slice(0,16)+'…':e[0]),datasets:[{data:ct.map(e=>e[1]),backgroundColor:COLORS.slice(0,ct.length),borderRadius:6}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#9ca3af',font:{family:'Space Mono',size:9},maxRotation:35},grid:{color:'#1e2d40'}},y:{ticks:{color:'#9ca3af',font:{family:'Space Mono',size:10},stepSize:1},grid:{color:'#1e2d40'},beginAtZero:true}}}});
+  (()=>{
+    const clc={};desp.forEach(d=>{clc[d.cliente]=(clc[d.cliente]||0)+1;});
+    const ct=Object.entries(clc).sort((a,b)=>b[1]-a[1]).slice(0,12);
+    const labels=ct.map(e=>e[0].length>16?e[0].slice(0,16)+'…':e[0]);
+    const vals  =ct.map(e=>e[1]);
+    const maxV  =Math.max(...vals,1);
+    const canvas=document.getElementById('chartClientes');
+    canvas.style.height='220px';
+    const ctx=canvas.getContext('2d');
+    // Gradiente por valor — alto=cian, bajo=naranja
+    const bgs=vals.map(v=>{
+      const ratio=v/maxV;
+      const g=ctx.createLinearGradient(0,0,0,220);
+      const top=ratio>.6?A1:ratio>.35?GOLD:A2;
+      g.addColorStop(0,top+'dd');
+      g.addColorStop(1,top+'33');
+      return g;
+    });
+    charts['chartClientes']=new Chart(canvas,{
+      type:'bar',
+      data:{labels,datasets:[{data:vals,backgroundColor:bgs,borderRadius:8,borderSkipped:false}]},
+      options:{
+        maintainAspectRatio:false,
+        animation:{duration:700,easing:'easeOutQuart'},
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>` ${ctx.parsed.y} despachos`}}},
+        scales:{
+          x:{ticks:{color:'#9ca3af',font:{family:'Space Mono',size:9},maxRotation:40},grid:{display:false},border:{display:false}},
+          y:{ticks:{color:'#6b7280',font:{family:'Space Mono',size:9},stepSize:1},grid:{color:'rgba(30,45,64,.6)'},border:{display:false},beginAtZero:true}
+        }
+      }
+    });
+  })();
 }
 function filterDetalle(){renderDetalle();}
 function setCityFilter(btn,city){cityFilter=city;document.querySelectorAll('.fbtn:not(#monthBtns .fbtn)').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderDetalle();}
@@ -4363,7 +4855,18 @@ function renderDetalle(){
     if(hasPend) tr.className='row-herrpend';
     const pendBadge=hasPend?'<span class="hp-badge">⏳ H.Pend</span>':'';
     const realIdx2=DATA.desp.indexOf(d);
-    if(hasPend){tr.style.cursor='pointer';tr.title='Clic para ver herrajes pendientes';tr.onclick=()=>verHerrajesPendiente(realIdx2);}
+    tr.style.cursor='pointer';
+    tr.dataset.realIdx=realIdx2;
+    // Clic izquierdo → comportamiento original (ver herrajes)
+    tr.onclick=function(e){
+      if(hasPend) verHerrajesPendiente(realIdx2);
+      else verHerrajesCliente(realIdx2);
+    };
+    // Clic derecho → menú contextual editar/eliminar
+    tr.oncontextmenu=function(e){
+      e.preventDefault();
+      showDespContextMenu(e, realIdx2);
+    };
     tr.innerHTML=`<td style="color:var(--accent);font-weight:700;white-space:nowrap">${disp(d.fecha)}</td><td>${d.cliente}${pendBadge}</td><td style="color:#9ca3af">${d.area}</td><td style="color:#6b7280;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.color||'—'}</td><td style="color:#9ca3af">${d.instalador||'—'}</td><td>${cityBadge(d.ciudad)}</td><td style="color:#6b7280;font-size:10px">${d.tipo}</td><td><span class="badge b-ok">✓ ${d.estado}</span></td>`;
     tb.appendChild(tr);
   });
@@ -4434,10 +4937,25 @@ function renderPendientes(){
   if(lbl) lbl.textContent=`${filtered.length} registro${filtered.length!==1?'s':''} · ${lblTxt}`;
 
   const tb=document.getElementById('pendSemBody');tb.innerHTML='';
-  filtered.forEach(p=>{
+  filtered.forEach((p,visIdx)=>{
     const isHoy=toISO(p.fecha)===todayISO;
+    const realPendIdx=DATA.pend.indexOf(p);
     const tr=document.createElement('tr');
     if(isHoy) tr.classList.add('pend-hoy');
+    tr.style.cursor='pointer';
+    tr.onclick=function(){
+      document.querySelectorAll('#pendSemBody tr').forEach(r=>r.classList.remove('pend-selected'));
+      tr.classList.add('pend-selected');
+      window._selectedPendIdx=realPendIdx;
+      const btnE=document.getElementById('btnPendEditar');
+      const btnD=document.getElementById('btnPendEliminar');
+      const btnH=document.getElementById('btnPendEntregar');
+      const info=document.getElementById('pendSelInfo');
+      if(btnE){btnE.disabled=false;btnE.style.color='var(--accent)';btnE.style.borderColor='var(--accent)';btnE.style.cursor='pointer';btnE.style.background='rgba(0,229,255,.12)';}
+      if(btnD){btnD.disabled=false;btnD.style.color='var(--pink)';btnD.style.borderColor='var(--pink)';btnD.style.cursor='pointer';btnD.style.background='rgba(255,62,154,.12)';}
+      if(btnH){btnH.disabled=false;btnH.style.color='var(--accent3)';btnH.style.borderColor='var(--accent3)';btnH.style.cursor='pointer';btnH.style.background='rgba(168,255,62,.12)';}
+      if(info) info.textContent='Fila seleccionada';
+    };
     const fechaCell=`<td style="font-weight:700;white-space:nowrap">${disp(p.fecha)}${isHoy?'<span class="badge-hoy">HOY</span>':''}</td>`;
     tr.innerHTML=`${fechaCell}<td>${p.cliente}</td><td style="color:#9ca3af">${p.area}</td><td style="color:#6b7280">${p.color||'—'}</td><td style="color:#9ca3af">${p.instalador}</td><td>${cityBadge(p.ciudad)}</td><td style="color:#6b7280;font-size:10px;max-width:220px">${p.detalle}</td><td><span class="badge ${p.estado==='Terminado'?'b-ok':'b-proc'}">${p.estado}</span></td>`;
     tb.appendChild(tr);
@@ -4826,6 +5344,75 @@ function saveBodega(){
   else{DATA.bodega.push(obj);toast('✓ Bodega agregado');}
   saveState();closeModal('modalBodega');renderEditors();renderPendientes();renderBodega();updateKPIs();
 }
+// ── Helpers contextuales para barras de acciones ──
+window._selectedDespIdx = null;
+window._selectedPendIdx = null;
+window._selectedBodIdx  = null;
+
+function editDesp(){
+  if(window._selectedDespIdx===null)return;
+  editItem('desp', window._selectedDespIdx);
+}
+function deleteDesp(){
+  if(window._selectedDespIdx===null)return;
+  deleteItem('desp', window._selectedDespIdx);
+  window._selectedDespIdx=null;
+  _resetAcciones('desp');
+}
+function editPendCtx(){
+  if(window._selectedPendIdx===null)return;
+  editItem('pend', window._selectedPendIdx);
+}
+function deletePendCtx(){
+  if(window._selectedPendIdx===null)return;
+  deleteItem('pend', window._selectedPendIdx);
+  window._selectedPendIdx=null;
+  _resetAcciones('pend');
+}
+function entregarHerrCtx(){
+  if(window._selectedPendIdx===null)return;
+  // Marcar el herraje como entregado si el pendiente tiene herrPendDesc
+  const d=DATA.pend[window._selectedPendIdx];
+  if(d&&d.herrPendDesc){
+    if(confirm('¿Marcar herrajes de este pendiente como entregados?')){
+      d.herrPendEntregado=true;
+      saveState();renderPendientes();renderBodega();
+      showToast('✓ Herrajes marcados como entregados');
+    }
+  } else {
+    alert('Este pendiente no tiene herrajes registrados.');
+  }
+}
+function editBodCtx(){
+  if(window._selectedBodIdx===null)return;
+  editItem('bodega', window._selectedBodIdx);
+}
+function deleteBodCtx(){
+  if(window._selectedBodIdx===null)return;
+  deleteItem('bodega', window._selectedBodIdx);
+  window._selectedBodIdx=null;
+  _resetAcciones('bod');
+}
+function _resetAcciones(type){
+  const map={
+    desp: ['btnDespEditar','btnDespEliminar'],
+    pend: ['btnPendEditar','btnPendEliminar','btnPendEntregar'],
+    bod:  ['btnBodEditar','btnBodEliminar']
+  };
+  (map[type]||[]).forEach(id=>{
+    const b=document.getElementById(id);
+    if(!b)return;
+    b.disabled=true;
+    b.style.color='var(--muted)';
+    b.style.borderColor='var(--border)';
+    b.style.cursor='default';
+    b.style.background='transparent';
+  });
+  const infoMap={desp:'despSelInfo',pend:'pendSelInfo',bod:'bodSelInfo'};
+  const inf=document.getElementById(infoMap[type]);
+  if(inf) inf.textContent='';
+}
+
 function deleteItem(type,index){
   if(!confirm('¿Eliminar este registro?'))return;
   DATA[type].splice(index,1);
@@ -5293,10 +5880,48 @@ function verHerrajesCliente(despIndex){
 }
 
 // ── Render semana con herrajes ──
+function _getSemanaFiltrada(){
+  const desdeEl=document.getElementById('semFiltDesde');
+  const hastaEl=document.getElementById('semFiltHasta');
+  const desdeVal=desdeEl&&desdeEl.value?desdeEl.value:null;
+  const hastaVal=hastaEl&&hastaEl.value?hastaEl.value:null;
+  if(desdeVal||hastaVal){
+    // Filtro personalizado
+    const desp=DATA.desp.filter(d=>{
+      const iso=toISO(d.fecha);
+      if(desdeVal&&iso<desdeVal)return false;
+      if(hastaVal&&iso>hastaVal)return false;
+      return true;
+    });
+    const fmt=iso=>{const[y,m,dd]=iso.split('-');return `${dd}/${m}/${y.slice(2)}`;};
+    const label=`${desdeVal?fmt(desdeVal):'inicio'} → ${hastaVal?fmt(hastaVal):'hoy'}`;
+    return {desp,label,custom:true};
+  }
+  const sem=getSemanaDesp();
+  return {desp:sem.desp,label:`${sem.desde} → ${sem.hasta}`,custom:false};
+}
+
+function semFiltReset(){
+  const d=document.getElementById('semFiltDesde');
+  const h=document.getElementById('semFiltHasta');
+  if(d)d.value='';if(h)h.value='';
+  renderSemana();
+}
+
 function renderSemanaConHerrajes(){
-  const {desp}=getSemanaDesp();
+  const {desp,label,custom}=_getSemanaFiltrada();
   const tb=document.getElementById('semanaBody');
   if(!tb)return;
+  // Update header label
+  const rl=document.getElementById('semanaRangoLabel');
+  if(rl)rl.textContent=label+(custom?' (periodo personalizado)':' (semana en curso)');
+  const lbl=document.getElementById('semFiltLabel');
+  if(lbl)lbl.textContent=desp.length+' despacho'+(desp.length!==1?'s':'');
+  document.getElementById('semanaCount').textContent=desp.length;
+  document.getElementById('sw1').textContent=desp.length;
+  document.getElementById('sw2').textContent=new Set(desp.map(d=>d.ciudad)).size;
+  document.getElementById('sw3').textContent=new Set(desp.map(d=>acat(d.area))).size;
+  document.getElementById('sw4').textContent=new Set(desp.filter(d=>d.instalador&&d.instalador!=='N/A'&&d.instalador!=='').map(d=>d.instalador)).size;
   tb.innerHTML='';
   let costoSemana=0;
   desp.forEach((d,idx)=>{
@@ -5452,7 +6077,7 @@ saveDesp=function(){
 // ── Patch renderSemana to add herrajes ──
 const _origRenderSemana=renderSemana;
 renderSemana=function(){
-  _origRenderSemana();
+  // Skip _origRenderSemana label update — renderSemanaConHerrajes handles it
   renderSemanaConHerrajes();
 };
 
@@ -8496,6 +9121,170 @@ document.addEventListener('DOMContentLoaded', ()=>{ setTimeout(renderNotificacio
 })();
 // ══════════════════════════════════════════════════════
 // FIN SPLASH SCREEN
+// ══════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════
+// LOGISTICS REDESIGN — nav controller + Firebase mirror
+// ══════════════════════════════════════════════════════
+window._lmActiveTab = 'overview';
+
+window.lmShowTab = function(id) {
+  window._lmActiveTab = id;
+  // Delegate to existing showTab — find the matching legacy .tab button
+  // We use the lm-nitem id directly (not querySelector on onclick) to avoid
+  // accidentally matching PDF buttons that also contain tab names in onclick
+  const btn = document.getElementById('lmtab-' + id);
+  showTab(id, btn);
+};
+
+// Mirror fbDot → lmFbDot (the topbar mini indicator)
+(function(){
+  function syncFb(){
+    const src = document.getElementById('fbDot');
+    const dot = document.getElementById('lmFbDot');
+    const txt = document.getElementById('lmFbTxt');
+    if(!src||!dot||!txt) return;
+    const cls = src.className;
+    if(cls==='online'){
+      dot.className='lm-fbpill-dot on';
+      txt.textContent='SINCRONIZADO'; txt.style.color='#a8ff3e';
+    } else if(cls==='offline'){
+      dot.className='lm-fbpill-dot off';
+      txt.textContent='SIN CONEXIÓN'; txt.style.color='#ff6b35';
+    } else {
+      dot.className='lm-fbpill-dot';
+      txt.textContent='CONECTANDO'; txt.style.color='#4b6080';
+    }
+  }
+  const fbDot = document.getElementById('fbDot');
+  if(fbDot){
+    new MutationObserver(syncFb).observe(fbDot,{attributes:true,attributeFilter:['class']});
+    syncFb();
+  }
+})();
+
+// Patch renderCharts to also update KPI bars
+(function(){
+  const _orig = window.renderCharts;
+  window.renderCharts = function(){
+    if(_orig) _orig.apply(this, arguments);
+    setTimeout(()=>{
+      const k1 = parseInt(document.getElementById('k1')?.textContent||'0');
+      const k2 = parseInt(document.getElementById('k2')?.textContent||'0');
+      const k3 = parseInt(document.getElementById('k3')?.textContent||'0');
+      const k4 = parseInt(document.getElementById('k4')?.textContent||'0');
+      const k5 = parseInt(document.getElementById('k5')?.textContent||'0');
+      const max = k1||1;
+      const pct = (n,d) => Math.min(100,Math.round(n/d*100))+'%';
+      const set = (id,w) => { const e=document.getElementById(id); if(e) e.style.width=w; };
+      set('kbar1','100%'); set('kbar2',pct(k2,max)); set('kbar3',pct(k3,max));
+      set('kbar4',pct(k4,max)); set('kbar5',pct(k5,31));
+      const ch = document.getElementById('kch1');
+      if(ch && k1){ ch.textContent=k1+' total'; ch.className='kpi-badge-change up'; }
+    }, 200);
+  };
+})();
+
+// Patch enterDashboard to use lmShowTab safely (avoids PDF button click bug)
+(function(){
+  const _orig = window.enterDashboard;
+  window.enterDashboard = function(modulo){
+    if(modulo !== 'logistica'){ _orig.apply(this, arguments); return; }
+    // Handle logistica ourselves
+    const splash = document.getElementById('splashScreen');
+    if(!splash) return;
+    splash.style.transition='opacity .6s ease'; splash.style.opacity='0';
+    setTimeout(()=>{
+      splash.style.display='none';
+      ['moduloLogistica','moduloProduccion','moduloOperaciones'].forEach(id=>{
+        const el=document.getElementById(id); if(el) el.style.display='none';
+      });
+      const ml = document.getElementById('moduloLogistica');
+      if(ml){
+        ml.style.display='block';
+        // Safe tab activation — target only the nav item, never a PDF button
+        lmShowTab('overview');
+      }
+    }, 600);
+  };
+})();
+// ══════════════════════════════════════════════════════
+// FIN LOGISTICS REDESIGN HELPERS
+// ══════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════
+// MENÚ CONTEXTUAL — CLIC DERECHO EN DESPACHOS
+// ══════════════════════════════════════════════════════
+(function(){
+  var _ctxIdx = null;
+
+  window.showDespContextMenu = function(e, realIdx){
+    _ctxIdx = realIdx;
+    var menu = document.getElementById('despContextMenu');
+    if(!menu) return;
+
+    // Etiqueta con nombre del cliente
+    var d = DATA.desp[realIdx];
+    var lbl = document.getElementById('despCtxLabel');
+    if(lbl && d) lbl.textContent = d.cliente ? d.cliente.slice(0,28) : 'DESPACHO';
+
+    // Mostrar primero para medir tamaño
+    menu.style.display = 'block';
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var mw = menu.offsetWidth  || 190;
+    var mh = menu.offsetHeight || 110;
+    var x = e.clientX + 6;
+    var y = e.clientY + 6;
+    if(x + mw > vw - 8) x = e.clientX - mw - 6;
+    if(y + mh > vh - 8) y = e.clientY - mh - 6;
+    menu.style.left = x + 'px';
+    menu.style.top  = y + 'px';
+
+    // Highlight sutil de la fila
+    document.querySelectorAll('#detalleBody tr').forEach(function(r){ r.style.background=''; });
+    document.querySelectorAll('#detalleBody tr').forEach(function(r){
+      if(parseInt(r.dataset.realIdx) === realIdx) r.style.background='rgba(0,229,255,.07)';
+    });
+  };
+
+  window.despCtxAction = function(action){
+    var menu = document.getElementById('despContextMenu');
+    if(menu) menu.style.display = 'none';
+    document.querySelectorAll('#detalleBody tr').forEach(function(r){ r.style.background=''; });
+    if(_ctxIdx === null) return;
+    if(action === 'edit')   editItem('desp', _ctxIdx);
+    if(action === 'delete') deleteItem('desp', _ctxIdx);
+    _ctxIdx = null;
+  };
+
+  // Cerrar al hacer clic fuera del menú
+  document.addEventListener('click', function(e){
+    var menu = document.getElementById('despContextMenu');
+    if(menu && !menu.contains(e.target)){
+      menu.style.display = 'none';
+      document.querySelectorAll('#detalleBody tr').forEach(function(r){ r.style.background=''; });
+      _ctxIdx = null;
+    }
+  });
+
+  // Cerrar con Escape
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape'){
+      var menu = document.getElementById('despContextMenu');
+      if(menu) menu.style.display = 'none';
+      document.querySelectorAll('#detalleBody tr').forEach(function(r){ r.style.background=''; });
+      _ctxIdx = null;
+    }
+  });
+
+  // Cerrar al hacer scroll
+  document.addEventListener('scroll', function(){
+    var menu = document.getElementById('despContextMenu');
+    if(menu && menu.style.display !== 'none') menu.style.display = 'none';
+  }, true);
+})();
+// ══════════════════════════════════════════════════════
+// FIN MENÚ CONTEXTUAL
 // ══════════════════════════════════════════════════════
 </script>
 
