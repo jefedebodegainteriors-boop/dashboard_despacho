@@ -149,7 +149,8 @@
   .tab{padding:8px 16px;border-radius:8px;border:1px solid var(--border);cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:all .2s;background:transparent;color:var(--muted);}
   .tab.active{background:var(--accent);color:var(--dark);border-color:var(--accent);}
   .tab:hover:not(.active){border-color:var(--accent);color:var(--accent);}
-  .section{display:none;}.section.active{display:block;}
+  .section{display:none;}.section.active{display:block;min-height:0;}
+  .section.active.herr-section{display:flex;flex-direction:column;width:100%;}
   .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:20px;}
   .kpi{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 18px;position:relative;overflow:hidden;}
   .kpi::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;border-radius:14px 0 0 14px;}
@@ -329,9 +330,6 @@
   .h-list-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:var(--card);border:1px solid var(--border);margin-bottom:6px;}
   .h-list-row .h-name{flex:1;color:#e5e7eb;font-size:11px;}
   .h-list-row .h-pres{color:#6b7280;font-size:10px;min-width:120px;}
-  .h-list-row .h-price{color:var(--gold);font-size:12px;font-weight:700;min-width:80px;text-align:right;}
-  .h-price-input{width:90px;background:#0d1526;border:1px solid var(--border);color:var(--gold);font-family:'Space Mono',monospace;font-size:11px;font-weight:700;text-align:right;padding:4px 8px;border-radius:6px;outline:none;}
-  .h-price-input:focus{border-color:var(--gold);}
 
   /* ══ PRODUCCIÓN TABS ══ */
   .ptab{padding:7px 14px;border-radius:8px;border:1px solid rgba(0,191,255,.3);cursor:pointer;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;transition:all .2s;background:transparent;color:rgba(0,191,255,.6);}
@@ -395,7 +393,7 @@
   background: #080912; z-index: 10; display: none;
 }
 /* Root flex layout */
-.lm-root { display: flex; width: 100%; height: 100%; overflow: hidden; }
+.lm-root { display: flex; width: 100%; height: 100%; overflow: hidden; min-height: 0; }
 
 /* ── Icon Sidebar ── */
 .lm-sidebar {
@@ -413,7 +411,7 @@
 .lm-sdiv { width: 24px; height: 1px; background: #141e30; margin: 5px 0; }
 
 /* ── Main column ── */
-.lm-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+.lm-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; min-height: 0; }
 
 /* ── Topbar ── */
 .lm-topbar {
@@ -452,7 +450,7 @@
 .lm-fbpill-txt { font-size: 9px; font-family: 'Space Mono', monospace; letter-spacing: .8px; color: #283650; }
 
 /* ── Body row ── */
-.lm-body { flex: 1; display: flex; overflow: hidden; }
+.lm-body { flex: 1; display: flex; overflow: hidden; min-height: 0; }
 
 /* ── Nav panel ── */
 .lm-nav {
@@ -486,6 +484,7 @@
 .lm-content {
   flex: 1; padding: 16px 18px; overflow-y: auto;
   background: #080912; display: flex; flex-direction: column; gap: 0;
+  min-height: 0;
 }
 .lm-content::-webkit-scrollbar { width: 4px; }
 .lm-content::-webkit-scrollbar-thumb { background: #141e30; border-radius: 4px; }
@@ -682,7 +681,7 @@
         <div class="lm-nav-lbl">GESTIÓN</div>
         <button class="tab lm-nitem" id="lmtab-pendientes"  onclick="lmShowTab('pendientes')"> <span class="ni">⏳</span> Pendientes <div class="lm-ndot w"></div></button>
         <button class="tab lm-nitem" id="lmtab-bodega"      onclick="lmShowTab('bodega')">     <span class="ni">▣</span> Bodega <div class="lm-ndot w"></div></button>
-        <button class="tab lm-nitem" id="lmtab-gestion_herrajes" onclick="lmShowTab('gestion_herrajes')"><span class="ni">⬡</span> Herrajes</button>
+        <button class="tab lm-nitem" id="lmtab-gestion_herrajes" onclick="lmShowTab('gestion_herrajes')"><span class="ni">⬡</span> Producto</button>
         <button class="tab lm-nitem" id="lmtab-notas"       onclick="lmShowTab('notas')">      <span class="ni">◎</span> Notas</button>
         <div class="lm-nav-lbl">REPORTES</div>
         <button class="tab lm-nitem" id="lmtab-reporte"     onclick="lmShowTab('reporte')">    <span class="ni">◑</span> Reporte</button>
@@ -730,11 +729,11 @@
     <div class="kpi c5"><div class="kpi-label">DÍAS CON DESPACHO</div><div class="kpi-value" id="k5">26</div><div class="kpi-sub">Fechas únicas</div><div class="kpi-bar"><div class="kpi-bar-fill" id="kbar5" style="width:0%"></div></div></div>
   </div>
   <div class="charts-grid">
-    <div class="chart-card"><div class="chart-title">Distribución por Ciudad</div><canvas id="chartCiudad"></canvas></div>
-    <div class="chart-card" style="display:flex;flex-direction:column;"><div class="chart-title">Despachos por Área</div><canvas id="chartArea" style="max-height:220px;"></canvas></div>
-    <div class="chart-card"><div class="chart-title">Top Instaladores</div><canvas id="chartInst"></canvas></div>
-    <div class="chart-card"><div class="chart-title">Despachos por Fecha</div><canvas id="chartFecha"></canvas></div>
-    <div class="chart-card full"><div class="chart-title">Top Clientes por Partidas Despachadas</div><canvas id="chartClientes"></canvas></div>
+    <div class="chart-card"><div class="chart-title">📅 Despachos por Día</div><canvas id="chartCiudad"></canvas></div>
+    <div class="chart-card" style="display:flex;flex-direction:column;"><div class="chart-title">🌐 Tendencia Semanal</div><canvas id="chartArea" style="max-height:220px;"></canvas></div>
+    <div class="chart-card"><div class="chart-title">🏙 Distribución por Ciudad</div><div style="position:relative;height:230px"><canvas id="chartInst"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">👷 Instaladores más Activos</div><div id="chartFechaWrap" style="position:relative;min-height:180px"><canvas id="chartFecha"></canvas></div></div>
+    <div class="chart-card full"><div class="chart-title">Top Clientes por Partidas Despachadas</div><div style="position:relative;height:230px"><canvas id="chartClientes"></canvas></div></div>
   </div>
 </div>
 
@@ -813,7 +812,6 @@
     <div class="kpi c2"><div class="kpi-label">🏙️ Ciudades</div><div class="kpi-value" id="sw2">2</div><div class="kpi-sub">Destinos activos</div></div>
     <div class="kpi c3"><div class="kpi-label">📐 Áreas</div><div class="kpi-value" id="sw3">5</div><div class="kpi-sub">Tipos distintos</div></div>
     <div class="kpi c5"><div class="kpi-label">👷 Instaladores</div><div class="kpi-value" id="sw4">8</div><div class="kpi-sub">En campo</div></div>
-    <div class="kpi c3"><div class="kpi-label">🔩 Costo Herrajes</div><div class="kpi-value" id="sw5" style="font-size:20px;">L 0.00</div><div class="kpi-sub">Esta semana</div></div>
   </div>
   <div class="table-wrap"><table><thead>
     <tr><th>FECHA</th><th>Cliente</th><th>Área</th><th>Color</th><th>Instalador</th><th>Ciudad</th><th>Tipo</th><th>Estado</th><th>🔩 Herrajes</th></tr>
@@ -897,6 +895,7 @@
       Entregar Herrajes
     </button>
     <span id="pendSelInfo" style="color:var(--sub);font-size:10px;margin-left:4px;"></span>
+    <span style="color:var(--sub);font-size:10px;letter-spacing:.5px;margin-left:auto;">Clic → seleccionar &nbsp;·&nbsp; Clic derecho → editar / eliminar</span>
   </div>
   <div class="chart-card" style="margin-bottom:14px;">
     <div class="pend-header" style="margin-bottom:12px;">
@@ -1006,7 +1005,7 @@
     <div class="kpi c2"><div class="kpi-label">⚙️ En Proceso</div><div class="kpi-value" id="rk2">3</div><div class="kpi-sub">Pendientes activos</div></div>
     <div class="kpi c4"><div class="kpi-label">📦 En Bodega</div><div class="kpi-value" id="rk3">6</div><div class="kpi-sub">Sin despachar</div></div>
     <div class="kpi c3"><div class="kpi-label">✅ Resueltos</div><div class="kpi-value" id="rk4">2</div><div class="kpi-sub">Pend. terminados semana</div></div>
-    <div class="kpi c3"><div class="kpi-label">🔩 Costo Herrajes</div><div class="kpi-value" id="rk5" style="font-size:18px;color:var(--gold);">L 0.00</div><div class="kpi-sub">Total semana</div></div>
+
   </div>
 
   <!-- Despachados semana -->
@@ -1015,7 +1014,7 @@
       <div class="pend-title" style="color:var(--accent3);">🚚 CLIENTES DESPACHADOS — SEMANA <span id="rDespCount" style="color:var(--accent3);">(19)</span></div>
     </div>
     <div class="table-wrap"><table><thead>
-      <tr><th>FECHA</th><th>Cliente</th><th>Área</th><th>Color</th><th>Instalador</th><th>Ciudad</th><th>Tipo</th><th style="color:var(--gold);">🔩 Costo Herrajes</th></tr>
+      <tr><th>FECHA</th><th>Cliente</th><th>Área</th><th>Color</th><th>Instalador</th><th>Ciudad</th><th>Tipo</th></tr>
     </thead><tbody id="rDespBody"></tbody></table></div>
   </div>
 
@@ -1023,10 +1022,9 @@
   <div class="chart-card" style="margin-top:14px;border-color:rgba(168,255,62,.25);">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
       <div class="pend-title" style="color:var(--accent3);">🔩 RESUMEN DE HERRAJES UTILIZADOS</div>
-      <span id="rHerrTotal" style="color:var(--gold);font-size:12px;font-weight:700;"></span>
     </div>
     <div class="table-wrap"><table><thead>
-      <tr><th>Herraje</th><th>Presentación</th><th style="text-align:center">Cantidad Total</th><th style="text-align:center">Clientes</th><th style="text-align:right;color:var(--gold);">Costo Total</th></tr>
+      <tr><th>Herraje</th><th>Presentación</th><th style="text-align:center">Cantidad Total</th><th style="text-align:center">Clientes</th></tr>
     </thead><tbody id="rHerrBody"></tbody></table></div>
   </div>
 
@@ -1290,15 +1288,13 @@
 </div>
 
 <!-- GESTION HERRAJES -->
-<div id="gestion_herrajes" class="section">
+<div id="gestion_herrajes" class="section herr-section">
   <div class="data-bar" style="border-color:rgba(255,215,0,.3);">
-    <span class="data-bar-label" style="color:var(--gold);">🔩 GESTIÓN DE HERRAJES — CATÁLOGO Y PRECIOS</span>
-    <button class="btn" style="background:rgba(168,255,62,.15);color:var(--accent3);border:1px solid var(--accent3);" onclick="openModal('nuevoHerraje')">+ Agregar Herraje</button>
-    <button class="btn btn-save" onclick="saveHerrajePrecios()">💾 Guardar Precios</button>
-    <span style="color:var(--sub);font-size:10px;margin-left:auto;">Los precios se aplican automáticamente en reportes</span>
+    <span class="data-bar-label" style="color:var(--gold);">🔩 CATÁLOGO DE PRODUCTOS</span>
+    <button class="btn" style="background:rgba(168,255,62,.15);color:var(--accent3);border:1px solid var(--accent3);" onclick="openModal('nuevoHerraje')">+ Agregar Producto</button>
   </div>
-  <div class="chart-card">
-    <div style="color:var(--muted);font-size:10px;letter-spacing:1.5px;margin-bottom:14px;">CATÁLOGO COMPLETO · EDITA EL PRECIO DE CADA HERRAJE DIRECTAMENTE</div>
+  <div class="chart-card" style="width:100%;box-sizing:border-box;display:flex;flex-direction:column;flex:1;overflow-y:auto;">
+    <div style="color:var(--muted);font-size:10px;letter-spacing:1.5px;margin-bottom:14px;">CATÁLOGO COMPLETO DE PRODUCTOS</div>
     <div id="herrajesCatalogoLista"></div>
   </div>
 </div>
@@ -1307,6 +1303,33 @@
     </div><!-- /lm-body -->
   </div><!-- /lm-main -->
 </div><!-- /lm-root -->
+
+<!-- ── Menú contextual clic derecho — Pendientes ── -->
+<div id="pendContextMenu" style="
+  display:none;position:fixed;z-index:9000;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:12px;padding:6px;min-width:180px;
+  box-shadow:0 8px 32px rgba(0,0,0,.55);
+  font-family:'Space Mono',monospace;font-size:11px;
+  animation:ctxFadeIn .12s ease;">
+  <div style="color:var(--sub);font-size:9px;letter-spacing:1.5px;padding:6px 10px 4px;text-transform:uppercase;border-bottom:1px solid var(--border);margin-bottom:4px;" id="pendCtxLabel">PENDIENTE</div>
+  <button id="pendCtxEdit" onclick="pendCtxAction('edit')" style="
+    display:flex;align-items:center;gap:9px;width:100%;background:transparent;
+    border:none;color:var(--accent);cursor:pointer;padding:9px 12px;border-radius:8px;
+    font-family:'Space Mono',monospace;font-size:11px;font-weight:700;
+    transition:background .15s;" onmouseover="this.style.background='rgba(0,229,255,.1)'" onmouseout="this.style.background='transparent'">
+    <svg width="12" height="12" viewBox="0 0 11 11"><path d="M1 8.5L2.5 10L9 3.5L7.5 2L1 8.5Z" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linejoin="round"/><line x1="6" y1="3" x2="8" y2="5" stroke="currentColor" stroke-width="1.2"/></svg>
+    Editar
+  </button>
+  <button id="pendCtxDelete" onclick="pendCtxAction('delete')" style="
+    display:flex;align-items:center;gap:9px;width:100%;background:transparent;
+    border:none;color:var(--pink);cursor:pointer;padding:9px 12px;border-radius:8px;
+    font-family:'Space Mono',monospace;font-size:11px;font-weight:700;
+    transition:background .15s;" onmouseover="this.style.background='rgba(255,62,154,.1)'" onmouseout="this.style.background='transparent'">
+    <svg width="12" height="12" viewBox="0 0 11 11"><line x1="1" y1="1" x2="10" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="10" y1="1" x2="1" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    Eliminar
+  </button>
+</div>
 
 <!-- ── Menú contextual clic derecho — Despachos ── -->
 <div id="despContextMenu" style="
@@ -2678,7 +2701,6 @@
     <div class="form-grid">
       <div class="form-group full"><label>Descripción</label><input id="nh_nombre" placeholder="Ej: Bisagra especial"></div>
       <div class="form-group full"><label>Presentación</label><input id="nh_pres" placeholder="Ej: PARES, UNIDAD, BOLSA..."></div>
-      <div class="form-group full"><label>Precio (L.)</label><input id="nh_precio" type="number" min="0" step="0.01" placeholder="0.00"></div>
     </div>
     <div class="modal-footer">
       <button class="btn" style="background:rgba(107,114,128,.15);color:var(--muted);border:1px solid var(--border);" onclick="closeModal('modalNuevoHerraje')">Cancelar</button>
@@ -4135,9 +4157,9 @@ function _startFirebaseSync(){
 const COLORS=['#00e5ff','#ff6b35','#a8ff3e','#ff3e9a','#ffd700','#7c3aed','#06b6d4','#f97316','#34d399'];
 
 // date helpers: stored as DD/MM/YYYY
-function toISO(f){if(!f)return'';const p=f.split('/');return p.length===3?`${p[2]}-${p[1]}-${p[0]}`:f;}
+function toISO(f){if(!f)return'';const p=f.split('/');if(p.length!==3)return f;let y=p[2];if(y.length===2)y='20'+y;return`${y}-${String(p[1]).padStart(2,'0')}-${String(p[0]).padStart(2,'0')}`;}
 function fromISO(f){if(!f)return'';const p=f.split('-');return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:f;}
-function disp(f){if(!f)return'—';const p=f.split('/');return p.length===3?`${p[0]}/${p[1]}/${p[2].slice(2)}`:f;}
+function disp(f){if(!f)return'—';const p=f.split('/');if(p.length!==3)return f;const y=p[2].length===4?p[2].slice(2):p[2];return`${String(p[0]).padStart(2,'0')}/${String(p[1]).padStart(2,'0')}/${y}`;}
 
 function acat(a){
   a=a.toLowerCase();
@@ -4165,7 +4187,7 @@ function showTab(id,btn){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   if(btn)btn.classList.add('active');
-  if(id==='overview')renderCharts();
+  if(id==='overview'){ if(typeof Chart!=='undefined') renderCharts(); else setTimeout(function(){if(typeof Chart!=='undefined')renderCharts();},500); }
   if(id==='editor'){renderEditors();renderSecciones();}
   if(id==='pendientes')renderPendientes();
   if(id==='bodega')renderBodega();
@@ -4191,24 +4213,14 @@ function renderReporte(){
   document.getElementById('rk3').textContent=DATA.bodega.length;
   document.getElementById('rk4').textContent=terminadosSemana.length;
   document.getElementById('rDespCount').textContent=`(${desp.length})`;
-  // Tabla despachados con costo de herrajes
+  // Tabla despachados
   const tb1=document.getElementById('rDespBody'); tb1.innerHTML='';
-  let costoTotalReporte=0;
   desp.forEach(d=>{
-    const costo=typeof calcCostoHerrajes==='function'?calcCostoHerrajes(d.herrajes):0;
-    costoTotalReporte+=costo;
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td style="color:var(--accent3);font-weight:700;white-space:nowrap">${disp(d.fecha)}</td><td>${d.cliente}</td><td style="color:#9ca3af">${d.area}</td><td style="color:#6b7280;max-width:120px;overflow:hidden;text-overflow:ellipsis">${d.color||'—'}</td><td style="color:#9ca3af">${d.instalador||'—'}</td><td>${cityBadge(d.ciudad)}</td><td style="color:#6b7280;font-size:10px">${d.tipo}</td><td style="color:var(--gold);font-weight:700;">${costo>0?(typeof fmtL==='function'?fmtL(costo):'L '+costo.toFixed(2)):'—'}</td>`;
+    tr.innerHTML=`<td style="color:var(--accent3);font-weight:700;white-space:nowrap">${disp(d.fecha)}</td><td>${d.cliente}</td><td style="color:#9ca3af">${d.area}</td><td style="color:#6b7280;max-width:120px;overflow:hidden;text-overflow:ellipsis">${d.color||'—'}</td><td style="color:#9ca3af">${d.instalador||'—'}</td><td>${cityBadge(d.ciudad)}</td><td style="color:#6b7280;font-size:10px">${d.tipo}</td>`;
     tb1.appendChild(tr);
   });
-  // fila total
-  if(desp.length){
-    const trTotal=document.createElement('tr');
-    trTotal.innerHTML=`<td colspan="7" style="text-align:right;font-weight:700;color:#f9fafb;padding:10px 12px;border-top:1px solid var(--border);">TOTAL HERRAJES SEMANA</td><td style="color:var(--gold);font-weight:700;font-size:13px;border-top:1px solid var(--border);">${typeof fmtL==='function'?fmtL(costoTotalReporte):'L '+costoTotalReporte.toFixed(2)}</td>`;
-    tb1.appendChild(trTotal);
-  }
-  if(!desp.length) tb1.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--sub);font-size:11px;">Sin despachos esta semana</td></tr>`;
-  const rk5=document.getElementById('rk5');if(rk5)rk5.textContent=typeof fmtL==='function'?fmtL(costoTotalReporte):'L '+costoTotalReporte.toFixed(2);
+  if(!desp.length) tb1.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--sub);font-size:11px;">Sin despachos esta semana</td></tr>`;
 
   // ── Tabla resumen herrajes ──
   const herrBody=document.getElementById('rHerrBody');
@@ -4229,21 +4241,19 @@ function renderReporte(){
     const entries=Object.entries(herrMap).sort((a,b)=>b[1].qty-a[1].qty);
     herrBody.innerHTML='';
     if(!entries.length){
-      herrBody.innerHTML='<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--sub);font-size:11px;">Sin herrajes registrados esta semana</td></tr>';
+      herrBody.innerHTML='<tr><td colspan="4" style="text-align:center;padding:16px;color:var(--sub);font-size:11px;">Sin herrajes registrados esta semana</td></tr>';
     } else {
-      let totalQty=0,totalCosto=0;
+      let totalQty=0;
       entries.forEach(([hid,dat])=>{
         const h=hh.find(x=>x.id===hid)||{nombre:hid,presentacion:'—'};
-        totalQty+=dat.qty; totalCosto+=dat.costo;
+        totalQty+=dat.qty;
         const tr=document.createElement('tr');
-        tr.innerHTML=`<td style="color:#e5e7eb">${h.nombre}</td><td style="color:#6b7280;font-size:10px">${h.presentacion}</td><td style="text-align:center;color:var(--accent3);font-weight:700">${dat.qty}</td><td style="text-align:center;color:#9ca3af">${dat.clientes.size}</td><td style="text-align:right;color:var(--gold);font-weight:700">${dat.costo>0?fmtL(dat.costo):'—'}</td>`;
+        tr.innerHTML=`<td style="color:#e5e7eb">${h.nombre}</td><td style="color:#6b7280;font-size:10px">${h.presentacion}</td><td style="text-align:center;color:var(--accent3);font-weight:700">${dat.qty}</td><td style="text-align:center;color:#9ca3af">${dat.clientes.size}</td>`;
         herrBody.appendChild(tr);
       });
       const trTot=document.createElement('tr');
-      trTot.innerHTML=`<td colspan="2" style="text-align:right;font-weight:700;color:#f9fafb;border-top:1px solid var(--border);">TOTALES</td><td style="text-align:center;color:var(--accent3);font-weight:700;border-top:1px solid var(--border);">${totalQty}</td><td style="border-top:1px solid var(--border)"></td><td style="text-align:right;color:var(--gold);font-weight:700;border-top:1px solid var(--border);">${totalCosto>0?fmtL(totalCosto):'—'}</td>`;
+      trTot.innerHTML=`<td colspan="2" style="text-align:right;font-weight:700;color:#f9fafb;border-top:1px solid var(--border);">TOTALES</td><td style="text-align:center;color:var(--accent3);font-weight:700;border-top:1px solid var(--border);">${totalQty}</td><td style="border-top:1px solid var(--border)"></td>`;
       herrBody.appendChild(trTot);
-      const rht=document.getElementById('rHerrTotal');
-      if(rht) rht.textContent=`${entries.length} tipo(s) · ${totalQty} unidades`;
     }
   }
 
@@ -4273,8 +4283,8 @@ function generarReportePDF(){
     });
   });
   const herrEntries=Object.entries(herrMap2).sort((a,b)=>b[1].qty-a[1].qty);
-  let herrTotalQty=0,herrTotalCosto=0;
-  const herrRows=herrEntries.map((e,i)=>{herrTotalQty+=e[1].qty;herrTotalCosto+=e[1].costo;const h=hh2.find(x=>x.id===e[0])||{nombre:e[0],presentacion:'—'};return `<tr><td>${i+1}</td><td><strong>${h.nombre}</strong></td><td>${h.presentacion}</td><td style="text-align:center">${e[1].qty}</td><td style="text-align:center">${e[1].clientes.size}</td><td style="text-align:right">${e[1].costo>0?'L '+e[1].costo.toLocaleString('es-HN',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td></tr>`;}).join('');
+  let herrTotalQty=0;
+  const herrRows=herrEntries.map((e,i)=>{herrTotalQty+=e[1].qty;const h=hh2.find(x=>x.id===e[0])||{nombre:e[0],presentacion:'—'};return `<tr><td>${i+1}</td><td><strong>${h.nombre}</strong></td><td>${h.presentacion}</td><td style="text-align:center">${e[1].qty}</td><td style="text-align:center">${e[1].clientes.size}</td></tr>`;}).join('');
   // Herrajes pendientes por entregar
   const herrPendList=DATA.desp.filter(d=>d.herrPendDesc&&d.herrPendDesc.trim()!==''&&!d.herrPendEntregado);
   const herrPendRows=herrPendList.map((d,i)=>`<tr><td>${i+1}</td><td><strong>${d.cliente}</strong></td><td>${d.area}</td><td>${disp(d.fecha)}</td><td style="color:#b45309">${d.herrPendDesc}</td></tr>`).join('');
@@ -4379,8 +4389,8 @@ function generarReportePDF(){
     <!-- 5. Herrajes utilizados semana -->
     ${herrEntries.length>0?`
     <div class="section-title" style="background:#fefdf5;color:#713f12;border-left:4px solid #d97706;">🔩 Herrajes Utilizados esta Semana (${herrEntries.length} tipos)</div>
-    <table><thead><tr><th>#</th><th>Herraje</th><th>Presentación</th><th style="text-align:center">Cant.</th><th style="text-align:center">Clientes</th><th style="text-align:right">Costo</th></tr></thead>
-    <tbody>${herrRows}<tr><td colspan="3" style="text-align:right;font-weight:700;border-top:2px solid #d97706;padding-top:8px;">TOTALES</td><td style="text-align:center;font-weight:700;border-top:2px solid #d97706;">${herrTotalQty}</td><td style="border-top:2px solid #d97706;"></td><td style="text-align:right;font-weight:700;border-top:2px solid #d97706;">${herrTotalCosto>0?'L '+herrTotalCosto.toLocaleString('es-HN',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td></tr></tbody></table>
+    <table><thead><tr><th>#</th><th>Herraje</th><th>Presentación</th><th style="text-align:center">Cant.</th><th style="text-align:center">Clientes</th></tr></thead>
+    <tbody>${herrRows}<tr><td colspan="3" style="text-align:right;font-weight:700;border-top:2px solid #d97706;padding-top:8px;">TOTALES</td><td style="text-align:center;font-weight:700;border-top:2px solid #d97706;">${herrTotalQty}</td><td style="border-top:2px solid #d97706;"></td></tr></tbody></table>
     `:''}
 
     <!-- 6. Herrajes pendientes por entregar -->
@@ -4460,7 +4470,7 @@ function exportarPDF(seccion){
   let titulo='', subtitulo='', hdrs='', rows='';
 
   if(seccion==='overview'){
-    const d=getFilteredDesp();
+    const d=sortByFechaDesc(getFilteredDesp());
     const lbl=document.getElementById('overviewLabel')?.textContent||'';
     titulo='📊 Resumen — Clientes Despachados';
     subtitulo=lbl||`${d.length} registros`;
@@ -4469,7 +4479,7 @@ function exportarPDF(seccion){
   }
   else if(seccion==='detalle'){
     const q=document.getElementById('srch').value.toLowerCase();
-    const d=getFilteredDespDetalle().filter(r=>(cityFilter==='Todos'||r.ciudad===cityFilter)&&(!q||r.cliente.toLowerCase().includes(q)||r.area.toLowerCase().includes(q)));
+    const d=sortByFechaDesc(getFilteredDespDetalle().filter(r=>(cityFilter==='Todos'||r.ciudad===cityFilter)&&(!q||r.cliente.toLowerCase().includes(q)||r.area.toLowerCase().includes(q))));
     const lbl=document.getElementById('mesLabel')?.textContent||'';
     titulo='📋 Detalle — Registros Filtrados';
     subtitulo=lbl||`${d.length} registros`;
@@ -4481,7 +4491,7 @@ function exportarPDF(seccion){
     titulo='📅 Semana Actual — Despachos';
     subtitulo=`${disp(desde)} → ${disp(hasta)} · ${desp.length} registros`;
     hdrs=thDesp;
-    rows=desp.map(r=>`<tr><td style="white-space:nowrap">${disp(r.fecha)}</td><td>${r.cliente}</td><td>${r.area}</td><td>${r.color||'—'}</td><td>${r.instalador||'—'}</td><td>${r.ciudad}</td><td>${r.tipo}</td><td>${r.estado}</td></tr>`).join('');
+    rows=sortByFechaDesc(desp).map(r=>`<tr><td style="white-space:nowrap">${disp(r.fecha)}</td><td>${r.cliente}</td><td>${r.area}</td><td>${r.color||'—'}</td><td>${r.instalador||'—'}</td><td>${r.ciudad}</td><td>${r.tipo}</td><td>${r.estado}</td></tr>`).join('');
   }
   else if(seccion==='pendientes'){
     const todayISO=new Date().toISOString().split('T')[0];
@@ -4594,260 +4604,324 @@ function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];
 function renderCharts(){
   const desp=getFilteredDesp();
   updateKPIs();
+  if(typeof Chart==='undefined') return; // Chart.js no cargado aún
 
-  // ── Paleta de la app ──
-  const A1='#00e5ff', A2='#ff6b35', A3='#a8ff3e', GOLD='#ffd700', PINK='#ff3e9a';
+  // ── Paleta ──
+  const A1='#00e5ff',A2='#ff6b35',A3='#a8ff3e',GOLD='#ffd700',PINK='#ff3e9a';
   const PALETTE=[A1,A2,A3,GOLD,PINK,'#7c3aed','#06b6d4','#f59e0b','#10b981','#6366f1'];
+  const FONT='Space Mono,monospace';
+  const GRID='rgba(30,45,64,.5)';
+  const TICK='#6b7280';
 
-  // Opciones base silenciosas
-  const baseScaleOpts = (axisX=true) => ({
-    x: { display:axisX, ticks:{color:'#6b7280',font:{family:'Space Mono',size:9}}, grid:{color:'rgba(30,45,64,.6)'} },
-    y: { display:true, ticks:{color:'#6b7280',font:{family:'Space Mono',size:9}}, grid:{color:'rgba(30,45,64,.6)'} }
-  });
+  // ── Helpers vacío/mostrar canvas ──
+  function showEmpty(id,msg){
+    destroyChart(id);
+    const cv=document.getElementById(id); if(!cv) return;
+    cv.style.display='none';
+    let ph=cv.parentElement.querySelector('.ch-empty');
+    if(!ph){ph=document.createElement('div');ph.className='ch-empty';cv.parentElement.appendChild(ph);}
+    ph.style.cssText='display:flex;align-items:center;justify-content:center;min-height:150px;color:#4b5563;font-family:'+FONT+';font-size:11px;letter-spacing:1px;text-align:center;padding:20px;';
+    ph.textContent='— '+msg+' —';
+  }
+  function showCanvas(id){
+    const cv=document.getElementById(id); if(!cv) return;
+    cv.style.display='';
+    const ph=cv.parentElement.querySelector('.ch-empty');
+    if(ph) ph.style.display='none';
+  }
+
+  // ── Opciones de escala comunes ──
+  const sx={ticks:{color:TICK,font:{family:FONT,size:9},maxRotation:45,maxTicksLimit:14},grid:{color:GRID},border:{display:false}};
+  const sy={ticks:{color:TICK,font:{family:FONT,size:9},stepSize:1},grid:{color:GRID},border:{display:false},beginAtZero:true};
+  const tooltipBase={backgroundColor:'#0d1526',borderWidth:1,titleFont:{family:FONT,size:10},bodyFont:{family:FONT,size:10},bodyColor:'#e5e7eb'};
 
   // ════════════════════════════════════════════════
-  // 1. DISTRIBUCIÓN POR CIUDAD — Barras horizontales
-  //    con valor embebido + gradiente
+  // 1. DESPACHOS POR DÍA — Bar Chart (chartCiudad)
   // ════════════════════════════════════════════════
   destroyChart('chartCiudad');
-  (()=>{
-    const cc={};desp.forEach(d=>{cc[d.ciudad]=(cc[d.ciudad]||0)+1;});
-    const sorted=Object.entries(cc).sort((a,b)=>b[1]-a[1]);
-    const labels=sorted.map(e=>e[0]);
-    const vals  =sorted.map(e=>e[1]);
-    const maxV  =Math.max(...vals,1);
-    const canvas=document.getElementById('chartCiudad');
-    const ctx=canvas.getContext('2d');
-    // Gradiente horizontal por barra (se aplica como array)
-    const grads=vals.map((_,i)=>{
-      const g=ctx.createLinearGradient(0,0,canvas.parentElement.clientWidth||300,0);
-      const c=PALETTE[i%PALETTE.length];
-      g.addColorStop(0,c+'cc');
-      g.addColorStop(1,c+'22');
-      return g;
-    });
+  (function(){
+    if(!desp.length){showEmpty('chartCiudad','Sin datos de despachos');return;}
+    showCanvas('chartCiudad');
+    // Agrupar por fecha, ordenar cronológico
+    var fc={};
+    desp.forEach(function(d){if(d.fecha)fc[d.fecha]=(fc[d.fecha]||0)+1;});
+    var fs=Object.entries(fc).sort(function(a,b){return toISO(a[0]).localeCompare(toISO(b[0]));});
+    if(!fs.length){showEmpty('chartCiudad','Sin fechas válidas');return;}
+    var labels=fs.map(function(e){return disp(e[0]);});
+    var vals=fs.map(function(e){return e[1];});
+    var maxV=Math.max.apply(null,vals)||1;
+    var canvas=document.getElementById('chartCiudad');
+    var ctx=canvas.getContext('2d');
+    var grad=ctx.createLinearGradient(0,0,0,220);
+    grad.addColorStop(0,A1+'bb');grad.addColorStop(1,A1+'22');
     charts['chartCiudad']=new Chart(canvas,{
       type:'bar',
-      data:{labels,datasets:[{data:vals,backgroundColor:grads,borderRadius:8,borderSkipped:false}]},
-      options:{
-        indexAxis:'y',
-        animation:{duration:600,easing:'easeOutQuart'},
-        plugins:{
-          legend:{display:false},
-          tooltip:{enabled:false},
-          datalabels: undefined
-        },
-        scales:{
-          x:{display:false,max:maxV*1.35},
-          y:{ticks:{color:'#e5e7eb',font:{family:'Space Mono',size:11},padding:4},grid:{display:false},border:{display:false}}
-        },
-        layout:{padding:{right:10}},
-        // valor embebido via afterDraw
-        animation:{onComplete:function(){
-          const chart=this;
-          const ctx2=chart.ctx;
-          ctx2.save();
-          ctx2.font='700 11px Space Mono,monospace';
-          ctx2.fillStyle='#f9fafb';
-          ctx2.textBaseline='middle';
-          chart.data.datasets[0].data.forEach((val,i)=>{
-            const meta=chart.getDatasetMeta(0);
-            const bar=meta.data[i];
-            if(!bar) return;
-            const x=bar.x+8;
-            const y=bar.y;
-            ctx2.fillText(val+' despachos',x,y);
-          });
-          ctx2.restore();
-        }}
-      }
-    });
-  })();
-
-  // ════════════════════════════════════════════════
-  // 2. TOP INSTALADORES — Barras horizontales con
-  //    avatar inicial + ranking numerado
-  // ════════════════════════════════════════════════
-  destroyChart('chartInst');
-  (()=>{
-    const ic={};desp.filter(d=>d.instalador&&d.instalador!=='N/A'&&d.instalador!=='').forEach(d=>{ic[d.instalador]=(ic[d.instalador]||0)+1;});
-    const it=Object.entries(ic).sort((a,b)=>b[1]-a[1]).slice(0,8);
-    const labels=it.map(e=>e[0]);
-    const vals  =it.map(e=>e[1]);
-    const maxV  =Math.max(...vals,1);
-    const RANK_COLORS=[GOLD,A1,A3,...PALETTE.slice(3)];
-    const canvas=document.getElementById('chartInst');
-    charts['chartInst']=new Chart(canvas,{
-      type:'bar',
-      data:{labels,datasets:[{
+      data:{labels:labels,datasets:[{
+        label:'Despachos',
         data:vals,
-        backgroundColor:RANK_COLORS.slice(0,vals.length).map(c=>c+'cc'),
-        borderRadius:8,borderSkipped:false
+        backgroundColor:vals.map(function(v){return v===maxV?A3+'cc':A1+'88';}),
+        borderRadius:5,
+        borderSkipped:false
       }]},
       options:{
-        indexAxis:'y',
-        animation:{duration:700,easing:'easeOutExpo'},
-        plugins:{legend:{display:false},tooltip:{enabled:true,callbacks:{
-          label:(ctx)=>' '+ctx.parsed.x+' despachos'
-        }}},
-        scales:{
-          x:{display:false,max:maxV*1.4},
-          y:{ticks:{color:'#e5e7eb',font:{family:'Space Mono',size:10},padding:4},grid:{display:false},border:{display:false}}
+        responsive:true,
+        animation:{duration:600,easing:'easeOutQuart'},
+        interaction:{mode:'index',intersect:false},
+        plugins:{
+          legend:{display:false},
+          tooltip:Object.assign({},tooltipBase,{borderColor:A1,titleColor:A1,callbacks:{
+            title:function(items){return items[0].label;},
+            label:function(ctx){return ' '+ctx.parsed.y+' despacho'+(ctx.parsed.y!==1?'s':'');}
+          }})
         },
-        animation:{onComplete:function(){
-          const chart=this;
-          const ctx2=chart.ctx;
-          ctx2.save();
-          chart.data.datasets[0].data.forEach((val,i)=>{
-            const meta=chart.getDatasetMeta(0);
-            const bar=meta.data[i];
-            if(!bar) return;
-            // Ranking badge (círculo numerado)
-            const rankX=bar.base-22;
-            const rankY=bar.y;
-            ctx2.fillStyle=RANK_COLORS[i%RANK_COLORS.length];
-            ctx2.beginPath();
-            ctx2.arc(rankX,rankY,10,0,Math.PI*2);
-            ctx2.fill();
-            ctx2.fillStyle='#0a0e1a';
-            ctx2.font='700 9px Space Mono,monospace';
-            ctx2.textAlign='center';
-            ctx2.textBaseline='middle';
-            ctx2.fillText(i+1,rankX,rankY);
-            // Valor al lado derecho
-            ctx2.fillStyle='#9ca3af';
-            ctx2.font='700 10px Space Mono,monospace';
-            ctx2.textAlign='left';
-            ctx2.fillText(val,bar.x+6,rankY);
-          });
-          ctx2.restore();
-        }}
+        scales:{x:sx,y:sy}
       }
     });
   })();
 
   // ════════════════════════════════════════════════
-  // 3. DESPACHOS POR ÁREA — Donut con leyenda lateral
+  // 2. DISTRIBUCIÓN POR CIUDAD — Doughnut (chartInst)
   // ════════════════════════════════════════════════
-  destroyChart('chartArea');
-  (()=>{
-    const ac={};desp.forEach(d=>{const c=acat(d.area);ac[c]=(ac[c]||0)+1;});
-    const sorted=Object.entries(ac).sort((a,b)=>b[1]-a[1]);
-    const labels=sorted.map(e=>e[0]);
-    const vals  =sorted.map(e=>e[1]);
-    const bg    =PALETTE.slice(0,labels.length);
-    // Contenedor padre del canvas — necesitamos layout lateral
-    const card=document.getElementById('chartArea').closest('.chart-card');
-    card.style.display='flex';
-    card.style.flexDirection='column';
-    const canvas=document.getElementById('chartArea');
-    canvas.style.maxHeight='220px';
-    charts['chartArea']=new Chart(canvas,{
+  destroyChart('chartInst');
+  (function(){
+    if(!desp.length){showEmpty('chartInst','Sin datos de ciudades');return;}
+    showCanvas('chartInst');
+    var cc={};
+    desp.forEach(function(d){if(d.ciudad)cc[d.ciudad]=(cc[d.ciudad]||0)+1;});
+    var sorted=Object.entries(cc).sort(function(a,b){return b[1]-a[1];});
+    if(!sorted.length){showEmpty('chartInst','Sin ciudades registradas');return;}
+    var labels=sorted.map(function(e){return e[0];});
+    var vals=sorted.map(function(e){return e[1];});
+    var total=vals.reduce(function(s,v){return s+v;},0)||1;
+    var bg=PALETTE.slice(0,labels.length);
+    var canvas=document.getElementById('chartInst');
+    charts['chartInst']=new Chart(canvas,{
       type:'doughnut',
-      data:{labels,datasets:[{data:vals,backgroundColor:bg.map(c=>c+'cc'),borderColor:'#0a0e1a',borderWidth:2,hoverOffset:8}]},
+      data:{labels:labels,datasets:[{
+        data:vals,
+        backgroundColor:bg.map(function(c){return c+'cc';}),
+        borderColor:'#111827',
+        borderWidth:2,
+        hoverOffset:10
+      }]},
       options:{
-        cutout:'62%',
+        responsive:true,
+        maintainAspectRatio:false,
+        cutout:'60%',
         animation:{duration:700,easing:'easeOutQuart'},
-        layout:{padding:8},
+        layout:{padding:6},
         plugins:{
-          legend:{
-            display:true,
-            position:'right',
-            labels:{color:'#9ca3af',font:{family:'Space Mono',size:10},padding:10,usePointStyle:true,pointStyleWidth:10}
-          },
-          tooltip:{callbacks:{label:(ctx)=>` ${ctx.label}: ${ctx.parsed} (${Math.round(ctx.parsed/vals.reduce((a,b)=>a+b,0)*100)}%)`}}
+          legend:{display:true,position:'right',labels:{color:'#9ca3af',font:{family:FONT,size:10},padding:10,usePointStyle:true,pointStyleWidth:10}},
+          tooltip:Object.assign({},tooltipBase,{borderColor:A2,titleColor:A2,callbacks:{
+            label:function(ctx){return ' '+ctx.label+': '+ctx.parsed+' ('+Math.round(ctx.parsed/total*100)+'%)';}
+          }})
         }
       }
     });
   })();
 
   // ════════════════════════════════════════════════
-  // 4. DESPACHOS POR FECHA — Línea suavizada tension 0.4
-  //    área rellena semitransparente, puntos solo en hover
+  // 3. TENDENCIA SEMANAL — Line Chart (chartArea)
   // ════════════════════════════════════════════════
-  destroyChart('chartFecha');
-  (()=>{
-    const fc={};desp.forEach(d=>{if(d.fecha)fc[d.fecha]=(fc[d.fecha]||0)+1;});
-    const fs=Object.entries(fc).sort((a,b)=>toISO(a[0]).localeCompare(toISO(b[0])));
-    const canvas=document.getElementById('chartFecha');
-    const ctx=canvas.getContext('2d');
-    const grad=ctx.createLinearGradient(0,0,0,canvas.parentElement.clientHeight||200);
-    grad.addColorStop(0,'rgba(168,255,62,.35)');
-    grad.addColorStop(1,'rgba(168,255,62,.0)');
-    charts['chartFecha']=new Chart(canvas,{
+  destroyChart('chartArea');
+  (function(){
+    if(!desp.length){showEmpty('chartArea','Sin datos para tendencia');return;}
+    showCanvas('chartArea');
+    // Agrupar por semana (lunes de cada semana ISO)
+    var wc={};
+    desp.forEach(function(d){
+      var iso=toISO(d.fecha);
+      if(!iso||iso.length<10)return;
+      var dt=new Date(iso+'T12:00:00');
+      if(isNaN(dt.getTime()))return;
+      var day=dt.getDay();
+      var diffToMon=day===0?-6:1-day; // lunes = día 1
+      dt.setDate(dt.getDate()+diffToMon);
+      var wk=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+      wc[wk]=(wc[wk]||0)+1;
+    });
+    var ws=Object.entries(wc).sort(function(a,b){return a[0].localeCompare(b[0]);});
+    if(!ws.length){showEmpty('chartArea','Sin semanas válidas');return;}
+    var labels=ws.map(function(e){var p=e[0].split('-');return p[2]+'/'+p[1]+'/'+p[0].slice(2);});
+    var vals=ws.map(function(e){return e[1];});
+    var canvas=document.getElementById('chartArea');
+    canvas.style.maxHeight='';
+    var parent=canvas.closest('.chart-card');
+    if(parent){parent.style.display='';parent.style.flexDirection='';}
+    var ctx=canvas.getContext('2d');
+    var h=canvas.parentElement.clientHeight||200;
+    var grad=ctx.createLinearGradient(0,0,0,h);
+    grad.addColorStop(0,'rgba(0,229,255,.3)');grad.addColorStop(1,'rgba(0,229,255,.01)');
+    charts['chartArea']=new Chart(canvas,{
       type:'line',
-      data:{labels:fs.map(e=>disp(e[0])),datasets:[{
-        data:fs.map(e=>e[1]),
-        borderColor:A3,
+      data:{labels:labels,datasets:[{
+        label:'Despachos',
+        data:vals,
+        borderColor:A1,
         backgroundColor:grad,
-        pointRadius:0,
-        pointHoverRadius:6,
-        pointHoverBackgroundColor:A3,
-        pointHoverBorderColor:'#0a0e1a',
+        pointRadius:4,
+        pointBackgroundColor:A1,
+        pointHoverRadius:7,
+        pointHoverBackgroundColor:'#fff',
+        pointHoverBorderColor:A1,
         pointHoverBorderWidth:2,
-        tension:0.4,
+        tension:0.35,
         fill:true,
         borderWidth:2
       }]},
       options:{
+        responsive:true,
         animation:{duration:800,easing:'easeOutQuart'},
         interaction:{mode:'index',intersect:false},
-        plugins:{legend:{display:false},tooltip:{callbacks:{title:(items)=>items[0].label,label:(ctx)=>` ${ctx.parsed.y} despacho${ctx.parsed.y!==1?'s':''}`}}},
+        plugins:{
+          legend:{display:false},
+          tooltip:Object.assign({},tooltipBase,{borderColor:A1,titleColor:A1,callbacks:{
+            title:function(items){return 'Semana '+items[0].label;},
+            label:function(ctx){return ' '+ctx.parsed.y+' despacho'+(ctx.parsed.y!==1?'s':'');}
+          }})
+        },
+        scales:{x:sx,y:sy}
+      }
+    });
+  })();
+
+  // ════════════════════════════════════════════════
+  // 4. INSTALADORES MÁS ACTIVOS — Horizontal Bar (chartFecha)
+  // ════════════════════════════════════════════════
+  destroyChart('chartFecha');
+  (function(){
+    var ic={};
+    desp.filter(function(d){return d.instalador&&d.instalador.trim()&&d.instalador!=='N/A';})
+        .forEach(function(d){var k=d.instalador.trim();ic[k]=(ic[k]||0)+1;});
+    var it=Object.entries(ic).sort(function(a,b){return b[1]-a[1];}).slice(0,8);
+    var canvas=document.getElementById('chartFecha');
+    if(!canvas)return;
+    if(!it.length){showEmpty('chartFecha','Sin instaladores asignados');return;}
+    showCanvas('chartFecha');
+    var labels=it.map(function(e){return e[0].length>20?e[0].slice(0,20)+'…':e[0];});
+    var vals=it.map(function(e){return e[1];});
+    var maxV=Math.max.apply(null,vals)||1;
+    var RANK=[GOLD,A1,A3,A2,PINK,'#7c3aed','#06b6d4','#f59e0b'];
+    var wrap=document.getElementById('chartFechaWrap');
+    if(wrap) wrap.style.height=Math.max(180,it.length*42)+'px';
+    // Plugin inline para dibujar badges de ranking
+    var rankPlugin={
+      id:'rankBadge',
+      afterDatasetsDraw:function(chart){
+        var c2=chart.ctx;
+        c2.save();
+        chart.data.datasets[0].data.forEach(function(val,i){
+          var meta=chart.getDatasetMeta(0);
+          var bar=meta.data[i];
+          if(!bar)return;
+          // Badge circular
+          var bx=Math.max(bar.base+16,24), by=bar.y;
+          c2.fillStyle=RANK[i%RANK.length];
+          c2.beginPath();c2.arc(bx,by,9,0,Math.PI*2);c2.fill();
+          c2.fillStyle='#0a0e1a';c2.font='700 8px '+FONT;c2.textAlign='center';c2.textBaseline='middle';
+          c2.fillText(i+1,bx,by);
+          // Valor
+          c2.fillStyle='#9ca3af';c2.font='700 10px '+FONT;c2.textAlign='left';c2.textBaseline='middle';
+          c2.fillText(val+' desp.',bar.x+8,by);
+        });
+        c2.restore();
+      }
+    };
+    charts['chartFecha']=new Chart(canvas,{
+      type:'bar',
+      plugins:[rankPlugin],
+      data:{labels:labels,datasets:[{
+        data:vals,
+        backgroundColor:RANK.slice(0,vals.length).map(function(c){return c+'aa';}),
+        borderRadius:5,
+        borderSkipped:false
+      }]},
+      options:{
+        indexAxis:'y',
+        responsive:true,
+        maintainAspectRatio:false,
+        animation:{duration:700,easing:'easeOutExpo'},
+        plugins:{
+          legend:{display:false},
+          tooltip:Object.assign({},tooltipBase,{borderColor:GOLD,titleColor:GOLD,callbacks:{
+            label:function(ctx){return ' '+ctx.parsed.x+' despacho'+(ctx.parsed.x!==1?'s':'');}
+          }})
+        },
         scales:{
-          x:{ticks:{color:'#6b7280',font:{family:'Space Mono',size:8},maxRotation:45,maxTicksLimit:10},grid:{color:'rgba(30,45,64,.6)'},border:{display:false}},
-          y:{ticks:{color:'#6b7280',font:{family:'Space Mono',size:9},stepSize:1},grid:{color:'rgba(30,45,64,.6)'},border:{display:false},beginAtZero:true}
+          x:{display:false,max:maxV*1.5},
+          y:{ticks:{color:'#e5e7eb',font:{family:FONT,size:10},padding:4},grid:{display:false},border:{display:false}}
         }
       }
     });
   })();
 
   // ════════════════════════════════════════════════
-  // 5. TOP CLIENTES — Barras verticales con etiquetas
-  //    rotadas y gradiente por valor (más alto = más vivo)
+  // 5. TOP CLIENTES — Barras verticales (chartClientes)
   // ════════════════════════════════════════════════
   destroyChart('chartClientes');
-  (()=>{
-    const clc={};desp.forEach(d=>{clc[d.cliente]=(clc[d.cliente]||0)+1;});
-    const ct=Object.entries(clc).sort((a,b)=>b[1]-a[1]).slice(0,12);
-    const labels=ct.map(e=>e[0].length>16?e[0].slice(0,16)+'…':e[0]);
-    const vals  =ct.map(e=>e[1]);
-    const maxV  =Math.max(...vals,1);
-    const canvas=document.getElementById('chartClientes');
-    canvas.style.height='220px';
-    const ctx=canvas.getContext('2d');
-    // Gradiente por valor — alto=cian, bajo=naranja
-    const bgs=vals.map(v=>{
-      const ratio=v/maxV;
-      const g=ctx.createLinearGradient(0,0,0,220);
-      const top=ratio>.6?A1:ratio>.35?GOLD:A2;
-      g.addColorStop(0,top+'dd');
-      g.addColorStop(1,top+'33');
+  (function(){
+    if(!desp.length){showEmpty('chartClientes','Sin datos de clientes');return;}
+    showCanvas('chartClientes');
+    var clc={};
+    desp.forEach(function(d){if(d.cliente)clc[d.cliente]=(clc[d.cliente]||0)+1;});
+    var ct=Object.entries(clc).sort(function(a,b){return b[1]-a[1];}).slice(0,12);
+    if(!ct.length){showEmpty('chartClientes','Sin clientes');return;}
+    var labels=ct.map(function(e){return e[0].length>16?e[0].slice(0,16)+'…':e[0];});
+    var vals=ct.map(function(e){return e[1];});
+    var maxV=Math.max.apply(null,vals)||1;
+    var canvas=document.getElementById('chartClientes');
+    var ctx=canvas.getContext('2d');
+    var bgs=vals.map(function(v){
+      var ratio=v/maxV;
+      var g=ctx.createLinearGradient(0,0,0,230);
+      var top=ratio>.65?A1:ratio>.35?GOLD:A2;
+      g.addColorStop(0,top+'dd');g.addColorStop(1,top+'33');
       return g;
     });
     charts['chartClientes']=new Chart(canvas,{
       type:'bar',
-      data:{labels,datasets:[{data:vals,backgroundColor:bgs,borderRadius:8,borderSkipped:false}]},
+      data:{labels:labels,datasets:[{data:vals,backgroundColor:bgs,borderRadius:7,borderSkipped:false}]},
       options:{
+        responsive:true,
         maintainAspectRatio:false,
         animation:{duration:700,easing:'easeOutQuart'},
-        plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>` ${ctx.parsed.y} despachos`}}},
+        interaction:{mode:'index',intersect:false},
+        plugins:{
+          legend:{display:false},
+          tooltip:Object.assign({},tooltipBase,{borderColor:A3,titleColor:A3,callbacks:{
+            label:function(ctx){return ' '+ctx.parsed.y+' despacho'+(ctx.parsed.y!==1?'s':'');}
+          }})
+        },
         scales:{
-          x:{ticks:{color:'#9ca3af',font:{family:'Space Mono',size:9},maxRotation:40},grid:{display:false},border:{display:false}},
-          y:{ticks:{color:'#6b7280',font:{family:'Space Mono',size:9},stepSize:1},grid:{color:'rgba(30,45,64,.6)'},border:{display:false},beginAtZero:true}
+          x:{ticks:{color:'#9ca3af',font:{family:FONT,size:9},maxRotation:40},grid:{display:false},border:{display:false}},
+          y:sy
         }
       }
     });
   })();
 }
+// ══════════════════════════════════════════════════════
+// sortByFechaDesc — Ordena array de despachos de más
+// reciente a más antiguo. Acepta formato dd/mm/yy o
+// dd/mm/yyyy. Función reutilizable en todo el módulo.
+// ══════════════════════════════════════════════════════
+function sortByFechaDesc(arr){
+  return [...arr].sort(function(a,b){
+    return toISO(a.fecha).localeCompare(toISO(b.fecha)) * -1;
+  });
+}
+// ══════════════════════════════════════════════════════
+
 function filterDetalle(){renderDetalle();}
 function setCityFilter(btn,city){cityFilter=city;document.querySelectorAll('.fbtn:not(#monthBtns .fbtn)').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderDetalle();}
 function renderDetalle(){
   const q=document.getElementById('srch').value.toLowerCase();
   const base=getFilteredDespDetalle();
-  const f=base.filter(d=>
+  const fRaw=base.filter(d=>
     (cityFilter==='Todos'||d.ciudad===cityFilter)&&
     (q===''||d.cliente.toLowerCase().includes(q)||d.area.toLowerCase().includes(q))
   );
+  const f=sortByFechaDesc(fRaw);
   const tb=document.getElementById('detalleBody');tb.innerHTML='';
   f.forEach(d=>{
     const tr=document.createElement('tr');
@@ -4936,6 +5010,7 @@ function renderPendientes(){
   if(diaVal) lblTxt+=` · ${diaVal}`;
   if(lbl) lbl.textContent=`${filtered.length} registro${filtered.length!==1?'s':''} · ${lblTxt}`;
 
+  filtered = sortByFechaDesc(filtered);
   const tb=document.getElementById('pendSemBody');tb.innerHTML='';
   filtered.forEach((p,visIdx)=>{
     const isHoy=toISO(p.fecha)===todayISO;
@@ -4955,6 +5030,10 @@ function renderPendientes(){
       if(btnD){btnD.disabled=false;btnD.style.color='var(--pink)';btnD.style.borderColor='var(--pink)';btnD.style.cursor='pointer';btnD.style.background='rgba(255,62,154,.12)';}
       if(btnH){btnH.disabled=false;btnH.style.color='var(--accent3)';btnH.style.borderColor='var(--accent3)';btnH.style.cursor='pointer';btnH.style.background='rgba(168,255,62,.12)';}
       if(info) info.textContent='Fila seleccionada';
+    };
+    tr.oncontextmenu=function(e){
+      e.preventDefault();
+      showPendContextMenu(e, realPendIdx);
     };
     const fechaCell=`<td style="font-weight:700;white-space:nowrap">${disp(p.fecha)}${isHoy?'<span class="badge-hoy">HOY</span>':''}</td>`;
     tr.innerHTML=`${fechaCell}<td>${p.cliente}</td><td style="color:#9ca3af">${p.area}</td><td style="color:#6b7280">${p.color||'—'}</td><td style="color:#9ca3af">${p.instalador}</td><td>${cityBadge(p.ciudad)}</td><td style="color:#6b7280;font-size:10px;max-width:220px">${p.detalle}</td><td><span class="badge ${p.estado==='Terminado'?'b-ok':'b-proc'}">${p.estado}</span></td>`;
@@ -4999,9 +5078,18 @@ function renderSemana(){
   document.getElementById('sw3').textContent=new Set(desp.map(d=>acat(d.area))).size;
   document.getElementById('sw4').textContent=new Set(desp.filter(d=>d.instalador&&d.instalador!=='N/A'&&d.instalador!=='').map(d=>d.instalador)).size;
   const tb=document.getElementById('semanaBody');tb.innerHTML='';
-  desp.forEach(d=>{
+  const despSorted=sortByFechaDesc(desp);
+  despSorted.forEach(d=>{
+    const realIdx=DATA.desp.indexOf(d);
+    const hasPend=d.herrPendDesc&&d.herrPendDesc.trim()!==''&&!d.herrPendEntregado;
+    const pendBadge=hasPend?'<span class="hp-badge">⏳ H.Pend</span>':'';
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td style="color:var(--accent3);font-weight:700;white-space:nowrap">${disp(d.fecha)}</td><td>${d.cliente}</td><td style="color:#9ca3af">${d.area}</td><td style="color:#6b7280;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.color||'—'}</td><td style="color:#9ca3af">${d.instalador||'—'}</td><td>${cityBadge(d.ciudad)}</td><td style="color:#6b7280;font-size:10px">${d.tipo}</td><td><span class="badge b-ok">✓ ${d.estado}</span></td>`;
+    if(hasPend) tr.className='row-herrpend';
+    tr.style.cursor='pointer';
+    tr.dataset.realIdx=realIdx;
+    tr.onclick=function(e){ openDespachoDetalle(realIdx); };
+    tr.oncontextmenu=function(e){ e.preventDefault(); showDespContextMenu(e, realIdx); };
+    tr.innerHTML=`<td style="color:var(--accent3);font-weight:700;white-space:nowrap">${disp(d.fecha)}</td><td>${d.cliente}${pendBadge}</td><td style="color:#9ca3af">${d.area}</td><td style="color:#6b7280;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.color||'—'}</td><td style="color:#9ca3af">${d.instalador||'—'}</td><td>${cityBadge(d.ciudad)}</td><td style="color:#6b7280;font-size:10px">${d.tipo}</td><td><span class="badge b-ok">✓ ${d.estado}</span></td>`;
     tb.appendChild(tr);
   });
   if(desp.length===0){
@@ -5011,11 +5099,25 @@ function renderSemana(){
   }
 }
 
+// ══════════════════════════════════════════════════════
+// openDespachoDetalle(index) — abre el mismo modal de
+// Despachos desde cualquier tab (Semana, reportes, etc.)
+// Reutiliza editItem y verHerrajesCliente sin duplicar.
+// ══════════════════════════════════════════════════════
+function openDespachoDetalle(realIdx){
+  const d=DATA.desp[realIdx];
+  if(!d) return;
+  const hasPend=d.herrPendDesc&&d.herrPendDesc.trim()!==''&&!d.herrPendEntregado;
+  if(hasPend){ verHerrajesPendiente(realIdx); }
+  else { verHerrajesCliente(realIdx); }
+}
+// ══════════════════════════════════════════════════════
+
 function exportarSemanaExcel(){
   const {desp,desde,hasta}=getSemanaDesp();
   if(!desp.length){toast('Sin datos esta semana','var(--pink)');return;}
   const headers=['FECHA','CLIENTE','ÁREA','COLOR','INSTALADOR','CIUDAD','TIPO','ESTADO'];
-  const rows=desp.map(d=>[disp(d.fecha),d.cliente,d.area,d.color||'',d.instalador||'',d.ciudad,d.tipo,d.estado]);
+  const rows=sortByFechaDesc(desp).map(d=>[disp(d.fecha),d.cliente,d.area,d.color||'',d.instalador||'',d.ciudad,d.tipo,d.estado]);
   let csv=headers.join('\t')+'\n'+rows.map(r=>r.join('\t')).join('\n');
   // BOM for Excel UTF-8
   const bom='\uFEFF';
@@ -5031,7 +5133,7 @@ function exportarSemanaPDF(){
   const {desp,desde,hasta}=getSemanaDesp();
   if(!desp.length){toast('Sin datos esta semana','var(--pink)');return;}
   const win=window.open('','_blank');
-  const rows=desp.map(d=>`<tr><td>${disp(d.fecha)}</td><td>${d.cliente}</td><td>${d.area}</td><td>${d.color||'—'}</td><td>${d.instalador||'—'}</td><td>${d.ciudad}</td><td>${d.tipo}</td><td>${d.estado}</td></tr>`).join('');
+  const rows=sortByFechaDesc(desp).map(d=>`<tr><td>${disp(d.fecha)}</td><td>${d.cliente}</td><td>${d.area}</td><td>${d.color||'—'}</td><td>${d.instalador||'—'}</td><td>${d.ciudad}</td><td>${d.tipo}</td><td>${d.estado}</td></tr>`).join('');
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Despachos Semana</title>
   <style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:18px;margin-bottom:4px}p{color:#666;font-size:12px;margin-bottom:16px}
   table{width:100%;border-collapse:collapse;font-size:11px}th{background:#1F3864;color:#fff;padding:8px;text-align:left}
@@ -5871,8 +5973,7 @@ function verHerrajesCliente(despIndex){
   if(usados.length===0){
     html='<div style="color:var(--sub);font-size:11px;text-align:center;padding:20px;">Sin herrajes registrados para este despacho.</div>';
   }else{
-    html=usados.map(h=>`<div class="hd-row"><span class="hd-name">${h.nombre}<br><span class="hd-pres">${h.presentacion}</span></span><span class="hd-qty">${hData[h.id]||0}</span><span class="hd-cost">${h.precio>0?fmtL((hData[h.id]||0)*h.precio):'—'}</span></div>`).join('');
-    html+=`<div class="hd-total-row"><span style="color:#f9fafb;font-size:12px;font-weight:700;">COSTO TOTAL HERRAJES</span><span style="color:var(--gold);font-size:16px;font-weight:700;">${fmtL(costo)}</span></div>`;
+    html=usados.map(h=>`<div class="hd-row"><span class="hd-name">${h.nombre}<br><span class="hd-pres">${h.presentacion}</span></span><span class="hd-qty">${hData[h.id]||0}</span></div>`).join('');
   }
   document.getElementById('mhdTitle').textContent=`🔩 ${d.cliente} — ${d.area} (${disp(d.fecha)})`;
   document.getElementById('mhdContent').innerHTML=html;
@@ -5924,7 +6025,8 @@ function renderSemanaConHerrajes(){
   document.getElementById('sw4').textContent=new Set(desp.filter(d=>d.instalador&&d.instalador!=='N/A'&&d.instalador!=='').map(d=>d.instalador)).size;
   tb.innerHTML='';
   let costoSemana=0;
-  desp.forEach((d,idx)=>{
+  const despSorted=sortByFechaDesc(desp);
+  despSorted.forEach((d,idx)=>{
     const realIdx=DATA.desp.indexOf(d);
     const costo=calcCostoHerrajes(d.herrajes);
     costoSemana+=costo;
@@ -5932,12 +6034,13 @@ function renderSemanaConHerrajes(){
     const usados=Object.values(hData).some(v=>v>0);
     const tr=document.createElement('tr');
     tr.style.cursor='pointer';
-    tr.title='Clic para ver herrajes';
-    tr.onclick=()=>verHerrajesCliente(realIdx);
+    tr.dataset.realIdx=realIdx;
+    tr.title='Clic para ver detalle / herrajes';
     const hasPendSem=d.herrPendDesc&&d.herrPendDesc.trim()!==''&&!d.herrPendEntregado;
     if(hasPendSem){tr.classList.add('row-herrpend');tr.title='Clic para ver herrajes pendientes';}
     const pendBadgeSem=hasPendSem?'<span class="hp-badge">⏳ H.Pend</span>':'';
-    tr.onclick=()=>hasPendSem?verHerrajesPendiente(realIdx):verHerrajesCliente(realIdx);
+    tr.onclick=()=>openDespachoDetalle(realIdx);
+    tr.oncontextmenu=function(e){ e.preventDefault(); showDespContextMenu(e, realIdx); };
     tr.innerHTML=`<td style="color:var(--accent3);font-weight:700;white-space:nowrap">${disp(d.fecha)}</td><td>${d.cliente}${usados?'<span class="tag-herrajes">🔩</span>':''}${pendBadgeSem}</td><td style="color:#9ca3af">${d.area}</td><td style="color:#6b7280;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.color||'—'}</td><td style="color:#9ca3af">${d.instalador||'—'}</td><td>${cityBadge(d.ciudad)}</td><td style="color:#6b7280;font-size:10px">${d.tipo}</td><td><span class="badge b-ok">✓ ${d.estado}</span></td><td style="color:var(--gold);font-size:11px;font-weight:700;">${costo>0?fmtL(costo):'—'}</td>`;
     tb.appendChild(tr);
   });
@@ -5958,30 +6061,48 @@ function renderGestionHerrajes(){
   lista.innerHTML=hh.map((h,i)=>`
     <div class="h-list-row">
       <span style="color:#6b7280;font-size:10px;min-width:30px;">${i+1}</span>
-      <span class="h-name">${h.nombre}</span>
-      <span class="h-pres">${h.presentacion}</span>
-      <span class="h-price" style="display:flex;align-items:center;gap:6px;"><span style="color:#6b7280;font-size:10px;">L.</span><input class="h-price-input" type="number" min="0" step="0.01" value="${h.precio||0}" data-hid="${h.id}" onchange="updateHerrajePrecio('${h.id}',this.value)"></span>
-      <button class="btn-sm btn-delete" onclick="eliminarHerraje('${h.id}')" style="margin-left:8px;">✕</button>
+      <span class="h-name" id="hname_${h.id}">${h.nombre}</span>
+      <span class="h-pres" id="hpres_${h.id}">${h.presentacion}</span>
+      <button class="btn-sm btn-edit" onclick="editarHerraje('${h.id}')" style="margin-left:auto;margin-right:4px;">✏ Editar</button>
+      <button class="btn-sm btn-delete" onclick="eliminarHerraje('${h.id}')">✕</button>
     </div>`).join('');
 }
 
-function updateHerrajePrecio(hid,val){
-  if(!DATA.herrajes)DATA.herrajes=JSON.parse(JSON.stringify(DEFAULT_HERRAJES));
+function editarHerraje(hid){
+  if(!DATA.herrajes) DATA.herrajes=JSON.parse(JSON.stringify(DEFAULT_HERRAJES));
   const h=DATA.herrajes.find(x=>x.id===hid);
-  if(h)h.precio=parseFloat(val)||0;
+  if(!h) return;
+  const nameEl=document.getElementById('hname_'+hid);
+  const presEl=document.getElementById('hpres_'+hid);
+  if(!nameEl||!presEl) return;
+  // Replace with inline inputs
+  const row=nameEl.closest('.h-list-row');
+  const origHTML=row.innerHTML;
+  row.innerHTML=`
+    <span style="color:#6b7280;font-size:10px;min-width:30px;">#</span>
+    <input id="hedit_nombre_${hid}" value="${h.nombre}" style="flex:1;background:#0d1526;border:1px solid var(--accent);color:var(--text);font-family:'Space Mono',monospace;font-size:11px;padding:5px 8px;border-radius:6px;outline:none;">
+    <input id="hedit_pres_${hid}" value="${h.presentacion}" style="width:130px;background:#0d1526;border:1px solid var(--border);color:#6b7280;font-family:'Space Mono',monospace;font-size:10px;padding:5px 8px;border-radius:6px;outline:none;">
+    <button class="btn-sm btn-save" onclick="guardarEditHerraje('${hid}')" style="margin-left:8px;background:rgba(168,255,62,.15);color:var(--accent3);border:1px solid var(--accent3);">✓ Guardar</button>
+    <button class="btn-sm" onclick="renderGestionHerrajes()" style="background:transparent;color:var(--muted);border:1px solid var(--border);">✕</button>
+  `;
+  document.getElementById('hedit_nombre_'+hid)?.focus();
 }
 
-function saveHerrajePrecios(){
-  // Read all current inputs
-  document.querySelectorAll('.h-price-input').forEach(inp=>{
-    const hid=inp.getAttribute('data-hid');
-    if(!DATA.herrajes)DATA.herrajes=JSON.parse(JSON.stringify(DEFAULT_HERRAJES));
-    const h=DATA.herrajes.find(x=>x.id===hid);
-    if(h)h.precio=parseFloat(inp.value)||0;
-  });
+function guardarEditHerraje(hid){
+  if(!DATA.herrajes) DATA.herrajes=JSON.parse(JSON.stringify(DEFAULT_HERRAJES));
+  const h=DATA.herrajes.find(x=>x.id===hid);
+  if(!h) return;
+  const nombre=document.getElementById('hedit_nombre_'+hid)?.value.trim();
+  const pres=document.getElementById('hedit_pres_'+hid)?.value.trim();
+  if(!nombre){toast('⚠ Nombre requerido','var(--pink)');return;}
+  h.nombre=nombre;
+  h.presentacion=pres||h.presentacion;
   saveState();
-  toast('✓ Precios guardados');
+  renderGestionHerrajes();
+  toast('✓ Herraje actualizado');
 }
+
+
 
 function eliminarHerraje(hid){
   if(!confirm('¿Eliminar este herraje del catálogo?'))return;
@@ -5994,11 +6115,10 @@ function eliminarHerraje(hid){
 function saveNuevoHerraje(){
   const nombre=document.getElementById('nh_nombre').value.trim();
   const pres=document.getElementById('nh_pres').value.trim()||'UNIDAD';
-  const precio=parseFloat(document.getElementById('nh_precio').value)||0;
   if(!nombre){toast('⚠ Ingresa el nombre del herraje','var(--pink)');return;}
   if(!DATA.herrajes)DATA.herrajes=JSON.parse(JSON.stringify(DEFAULT_HERRAJES));
   const newId='hc'+Date.now();
-  DATA.herrajes.push({id:newId,nombre,presentacion:pres,precio});
+  DATA.herrajes.push({id:newId,nombre,presentacion:pres,precio:0});
   saveState();closeModal('modalNuevoHerraje');renderGestionHerrajes();
   toast('✓ Herraje agregado');
 }
@@ -6008,7 +6128,6 @@ const _origOpenModal=openModal;
 openModal=function(type){
   if(type==='nuevoHerraje'){
     ['nh_nombre','nh_pres'].forEach(id=>document.getElementById(id).value='');
-    document.getElementById('nh_precio').value='0';
     document.getElementById('modalNuevoHerraje').classList.add('open');
     return;
   }
@@ -6174,7 +6293,6 @@ function initDashboard(){
     const urlParams = new URLSearchParams(window.location.search);
     if(urlParams.get('modo')==='lectura'){
       document.body.classList.add('modo-lectura');
-      // Si la tab activa es editor, cambiar a overview
       const activeTab = document.querySelector('.tab.active');
       if(activeTab && (activeTab.textContent.includes('Editor') || activeTab.textContent.includes('Herrajes'))){
         const overviewTab = document.querySelector('.tab');
@@ -6190,11 +6308,18 @@ function initDashboard(){
     renderSemana();
     renderHerrPend();
     renderPendHerrajes();
-    if(typeof Chart!=='undefined') renderCharts();
     renderSuperficies();
     // Iniciar sincronización Firebase en tiempo real
     if(window._fbReady){ _startFirebaseSync(); }
     else { window._fbReadyCallback=function(){ _startFirebaseSync(); }; }
+    // Renderizar gráficos — con retry si Chart.js aún no cargó
+    (function tryCharts(attempts){
+      if(typeof Chart!=='undefined'){
+        try{ renderCharts(); }catch(e){ console.warn('renderCharts error:',e); }
+      } else if(attempts>0){
+        setTimeout(function(){ tryCharts(attempts-1); }, 300);
+      }
+    })(15);
   }catch(e){ console.error('Init error:',e); }
 }
 if(document.readyState==='complete'){ initDashboard(); }
@@ -9283,10 +9408,130 @@ window.lmShowTab = function(id) {
     if(menu && menu.style.display !== 'none') menu.style.display = 'none';
   }, true);
 })();
+// ── Menú contextual Pendientes ──
+(function(){
+  var _pendCtxIdx = null;
+
+  window.showPendContextMenu = function(e, realIdx){
+    _pendCtxIdx = realIdx;
+    var menu = document.getElementById('pendContextMenu');
+    if(!menu) return;
+    var p = DATA.pend[realIdx];
+    var lbl = document.getElementById('pendCtxLabel');
+    if(lbl && p) lbl.textContent = p.cliente ? p.cliente.slice(0,28) : 'PENDIENTE';
+    menu.style.display = 'block';
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var mw = menu.offsetWidth  || 190;
+    var mh = menu.offsetHeight || 110;
+    var x = e.clientX + 6;
+    var y = e.clientY + 6;
+    if(x + mw > vw - 8) x = e.clientX - mw - 6;
+    if(y + mh > vh - 8) y = e.clientY - mh - 6;
+    menu.style.left = x + 'px';
+    menu.style.top  = y + 'px';
+  };
+
+  window.pendCtxAction = function(action){
+    var menu = document.getElementById('pendContextMenu');
+    if(menu) menu.style.display = 'none';
+    if(_pendCtxIdx === null) return;
+    if(action === 'edit')   editItem('pend', _pendCtxIdx);
+    if(action === 'delete') deleteItem('pend', _pendCtxIdx);
+    _pendCtxIdx = null;
+  };
+
+  document.addEventListener('click', function(e){
+    var menu = document.getElementById('pendContextMenu');
+    if(menu && !menu.contains(e.target)) menu.style.display = 'none';
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape'){
+      var menu = document.getElementById('pendContextMenu');
+      if(menu) menu.style.display = 'none';
+    }
+  });
+  document.addEventListener('scroll', function(){
+    var menu = document.getElementById('pendContextMenu');
+    if(menu && menu.style.display !== 'none') menu.style.display = 'none';
+  }, true);
+})();
 // ══════════════════════════════════════════════════════
 // FIN MENÚ CONTEXTUAL
 // ══════════════════════════════════════════════════════
 </script>
 
+
+<script>
+// ══════════════════════════════════════════════════════
+// ANÁLISIS PRO — CONSULTOR SENIOR EN SISTEMAS LOGÍSTICOS
+// Disponible en consola: window.ANALISIS_PRO
+// ══════════════════════════════════════════════════════
+window.ANALISIS_PRO = {
+  version: 'v15',
+  fecha_analisis: '2026',
+  mejoras: [
+    // ── PRIORIDAD ALTA ──────────────────────────────
+    { id:'A1', prioridad:'ALTO', area:'Despachos / Semana', titulo:'Ordenamiento descendente automático',
+      descripcion:'sortByFechaDesc() aplicada en renderDetalle, renderSemanaConHerrajes, exportaciones y PDFs. El despacho más reciente siempre aparece arriba.',
+      estado:'IMPLEMENTADO ✅' },
+    { id:'A2', prioridad:'ALTO', area:'Tab Semana', titulo:'Funciones completas igual que Despachos',
+      descripcion:'openDespachoDetalle(index) reemplaza verHerrajesCliente() en Semana. Cada fila ahora soporta editar, eliminar, cambiar estado y menú contextual (clic derecho).',
+      estado:'IMPLEMENTADO ✅' },
+    { id:'A3', prioridad:'ALTO', area:'Resumen / Gráficos', titulo:'Reconstrucción profesional de gráficos Chart.js',
+      descripcion:'4 gráficos pro: Bar (despachos/día), Doughnut (distribución ciudad), Line (tendencia semanal agrupada por semana ISO), Horizontal Bar (instaladores activos con ranking). Validación de datos vacíos con mensaje "No hay datos disponibles".',
+      estado:'IMPLEMENTADO ✅' },
+    { id:'A4', prioridad:'ALTO', area:'Firebase', titulo:'Historial de cambios / Auditoría',
+      descripcion:'Registrar cada operación (crear/editar/eliminar) con timestamp, usuario y datos anteriores/nuevos en colección "auditoria" de Firebase. Permite trazabilidad total.',
+      estado:'PENDIENTE — IMPACTO ALTO' },
+    { id:'A5', prioridad:'ALTO', area:'Despachos', titulo:'Semáforo de estado visual',
+      descripcion:'Color en filas según estado: verde=Completo, amarillo=Parcial, rojo=Pendiente. Detecta alertas de herrajes pendientes >72h sin entregar.',
+      estado:'PENDIENTE — IMPACTO ALTO' },
+    { id:'A6', prioridad:'ALTO', area:'Alertas', titulo:'Alertas visuales automáticas',
+      descripcion:'Banner al abrir si hay herrajes pendientes sin entregar, despachos sin instalador asignado, o clientes en bodega >7 días.',
+      estado:'PENDIENTE — IMPACTO ALTO' },
+    // ── PRIORIDAD MEDIA ─────────────────────────────
+    { id:'M1', prioridad:'MEDIO', area:'Búsqueda', titulo:'Búsqueda avanzada con filtros múltiples',
+      descripcion:'Filtrar simultáneamente por fecha, ciudad, instalador, área y estado. Panel de filtros desplegable que no reemplaza la búsqueda existente.',
+      estado:'PENDIENTE' },
+    { id:'M2', prioridad:'MEDIO', area:'Estadísticas', titulo:'KPIs operativos en tiempo real',
+      descripcion:'Tasa de completitud (despachos completos vs parciales), tiempo promedio por instalador, despachos por semana vs semana anterior.',
+      estado:'PENDIENTE' },
+    { id:'M3', prioridad:'MEDIO', area:'Seguimiento', titulo:'Seguimiento por instalador',
+      descripcion:'Vista filtrada por instalador mostrando todos sus despachos activos, pendientes y completados. Tabla de rendimiento semanal.',
+      estado:'PENDIENTE' },
+    { id:'M4', prioridad:'MEDIO', area:'Exportación', titulo:'Exportación automática programada',
+      descripcion:'Botón "Exportar semana completa" que genera PDF + Excel de todos los módulos activos en un solo click. Nombre de archivo con fecha automática.',
+      estado:'PENDIENTE' },
+    { id:'M5', prioridad:'MEDIO', area:'Control de tiempos', titulo:'Control de tiempos de entrega',
+      descripcion:'Campo "fecha compromiso" en despacho. Calcular días de atraso. Resaltar en rojo despachos con más de N días sin resolver.',
+      estado:'PENDIENTE' },
+    { id:'M6', prioridad:'MEDIO', area:'Panel ejecutivo', titulo:'Panel ejecutivo / Dashboard KPI',
+      descripcion:'Vista simplificada con las 5 métricas clave: total semana, pendientes críticos, instaladores activos, ciudades cubiertas, costo total herrajes.',
+      estado:'PENDIENTE' },
+    // ── PRIORIDAD BAJA ──────────────────────────────
+    { id:'B1', prioridad:'BAJO', area:'Firebase', titulo:'Backup automático diario',
+      descripcion:'Cloud Function que exporta snapshot de Firebase a Google Drive o Bucket cada 24h. Recuperación ante pérdida de datos.',
+      estado:'PENDIENTE' },
+    { id:'B2', prioridad:'BAJO', area:'Performance', titulo:'Paginación para listas grandes',
+      descripcion:'Cuando DATA.desp supera 500 registros, renderizar en páginas de 50 con navegador de páginas. Evita freezes en dispositivos lentos.',
+      estado:'PENDIENTE' },
+    { id:'B3', prioridad:'BAJO', area:'UX / Modo offline', titulo:'Modo offline con Service Worker',
+      descripcion:'Cache de la app con Service Worker. Permite operar sin conexión y sincronizar al reconectar. Muestra banner de datos no guardados.',
+      estado:'PENDIENTE' },
+    { id:'B4', prioridad:'BAJO', area:'UX', titulo:'Undo / Deshacer última acción',
+      descripcion:'Toast con botón "Deshacer" por 5 segundos tras eliminar un registro. Recupera el dato sin necesidad de historial completo.',
+      estado:'PENDIENTE' },
+  ],
+  riesgos_operativos: [
+    'Sin historial de cambios: un error de edición no es recuperable.',
+    'Sin paginación: rendimiento puede degradarse con >300 despachos en dispositivos lentos.',
+    'toISO() con fechas de 2 dígitos de año asume 2000-2099 — verificar datos antiguos.',
+    'Firebase sin reglas de seguridad: cualquier URL con acceso a la API key puede leer/escribir.',
+    'Sin validación de duplicados al guardar despachos.',
+  ]
+};
+// Para ver el análisis: console.table(window.ANALISIS_PRO.mejoras)
+// ══════════════════════════════════════════════════════
+</script>
 
 </body></html>
