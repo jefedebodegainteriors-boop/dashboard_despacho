@@ -1851,340 +1851,393 @@
 
 
 <div id="moduloOperaciones" style="display:none;">
-  <!-- HEADER OPERACIONES -->
-  <div class="header" style="border-color:rgba(255,165,0,.3);">
-    <div class="header-left">
-      <div class="accent-bar" style="background:linear-gradient(180deg,#ff6b35,#ffd700);"></div>
-      <div>
-        <h1 style="color:#ff6b35;">OPERACIONES</h1>
-        <div class="subtitle">INSTALACIONES · TOPS · REMEDICIONES · REPARACIONES</div>
-      </div>
-    </div>
-    <button onclick="volverPortada()" style="background:transparent;border:1px solid #2a2a2a;border-radius:10px;padding:8px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .25s;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:1px;color:#4b5563;flex-shrink:0;"
-      onmouseover="this.style.borderColor='#ff6b35';this.style.color='#ff6b35';"
-      onmouseout="this.style.borderColor='#2a2a2a';this.style.color='#4b5563';">
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1L1 7L7 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><line x1="1" y1="7" x2="13" y2="7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+
+<style>
+.ops-shell{display:flex;flex-direction:column;min-height:100vh;background:var(--dark);}
+.ops-topbar{background:#07090f;border-bottom:1px solid #1a2535;padding:10px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0;position:sticky;top:0;z-index:50;}
+.ops-topbar-h2{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#ff6b35;letter-spacing:1px;margin:0;}
+.ops-pills{display:flex;gap:6px;flex-wrap:wrap;margin-left:4px;}
+.ops-pill{display:inline-block;font-size:9px;font-weight:700;padding:2px 9px;border-radius:20px;font-family:'Space Mono',monospace;letter-spacing:.5px;}
+.ops-pill-a{background:rgba(255,107,53,.12);color:#ff6b35;border:1px solid rgba(255,107,53,.35);}
+.ops-pill-b{background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.3);}
+.ops-pill-c{background:rgba(168,255,62,.1);color:#a8ff3e;border:1px solid rgba(168,255,62,.3);}
+.ops-sync{display:flex;align-items:center;gap:5px;margin-left:auto;font-family:'Space Mono',monospace;font-size:9px;color:#4b5563;}
+.ops-sync-dot{width:6px;height:6px;border-radius:50%;background:#a8ff3e;box-shadow:0 0 6px #a8ff3e66;}
+.ops-body{display:flex;flex:1;min-height:600px;}
+.ops-nav{width:162px;background:#060810;border-right:1px solid #141e30;padding:10px 7px;display:flex;flex-direction:column;gap:1px;overflow-y:auto;flex-shrink:0;}
+.ops-nav-lbl{color:#1e2d44;font-size:9px;font-family:'Space Mono',monospace;letter-spacing:2px;text-transform:uppercase;padding:11px 8px 4px;margin-top:2px;}
+.ops-nav-lbl:first-child{margin-top:0;}
+.ops-nitem{display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:7px;cursor:pointer;color:#3d5270;font-size:11px;font-family:'Space Mono',monospace;transition:all .12s;border:none;background:transparent;width:100%;text-align:left;letter-spacing:.2px;}
+.ops-nitem:hover:not(.active){background:#0b1424;color:#7a90a8;}
+.ops-nitem.active{background:rgba(255,107,53,.1);color:#ff6b35;font-weight:700;}
+.ops-ndot{width:5px;height:5px;border-radius:50%;margin-left:auto;flex-shrink:0;}
+.ops-ndot-w{background:#ff6b35;box-shadow:0 0 4px #ff6b3588;}
+.ops-ndot-ok{background:#a8ff3e;}
+.ops-ndot-b{background:#3b82f6;}
+.ops-content{flex:1;padding:16px 18px;background:#080912;display:flex;flex-direction:column;gap:14px;overflow-y:auto;min-width:0;}
+.ops-panel{display:none;flex-direction:column;gap:14px;}
+.ops-panel.active{display:flex;}
+.ops-alert{background:rgba(255,107,53,.07);border:1px solid rgba(255,107,53,.25);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:8px;font-size:11px;color:#ff6b35;font-family:'Space Mono',monospace;}
+.ops-kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;}
+.ops-kpi{background:#0d1526;border:1px solid #1a2535;border-radius:12px;padding:12px 14px;position:relative;overflow:hidden;}
+.ops-kpi::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;border-radius:12px 0 0 12px;}
+.ops-kpi.ka::before{background:#ff6b35;}.ops-kpi.kb::before{background:#3b82f6;}
+.ops-kpi.kc::before{background:#a8ff3e;}.ops-kpi.kd::before{background:#ef4444;}
+.ops-kpi.ke::before{background:#8b5cf6;}.ops-kpi.kf::before{background:#00bfff;}
+.ops-kpi.kg::before{background:#ffd700;}
+.ops-kpi-lbl{color:#4b5563;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;font-family:'Space Mono',monospace;margin-bottom:5px;}
+.ops-kpi-val{font-size:24px;font-weight:700;line-height:1;margin-bottom:3px;}
+.ops-kpi.ka .ops-kpi-val{color:#ff6b35;}.ops-kpi.kb .ops-kpi-val{color:#3b82f6;}
+.ops-kpi.kc .ops-kpi-val{color:#a8ff3e;}.ops-kpi.kd .ops-kpi-val{color:#ef4444;}
+.ops-kpi.ke .ops-kpi-val{color:#8b5cf6;}.ops-kpi.kf .ops-kpi-val{color:#00bfff;}
+.ops-kpi.kg .ops-kpi-val{color:#ffd700;}
+.ops-kpi-sub{color:#2d3f5a;font-size:9px;font-family:'Space Mono',monospace;}
+.ops-kpi-bar{height:2px;border-radius:2px;background:#141e30;margin-top:9px;}
+.ops-kpi-fill{height:2px;border-radius:2px;transition:width .5s ease;}
+.ops-kpi.ka .ops-kpi-fill{background:#ff6b35;}.ops-kpi.kb .ops-kpi-fill{background:#3b82f6;}
+.ops-kpi.kc .ops-kpi-fill{background:#a8ff3e;}.ops-kpi.kd .ops-kpi-fill{background:#ef4444;}
+.ops-kpi.ke .ops-kpi-fill{background:#8b5cf6;}.ops-kpi.kf .ops-kpi-fill{background:#00bfff;}
+.ops-kpi.kg .ops-kpi-fill{background:#ffd700;}
+.ops-card{background:#0d1526;border:1px solid #1a2535;border-radius:12px;overflow:hidden;}
+.ops-card-header{padding:11px 14px;border-bottom:1px solid #1a2535;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.ops-card-title{font-size:11px;font-weight:700;color:#f9fafb;font-family:'Space Mono',monospace;letter-spacing:.5px;}
+.ops-card-count{font-size:10px;color:#2d3f5a;font-family:'Space Mono',monospace;margin-left:auto;}
+.ops-table-wrap{overflow-x:auto;}
+.ops-table{width:100%;border-collapse:collapse;font-size:11px;font-family:'Space Mono',monospace;}
+.ops-table thead tr{background:#07090f;}
+.ops-table th{padding:8px 12px;text-align:left;color:#3d5270;letter-spacing:1px;font-weight:700;border-bottom:1px solid #141e30;white-space:nowrap;font-size:10px;}
+.ops-table td{padding:8px 12px;border-bottom:1px solid #0f1829;color:#e5e7eb;}
+.ops-table tbody tr:last-child td{border-bottom:none;}
+.ops-table tbody tr:hover td{background:#0b1020;}
+.ops-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:9px;font-weight:700;font-family:'Space Mono',monospace;}
+.ob-proceso{background:rgba(255,107,53,.12);color:#ff6b35;border:1px solid rgba(255,107,53,.3);}
+.ob-nuevo{background:rgba(59,130,246,.1);color:#60a5fa;border:1px solid rgba(59,130,246,.25);}
+.ob-terminado{background:rgba(168,255,62,.1);color:#a8ff3e;border:1px solid rgba(168,255,62,.25);}
+.ob-pendiente{background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.25);}
+.ob-remedir{background:rgba(139,92,246,.1);color:#a78bfa;border:1px solid rgba(139,92,246,.25);}
+.ob-realizado{background:rgba(168,255,62,.1);color:#a8ff3e;border:1px solid rgba(168,255,62,.25);}
+.ob-top{background:rgba(0,191,255,.1);color:#00bfff;border:1px solid rgba(0,191,255,.25);}
+.ops-search-row{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid #141e30;flex-wrap:wrap;}
+.ops-search{background:#07090f;border:1px solid #1a2535;border-radius:7px;padding:6px 10px;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:11px;outline:none;width:220px;}
+.ops-search:focus{border-color:rgba(255,107,53,.5);}
+.ops-chip{padding:3px 10px;border-radius:20px;border:1px solid #1a2535;font-size:9px;font-weight:700;font-family:'Space Mono',monospace;color:#3d5270;cursor:pointer;background:transparent;letter-spacing:.5px;}
+.ops-chip.active{border-color:rgba(255,107,53,.5);background:rgba(255,107,53,.1);color:#ff6b35;}
+.ops-add-btn{padding:5px 12px;border-radius:7px;border:1px solid #1a2535;background:transparent;color:#3d5270;font-family:'Space Mono',monospace;font-size:9px;font-weight:700;cursor:pointer;letter-spacing:.5px;transition:all .15s;white-space:nowrap;}
+.ops-add-btn:hover{border-color:rgba(168,255,62,.5);color:#a8ff3e;}
+.ops-export-row{display:flex;gap:8px;flex-wrap:wrap;padding:10px 14px;}
+.ops-export-btn{padding:6px 12px;border-radius:7px;border:1px solid #1a2535;background:transparent;color:#3d5270;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:.5px;transition:all .15s;display:flex;align-items:center;gap:5px;}
+.ops-export-btn:hover{background:#0d1526;color:#9ca3af;}
+.ops-rank-row{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid #0f1829;}
+.ops-rank-row:last-child{border-bottom:none;}
+.ops-rank-n{font-size:11px;font-weight:700;color:#3d5270;width:18px;flex-shrink:0;font-family:'Space Mono',monospace;}
+.ops-rank-name{flex:1;color:#e5e7eb;font-size:11px;font-family:'Space Mono',monospace;}
+.ops-rank-pts{font-size:11px;font-weight:700;color:#ffd700;min-width:50px;text-align:right;font-family:'Space Mono',monospace;}
+.ops-rank-bar{width:90px;}
+.ops-prog-bg{background:#141e30;border-radius:3px;height:3px;}
+.ops-prog-fill{border-radius:3px;height:3px;transition:width .5s;}
+.ops-btn-edit{background:rgba(0,229,255,.08);color:#00e5ff;border:none;border-radius:5px;padding:3px 8px;font-size:9px;font-weight:700;cursor:pointer;font-family:'Space Mono',monospace;}
+.ops-btn-del{background:rgba(255,62,154,.08);color:#ff3e9a;border:none;border-radius:5px;padding:3px 8px;font-size:9px;font-weight:700;cursor:pointer;font-family:'Space Mono',monospace;}
+.ops-back-btn{padding:5px 12px;border-radius:7px;border:1px solid #1a2535;background:transparent;color:#4b5563;font-family:'Space Mono',monospace;font-size:9px;font-weight:700;cursor:pointer;letter-spacing:.5px;display:flex;align-items:center;gap:6px;transition:all .15s;white-space:nowrap;}
+.ops-back-btn:hover{border-color:#ff6b35;color:#ff6b35;}
+.ops-semana-grp-hdr{padding:7px 14px;background:#07090f;font-size:10px;font-weight:700;color:#3d5270;border-bottom:1px solid #141e30;font-family:'Space Mono',monospace;letter-spacing:.5px;}
+@media(max-width:640px){.ops-nav{width:110px;}.ops-nitem{font-size:10px;padding:6px 7px;}.ops-content{padding:10px 12px;}}
+@media(max-width:480px){.ops-nav{display:none;}}
+</style>
+
+<div class="ops-shell">
+  <div class="ops-topbar">
+    <button class="ops-back-btn" onclick="volverPortada()">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1L1 6L6 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       INICIO
     </button>
-    <div class="tabs" style="flex-wrap:wrap;gap:6px;">
-      <button class="otab otab-active" onclick="showOpsTab('ops_resumen',this)">📊 Resumen</button>
-      <button class="otab" onclick="showOpsTab('ops_editor',this)">✏️ Editor</button>
-      <button class="otab" onclick="showOpsTab('ops_semana',this)">📅 Semana Actual</button>
-      <button class="otab" onclick="showOpsTab('ops_reporte',this)">📑 Reporte</button>
-      <button class="otab" onclick="showOpsTab('ops_terminados',this)">🏁 Terminados</button>
-      <button class="otab" onclick="showOpsTab('ops_rendimiento',this)" style="border-color:rgba(255,62,154,.4);color:#ff3e9a;">📈 Rendimiento</button>
-      <button class="otab" onclick="showOpsTab('ops_planif',this)" style="border-color:rgba(0,220,200,.4);color:#00dcc8;">🗓️ Planificación</button>
-      <button class="otab" onclick="showOpsTab('ops_repdiario',this)" style="border-color:rgba(168,85,247,.4);color:#a855f7;">📝 Rep. Diario</button>
+    <h2 class="ops-topbar-h2">OPERACIONES</h2>
+    <div class="ops-pills">
+      <span class="ops-pill ops-pill-a" id="opsTopPillA">— en proceso</span>
+      <span class="ops-pill ops-pill-b" id="opsTopPillB">— pendientes</span>
+      <span class="ops-pill ops-pill-c" id="opsTopPillC">— terminados</span>
     </div>
+    <div class="ops-sync"><div class="ops-sync-dot"></div><span>SINCRONIZADO</span></div>
   </div>
 
-  <!-- ══ RESUMEN ══ -->
-  <div id="ops_resumen" class="ops-tab active">
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;">
-      <div class="kpi c1"><div class="kpi-label">🔧 Instalaciones</div><div class="kpi-value" id="opK1" style="color:#ff6b35;">0</div><div class="kpi-sub">En proceso</div></div>
-      <div class="kpi c2"><div class="kpi-label">🆕 Clientes Nuevos</div><div class="kpi-value" id="opK2" style="color:var(--accent3);">0</div><div class="kpi-sub">Prod. e instalación</div></div>
-      <div class="kpi" style="border-left:4px solid #00bfff;"><div class="kpi-label">🪨 Tops Producidos</div><div class="kpi-value" id="opK3" style="color:#00bfff;">0</div><div class="kpi-sub">Registros</div></div>
-      <div class="kpi" style="border-left:4px solid var(--gold);"><div class="kpi-label">📐 Remediciones</div><div class="kpi-value" id="opK4" style="color:var(--gold);">0</div><div class="kpi-sub">Pendientes</div></div>
-      <div class="kpi c3"><div class="kpi-label">🔨 Reparaciones</div><div class="kpi-value" id="opK5" style="color:var(--accent2);">0</div><div class="kpi-sub">Pendientes/activas</div></div>
-      <div class="kpi" style="border-left:4px solid var(--accent3);"><div class="kpi-label">✅ Terminados</div><div class="kpi-value" id="opK6" style="color:var(--accent3);">0</div><div class="kpi-sub">Esta semana</div></div>
-      <div class="kpi" style="border-left:4px solid #ff3e9a;"><div class="kpi-label">⏱ Prom. Cierre</div><div class="kpi-value" id="opK7" style="color:#ff3e9a;">—</div><div class="kpi-sub">días inst→terminado</div></div>
-    </div>
-    <div class="charts-grid">
-      <div class="chart-card"><div class="chart-title">Instalaciones por Ciudad</div><canvas id="opsChartCiudad"></canvas></div>
-      <div class="chart-card"><div class="chart-title">Instalaciones por Supervisor</div><canvas id="opsChartSupervisor"></canvas></div>
-    </div>
-  </div>
+  <div class="ops-body">
+    <nav class="ops-nav">
+      <div class="ops-nav-lbl">Vista general</div>
+      <button class="ops-nitem active" onclick="showOpsPanel('resumen',this)">📊 Resumen</button>
+      <button class="ops-nitem" onclick="showOpsPanel('semana',this)">📅 Semana <span class="ops-ndot ops-ndot-ok"></span></button>
+      <button class="ops-nitem" onclick="showOpsPanel('reporte',this)">📑 Reportes</button>
 
-  <!-- ══ EDITOR ══ -->
-  <div id="ops_editor" class="ops-tab">
+      <div class="ops-nav-lbl">Trabajo activo</div>
+      <button class="ops-nitem" onclick="showOpsPanel('inst',this)">🔧 Instalaciones <span class="ops-ndot ops-ndot-w" id="opsNavDotInst" style="display:none;"></span></button>
+      <button class="ops-nitem" onclick="showOpsPanel('nuevos',this)">🆕 Nuevos</button>
+      <button class="ops-nitem" onclick="showOpsPanel('tops',this)">🪨 Tops</button>
+      <button class="ops-nitem" onclick="showOpsPanel('repar',this)">🔨 Reparaciones <span class="ops-ndot ops-ndot-w" id="opsNavDotRepar" style="display:none;"></span></button>
 
-    <!-- SECCIÓN A: INSTALACIONES EN PROCESO -->
-    <div class="chart-card editor-section" style="border-color:rgba(255,107,53,.3);margin-bottom:16px;">
-      <div class="editor-header">
-        <div>
-          <div class="editor-title" style="color:#ff6b35;">🔧 SECCIÓN A — INSTALACIONES EN PROCESO</div>
-          <div style="color:var(--sub);font-size:10px;margin-top:3px;">Proyectos actualmente en instalación</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <span id="opsInstCount" style="color:var(--sub);font-size:10px;">0 registros</span>
-          <button class="btn btn-add" onclick="openModalOps('inst')" style="border-color:#ff6b35;color:#ff6b35;background:rgba(255,107,53,.1);">+ Agregar</button>
-        </div>
-      </div>
-      <div class="table-wrap" style="margin-top:12px;">
-        <table><thead><tr><th>#</th><th>CLIENTE</th><th>SUPERVISOR</th><th>👷 INSTALADOR</th><th>CIUDAD</th><th>🏅 GRADO</th><th>⏱ HRS</th><th>📐 ÁREAS</th><th>OBSERVACIONES</th><th>ACCIONES</th></tr></thead>
-        <tbody id="opsInstBody"><tr><td colspan="10" style="text-align:center;padding:24px;color:var(--sub);font-size:11px;">Sin registros</td></tr></tbody></table>
-      </div>
-    </div>
+      <div class="ops-nav-lbl">Seguimiento</div>
+      <button class="ops-nitem" onclick="showOpsPanel('remedir',this)">📐 Remedir</button>
+      <button class="ops-nitem" onclick="showOpsPanel('folder',this)">📁 Folders</button>
+      <button class="ops-nitem" onclick="showOpsPanel('terminados',this)">✅ Terminados <span class="ops-ndot ops-ndot-ok"></span></button>
 
-    <!-- SECCIÓN B: CLIENTES NUEVOS PROD E INSTALACIÓN -->
-    <div class="chart-card editor-section" style="border-color:rgba(168,255,62,.3);margin-bottom:16px;">
-      <div class="editor-header">
-        <div>
-          <div class="editor-title" style="color:var(--accent3);">🆕 SECCIÓN B — CLIENTES NUEVOS PARA PRODUCCIÓN E INSTALACIÓN</div>
-          <div style="color:var(--sub);font-size:10px;margin-top:3px;">Nuevos proyectos programados</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <span id="opsNuevosCount" style="color:var(--sub);font-size:10px;">0 registros</span>
-          <button class="btn btn-add" onclick="openModalOps('nuevo')">+ Agregar</button>
-        </div>
-      </div>
-      <div class="table-wrap" style="margin-top:12px;">
-        <table><thead><tr><th>#</th><th>CLIENTE</th><th>FECHA INSTALACIÓN</th><th>CIUDAD</th><th>OBSERVACIONES</th><th>ACCIONES</th></tr></thead>
-        <tbody id="opsNuevosBody"><tr><td colspan="6" style="text-align:center;padding:24px;color:var(--sub);font-size:11px;">Sin registros</td></tr></tbody></table>
-      </div>
-    </div>
+      <div class="ops-nav-lbl">Análisis</div>
+      <button class="ops-nitem" onclick="showOpsPanel('rendimiento',this)">🏆 Rendimiento</button>
+      <button class="ops-nitem" onclick="showOpsPanel('planif',this)">🗓️ Planificación</button>
+      <button class="ops-nitem" onclick="showOpsPanel('repdiario',this)">📝 Rep. Diario</button>
+    </nav>
 
-    <!-- SECCIÓN C: PRODUCCIÓN DE TOPS -->
-    <div class="chart-card editor-section" style="border-color:rgba(0,191,255,.3);margin-bottom:16px;">
-      <div class="editor-header">
-        <div>
-          <div class="editor-title" style="color:#00bfff;">🪨 SECCIÓN C — PRODUCCIÓN DE TOPS</div>
-          <div style="color:var(--sub);font-size:10px;margin-top:3px;">Tops producidos e instalados</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <span id="opsTopsCount" style="color:var(--sub);font-size:10px;">0 registros</span>
-          <button class="btn btn-add" onclick="openModalOps('top')" style="border-color:#00bfff;color:#00bfff;background:rgba(0,191,255,.1);">+ Agregar</button>
-        </div>
-      </div>
-      <div class="table-wrap" style="margin-top:12px;">
-        <table><thead><tr><th>#</th><th>CLIENTE</th><th>COLOR DEL TOP</th><th>CANT. LÁMINAS</th><th>INSTALÓ</th><th>CIUDAD</th><th>OBSERVACIONES</th><th>ACCIONES</th></tr></thead>
-        <tbody id="opsTopsBody"><tr><td colspan="8" style="text-align:center;padding:24px;color:var(--sub);font-size:11px;">Sin registros</td></tr></tbody></table>
-      </div>
-    </div>
+    <main class="ops-content">
 
-    <!-- SECCIÓN D: CLIENTES PARA REMEDIR -->
-    <div class="chart-card editor-section" style="border-color:rgba(255,215,0,.3);margin-bottom:16px;">
-      <div class="editor-header">
-        <div>
-          <div class="editor-title" style="color:var(--gold);">📐 SECCIÓN D — CLIENTES NUEVOS PARA REMEDIR</div>
-          <div style="color:var(--sub);font-size:10px;margin-top:3px;">Clientes pendientes de remedición</div>
+      <!-- RESUMEN -->
+      <div id="opsp_resumen" class="ops-panel active">
+        <div class="ops-alert" id="opsAlertBanner" style="display:none;"></div>
+        <div class="ops-kpi-row">
+          <div class="ops-kpi ka"><div class="ops-kpi-lbl">Instalaciones</div><div class="ops-kpi-val" id="nopK1">0</div><div class="ops-kpi-sub">en proceso</div><div class="ops-kpi-bar"><div class="ops-kpi-fill" id="nopK1bar" style="width:0%"></div></div></div>
+          <div class="ops-kpi kb"><div class="ops-kpi-lbl">Nuevos</div><div class="ops-kpi-val" id="nopK2">0</div><div class="ops-kpi-sub">para producción</div><div class="ops-kpi-bar"><div class="ops-kpi-fill" id="nopK2bar" style="width:0%"></div></div></div>
+          <div class="ops-kpi kf"><div class="ops-kpi-lbl">Tops</div><div class="ops-kpi-val" id="nopK3">0</div><div class="ops-kpi-sub">en producción</div><div class="ops-kpi-bar"><div class="ops-kpi-fill" id="nopK3bar" style="width:0%"></div></div></div>
+          <div class="ops-kpi ke"><div class="ops-kpi-lbl">Remediciones</div><div class="ops-kpi-val" id="nopK4">0</div><div class="ops-kpi-sub">en cola</div><div class="ops-kpi-bar"><div class="ops-kpi-fill" id="nopK4bar" style="width:0%"></div></div></div>
+          <div class="ops-kpi kd"><div class="ops-kpi-lbl">Reparaciones</div><div class="ops-kpi-val" id="nopK5">0</div><div class="ops-kpi-sub">pendientes</div><div class="ops-kpi-bar"><div class="ops-kpi-fill" id="nopK5bar" style="width:0%"></div></div></div>
+          <div class="ops-kpi kc"><div class="ops-kpi-lbl">Terminados</div><div class="ops-kpi-val" id="nopK6">0</div><div class="ops-kpi-sub">esta semana</div><div class="ops-kpi-bar"><div class="ops-kpi-fill" id="nopK6bar" style="width:0%"></div></div></div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <span id="opsRemedirCount" style="color:var(--sub);font-size:10px;">0 registros</span>
-          <button class="btn btn-add" onclick="openModalOps('remedir')" style="border-color:var(--gold);color:var(--gold);background:rgba(255,215,0,.1);">+ Agregar</button>
+        <div class="charts-grid">
+          <div class="chart-card" style="background:#0d1526;border-color:#1a2535;"><div class="chart-title">Instalaciones por Ciudad</div><canvas id="opsChartCiudad"></canvas></div>
+          <div class="chart-card" style="background:#0d1526;border-color:#1a2535;"><div class="chart-title">Instalaciones por Supervisor</div><canvas id="opsChartSupervisor"></canvas></div>
+        </div>
+        <div class="ops-card">
+          <div class="ops-card-header"><span class="ops-card-title">📋 ACTIVIDAD RECIENTE — TODAS LAS SECCIONES</span></div>
+          <div class="ops-table-wrap">
+            <table class="ops-table">
+              <thead><tr><th>CLIENTE</th><th>TIPO</th><th>CIUDAD</th><th>ESTADO / DETALLE</th></tr></thead>
+              <tbody id="opsFeedBody"><tr><td colspan="4" style="text-align:center;padding:24px;color:#2d3f5a;">Sin registros</td></tr></tbody>
+            </table>
+          </div>
         </div>
       </div>
-      <div class="table-wrap" style="margin-top:12px;">
-        <table><thead><tr><th>#</th><th>CLIENTE</th><th>VENDEDORA</th><th>SUPERVISOR</th><th>UBICACIÓN</th><th>OBSERVACIONES</th><th>ACCIONES</th></tr></thead>
-        <tbody id="opsRemedirBody"><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--sub);font-size:11px;">Sin registros</td></tr></tbody></table>
-      </div>
-    </div>
 
-    <!-- SECCIÓN E: REMEDIDOS CON FOLDER PENDIENTE -->
-    <div class="chart-card editor-section" style="border-color:rgba(147,51,234,.3);margin-bottom:16px;">
-      <div class="editor-header">
-        <div>
-          <div class="editor-title" style="color:#9333ea;">📁 SECCIÓN E — CLIENTES YA REMEDIDOS CON FOLDER PENDIENTE</div>
-          <div style="color:var(--sub);font-size:10px;margin-top:3px;">Remedidos pendientes de diseño o folder</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <span id="opsFolderCount" style="color:var(--sub);font-size:10px;">0 registros</span>
-          <button class="btn btn-add" onclick="openModalOps('folder')" style="border-color:#9333ea;color:#9333ea;background:rgba(147,51,234,.1);">+ Agregar</button>
+      <!-- INSTALACIONES -->
+      <div id="opsp_inst" class="ops-panel">
+        <div class="ops-card">
+          <div class="ops-card-header">
+            <span class="ops-card-title">🔧 INSTALACIONES EN PROCESO</span>
+            <span class="ops-card-count" id="nopsInstCount">0 registros</span>
+            <button class="ops-add-btn" onclick="openModalOps('inst')">+ Agregar</button>
+          </div>
+          <div class="ops-search-row">
+            <input class="ops-search" id="nopsInstSearch" placeholder="🔍 Buscar cliente, supervisor..." oninput="renderNopsInst()">
+            <button class="ops-chip active" onclick="nopsChipFilter(this,'nopsInstCity','')">Todos</button>
+            <button class="ops-chip" onclick="nopsChipFilter(this,'nopsInstCity','TGU')">TGU</button>
+            <button class="ops-chip" onclick="nopsChipFilter(this,'nopsInstCity','SPS')">SPS</button>
+            <button class="ops-chip" onclick="nopsChipFilter(this,'nopsInstCity','CRT')">CRT</button>
+          </div>
+          <div class="ops-table-wrap">
+            <table class="ops-table">
+              <thead><tr><th>INICIO</th><th>FIN</th><th>CLIENTE</th><th>SUPERVISOR</th><th>INSTALADOR</th><th>CIUDAD</th><th>GRADO</th><th>HRS</th><th>ÁREAS</th><th>OBS</th><th>ESTADO</th><th>ACCIONES</th></tr></thead>
+              <tbody id="nopsInstBody"><tr><td colspan="10" style="text-align:center;padding:24px;color:#2d3f5a;">Sin registros</td></tr></tbody>
+            </table>
+          </div>
         </div>
       </div>
-      <div class="table-wrap" style="margin-top:12px;">
-        <table><thead><tr><th>#</th><th>CLIENTE</th><th>VENDEDORA</th><th>ÁREAS PENDIENTES</th><th>REMIDIÓ</th><th>📅 FECHA REMEDICIÓN</th><th>OBSERVACIONES</th><th>ACCIONES</th></tr></thead>
-        <tbody id="opsFolderBody"><tr><td colspan="8" style="text-align:center;padding:24px;color:var(--sub);font-size:11px;">Sin registros</td></tr></tbody></table>
-      </div>
-    </div>
 
-    <!-- SECCIÓN F: PENDIENTES Y REPARACIONES -->
-    <div class="chart-card editor-section" style="border-color:rgba(255,107,53,.3);margin-bottom:16px;">
-      <div class="editor-header">
-        <div>
-          <div class="editor-title" style="color:var(--accent2);">🔨 SECCIÓN F — CLIENTES CON PENDIENTES O REPARACIONES</div>
-          <div style="color:var(--sub);font-size:10px;margin-top:3px;">Reclamos, reparaciones y pendientes activos</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <span id="opsReparCount" style="color:var(--sub);font-size:10px;">0 registros</span>
-          <button class="btn btn-add" onclick="openModalOps('repar')" style="border-color:var(--accent2);color:var(--accent2);background:rgba(255,107,53,.1);">+ Agregar</button>
+      <!-- NUEVOS -->
+      <div id="opsp_nuevos" class="ops-panel">
+        <div class="ops-card">
+          <div class="ops-card-header">
+            <span class="ops-card-title">🆕 CLIENTES NUEVOS PARA PRODUCCIÓN E INSTALACIÓN</span>
+            <span class="ops-card-count" id="nopsNuevosCount">0 registros</span>
+            <button class="ops-add-btn" onclick="openModalOps('nuevo')">+ Agregar</button>
+          </div>
+          <div class="ops-search-row">
+            <input class="ops-search" id="nopsNuevosSearch" placeholder="🔍 Buscar cliente..." oninput="renderNopsNuevos()">
+          </div>
+          <div class="ops-table-wrap">
+            <table class="ops-table">
+              <thead><tr><th>#</th><th>CLIENTE</th><th>FECHA INSTALACIÓN</th><th>CIUDAD</th><th>OBSERVACIONES</th><th>ACCIONES</th></tr></thead>
+              <tbody id="nopsNuevosBody"><tr><td colspan="6" style="text-align:center;padding:24px;color:#2d3f5a;">Sin registros</td></tr></tbody>
+            </table>
+          </div>
         </div>
       </div>
-      <div class="table-wrap" style="margin-top:12px;">
-        <table><thead><tr><th>#</th><th>CLIENTE</th><th>ACCIÓN</th><th>CIUDAD</th><th>ESTATUS</th><th>OBSERVACIONES</th><th>ACCIONES</th></tr></thead>
-        <tbody id="opsReparBody"><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--sub);font-size:11px;">Sin registros</td></tr></tbody></table>
-      </div>
-    </div>
 
-    <!-- SECCIÓN G: CLIENTES TERMINADOS -->
-    <div class="chart-card editor-section" style="border-color:rgba(168,255,62,.3);margin-bottom:16px;">
-      <div class="editor-header">
-        <div>
-          <div class="editor-title" style="color:var(--accent3);">✅ SECCIÓN G — CLIENTES TERMINADOS</div>
-          <div style="color:var(--sub);font-size:10px;margin-top:3px;">Instalaciones completadas</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <span id="opsTermCount" style="color:var(--sub);font-size:10px;">0 registros</span>
-          <button class="btn btn-add" onclick="openModalOps('term')">+ Agregar</button>
-        </div>
-      </div>
-      <div class="table-wrap" style="margin-top:12px;">
-        <table><thead><tr><th>#</th><th>FECHA</th><th>CLIENTE</th><th>CIUDAD</th><th>OBSERVACIONES</th><th>ACCIONES</th></tr></thead>
-        <tbody id="opsTermBody"><tr><td colspan="6" style="text-align:center;padding:24px;color:var(--sub);font-size:11px;">Sin registros</td></tr></tbody></table>
-      </div>
-    </div>
-
-  </div><!-- fin ops_editor -->
-
-  <!-- ══ RENDIMIENTO SVI ══ -->
-  <div id="ops_rendimiento" class="ops-tab">
-    <!-- Header SVI -->
-    <div style="background:linear-gradient(135deg,rgba(255,62,154,.08),rgba(255,107,53,.06));border:1px solid rgba(255,62,154,.25);border-radius:14px;padding:18px 22px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
-      <div>
-        <div style="font-size:11px;letter-spacing:2px;color:#ff3e9a;font-weight:700;margin-bottom:4px;">SISTEMA DE VALORACIÓN DE INSTALACIÓN</div>
-        <div style="font-size:19px;font-weight:800;color:#f9fafb;letter-spacing:.5px;">Rendimiento de Instaladores</div>
-        <div style="color:var(--sub);font-size:10px;margin-top:3px;">IEI = Puntos acumulados ÷ Horas trabajadas · Estándar = 1.0</div>
-      </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <div style="background:rgba(20,184,166,.12);border:1px solid rgba(20,184,166,.3);border-radius:10px;padding:10px 16px;text-align:center;">
-          <div style="font-size:10px;color:#14b8a6;letter-spacing:1px;font-weight:700;">GRADO A</div>
-          <div style="font-size:18px;font-weight:800;color:#14b8a6;">1 pt</div>
-          <div style="font-size:9px;color:var(--sub);">Básico</div>
-        </div>
-        <div style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);border-radius:10px;padding:10px 16px;text-align:center;">
-          <div style="font-size:10px;color:#fbbf24;letter-spacing:1px;font-weight:700;">GRADO B</div>
-          <div style="font-size:18px;font-weight:800;color:#fbbf24;">2 pts</div>
-          <div style="font-size:9px;color:var(--sub);">Intermedio</div>
-        </div>
-        <div style="background:rgba(251,113,133,.1);border:1px solid rgba(251,113,133,.3);border-radius:10px;padding:10px 16px;text-align:center;">
-          <div style="font-size:10px;color:#fb7185;letter-spacing:1px;font-weight:700;">GRADO C</div>
-          <div style="font-size:18px;font-weight:800;color:#fb7185;">3 pts</div>
-          <div style="font-size:9px;color:var(--sub);">Especial</div>
+      <!-- TOPS -->
+      <div id="opsp_tops" class="ops-panel">
+        <div class="ops-card">
+          <div class="ops-card-header">
+            <span class="ops-card-title">🪨 PRODUCCIÓN DE TOPS</span>
+            <span class="ops-card-count" id="nopsTopsCount">0 registros</span>
+            <button class="ops-add-btn" onclick="openModalOps('top')">+ Agregar</button>
+          </div>
+          <div class="ops-search-row">
+            <input class="ops-search" id="nopsTopsSearch" placeholder="🔍 Buscar cliente..." oninput="renderNopsTops()">
+          </div>
+          <div class="ops-table-wrap">
+            <table class="ops-table">
+              <thead><tr><th>#</th><th>CLIENTE</th><th>COLOR DEL TOP</th><th>LÁMINAS</th><th>INSTALÓ</th><th>CIUDAD</th><th>OBS</th><th>ACCIONES</th></tr></thead>
+              <tbody id="nopsTopsBody"><tr><td colspan="8" style="text-align:center;padding:24px;color:#2d3f5a;">Sin registros</td></tr></tbody>
+            </table>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- KPIs row -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px;">
-      <div class="kpi" style="border-left:4px solid #ff3e9a;"><div class="kpi-label">📈 Total Proyectos</div><div class="kpi-value" id="sviK1" style="color:#ff3e9a;">0</div><div class="kpi-sub">Con grado asignado</div></div>
-      <div class="kpi" style="border-left:4px solid #14b8a6;"><div class="kpi-label">🟢 Grado A</div><div class="kpi-value" id="sviKA" style="color:#14b8a6;">0</div><div class="kpi-sub">Básicos</div></div>
-      <div class="kpi" style="border-left:4px solid #fbbf24;"><div class="kpi-label">🟡 Grado B</div><div class="kpi-value" id="sviKB" style="color:#fbbf24;">0</div><div class="kpi-sub">Intermedios</div></div>
-      <div class="kpi" style="border-left:4px solid #fb7185;"><div class="kpi-label">🔴 Grado C</div><div class="kpi-value" id="sviKC" style="color:#fb7185;">0</div><div class="kpi-sub">Especiales</div></div>
-      <div class="kpi" style="border-left:4px solid var(--gold);"><div class="kpi-label">⏱ Hrs Totales</div><div class="kpi-value" id="sviKHrs" style="color:var(--gold);">0</div><div class="kpi-sub">Registradas</div></div>
-      <div class="kpi" style="border-left:4px solid #a855f7;"><div class="kpi-label">🏆 Mejor IEI</div><div class="kpi-value" id="sviKBest" style="color:#a855f7;">—</div><div class="kpi-sub">Top instalador</div></div>
-    </div>
-
-    <!-- Ranking table -->
-    <div class="chart-card" style="border-color:rgba(255,62,154,.2);margin-bottom:16px;">
-      <div class="editor-header" style="margin-bottom:14px;">
-        <div>
-          <div class="editor-title" style="color:#ff3e9a;">🏆 Ranking de Instaladores — IEI</div>
-          <div style="color:var(--sub);font-size:10px;margin-top:2px;">Índice de Eficiencia de Instalación · Ordenado de mayor a menor</div>
+      <!-- REPARACIONES -->
+      <div id="opsp_repar" class="ops-panel">
+        <div class="ops-alert" id="opsAlertRepar" style="display:none;"></div>
+        <div class="ops-card">
+          <div class="ops-card-header">
+            <span class="ops-card-title">🔨 CLIENTES CON PENDIENTES O REPARACIONES</span>
+            <span class="ops-card-count" id="nopsReparCount">0 registros</span>
+            <button class="ops-add-btn" onclick="openModalOps('repar')">+ Agregar</button>
+          </div>
+          <div class="ops-search-row">
+            <input class="ops-search" id="nopsReparSearch" placeholder="🔍 Buscar cliente..." oninput="renderNopsRepar()">
+            <button class="ops-chip active" onclick="nopsChipFilter(this,'nopsReparStatus','')">Todos</button>
+            <button class="ops-chip" onclick="nopsChipFilter(this,'nopsReparStatus','PENDIENTE')">Pendiente</button>
+            <button class="ops-chip" onclick="nopsChipFilter(this,'nopsReparStatus','EN PROCESO')">En proceso</button>
+            <button class="ops-chip" onclick="nopsChipFilter(this,'nopsReparStatus','REALIZADO')">Realizado</button>
+          </div>
+          <div class="ops-table-wrap">
+            <table class="ops-table">
+              <thead><tr><th>#</th><th>CLIENTE</th><th>ACCIÓN</th><th>CIUDAD</th><th>ESTATUS</th><th>OBS</th><th>ACCIONES</th></tr></thead>
+              <tbody id="nopsReparBody"><tr><td colspan="7" style="text-align:center;padding:24px;color:#2d3f5a;">Sin registros</td></tr></tbody>
+            </table>
+          </div>
         </div>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>#</th><th>INSTALADOR</th><th>PROYECTOS</th><th>A</th><th>B</th><th>C</th><th>PUNTOS</th><th>HORAS</th><th>IEI</th><th>ESTADO</th></tr></thead>
-          <tbody id="sviRankingBody"><tr><td colspan="10" style="text-align:center;padding:24px;color:var(--sub);font-size:11px;">Sin datos — agrega instalaciones con Grado y Horas</td></tr></tbody>
-        </table>
-      </div>
-    </div>
 
-    <!-- Detalle por instalador -->
-    <div class="chart-card" style="border-color:rgba(168,85,247,.2);">
-      <div class="editor-header" style="margin-bottom:14px;">
-        <div>
-          <div class="editor-title" style="color:#a855f7;">📋 Proyectos por Grado · Detalle</div>
-          <div style="color:var(--sub);font-size:10px;margin-top:2px;">Todos los proyectos con Grado asignado</div>
+      <!-- REMEDIR -->
+      <div id="opsp_remedir" class="ops-panel">
+        <div class="ops-card">
+          <div class="ops-card-header">
+            <span class="ops-card-title">📐 CLIENTES NUEVOS PARA REMEDIR</span>
+            <span class="ops-card-count" id="nopsRemedirCount">0 registros</span>
+            <button class="ops-add-btn" onclick="openModalOps('remedir')">+ Agregar</button>
+          </div>
+          <div class="ops-search-row">
+            <input class="ops-search" id="nopsRemedirSearch" placeholder="🔍 Buscar cliente..." oninput="renderNopsRemedir()">
+          </div>
+          <div class="ops-table-wrap">
+            <table class="ops-table">
+              <thead><tr><th>#</th><th>CLIENTE</th><th>VENDEDORA</th><th>SUPERVISOR</th><th>UBICACIÓN</th><th>OBS</th><th>ACCIONES</th></tr></thead>
+              <tbody id="nopsRemedirBody"><tr><td colspan="7" style="text-align:center;padding:24px;color:#2d3f5a;">Sin registros</td></tr></tbody>
+            </table>
+          </div>
         </div>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>FECHA</th><th>CLIENTE</th><th>INSTALADOR</th><th>ÁREAS</th><th>GRADO</th><th>PUNTOS</th><th>HORAS</th><th>CIUDAD</th></tr></thead>
-          <tbody id="sviDetalleBody"><tr><td colspan="8" style="text-align:center;padding:24px;color:var(--sub);font-size:11px;">Sin proyectos registrados con grado</td></tr></tbody>
-        </table>
-      </div>
-    </div>
-  </div><!-- fin ops_rendimiento -->
 
-  <!-- ══ SEMANA ACTUAL ══ -->
-  <div id="ops_semana" class="ops-tab">
-    <div style="background:var(--card);border:1px solid rgba(255,107,53,.3);border-radius:12px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-      <div>
-        <div style="color:#ff6b35;font-size:13px;font-weight:700;letter-spacing:1px;">📅 OPERACIONES — SEMANA ACTUAL</div>
-        <div id="opsSemLabel" style="color:var(--sub);font-size:10px;margin-top:3px;">semana en curso</div>
-      </div>
-      <div style="display:flex;gap:10px;align-items:center;">
-        <span id="opsSemTotal" style="color:#ff6b35;font-size:22px;font-weight:700;">0</span>
-        <span style="color:var(--sub);font-size:10px;">registros<br>esta semana</span>
-        <button onclick="exportarOpsSemanaPDF()" style="background:rgba(255,107,53,.12);color:#ff6b35;border:1px solid #ff6b35;padding:8px 14px;border-radius:8px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;">📄 Exportar PDF</button>
-      </div>
-    </div>
-    <!-- KPIs semana -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px;">
-      <div class="kpi c1"><div class="kpi-label">🔧 Instalaciones</div><div class="kpi-value" id="swOpK1" style="color:#ff6b35;">0</div></div>
-      <div class="kpi c2"><div class="kpi-label">🆕 Nuevos</div><div class="kpi-value" id="swOpK2" style="color:var(--accent3);">0</div></div>
-      <div class="kpi" style="border-left:4px solid #00bfff;"><div class="kpi-label">🪨 Tops</div><div class="kpi-value" id="swOpK3" style="color:#00bfff;">0</div></div>
-      <div class="kpi" style="border-left:4px solid var(--gold);"><div class="kpi-label">📐 Remediciones</div><div class="kpi-value" id="swOpK4" style="color:var(--gold);">0</div></div>
-      <div class="kpi c3"><div class="kpi-label">🔨 Reparaciones</div><div class="kpi-value" id="swOpK5" style="color:var(--accent2);">0</div></div>
-      <div class="kpi" style="border-left:4px solid var(--accent3);"><div class="kpi-label">✅ Terminados</div><div class="kpi-value" id="swOpK6" style="color:var(--accent3);">0</div></div>
-    </div>
-    <!-- Tablas semana (se generan dinámicamente) -->
-    <div id="opsSemTablas"></div>
-  </div>
-
-  <!-- ══ REPORTE ══ -->
-  <div id="ops_reporte" class="ops-tab">
-    <div class="chart-card" style="margin-bottom:16px;border-color:rgba(255,107,53,.3);">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
-        <div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:800;letter-spacing:1px;color:#ff6b35;">📑 REPORTE DE OPERACIONES</div>
-          <div id="opsRepRangoLabel" style="color:var(--sub);font-size:10px;margin-top:3px;">Historial completo</div>
+      <!-- FOLDER -->
+      <div id="opsp_folder" class="ops-panel">
+        <div class="ops-card">
+          <div class="ops-card-header">
+            <span class="ops-card-title">📁 REMEDIDOS CON FOLDER PENDIENTE</span>
+            <span class="ops-card-count" id="nopsFolderCount">0 registros</span>
+            <button class="ops-add-btn" onclick="openModalOps('folder')">+ Agregar</button>
+          </div>
+          <div class="ops-search-row">
+            <input class="ops-search" id="nopsFolderSearch" placeholder="🔍 Buscar cliente..." oninput="renderNopsFolder()">
+          </div>
+          <div class="ops-table-wrap">
+            <table class="ops-table">
+              <thead><tr><th>#</th><th>CLIENTE</th><th>VENDEDORA</th><th>ÁREAS PEND.</th><th>REMIDIÓ</th><th>FECHA REMEDICIÓN</th><th>OBS</th><th>ACCIONES</th></tr></thead>
+              <tbody id="nopsFolderBody"><tr><td colspan="8" style="text-align:center;padding:24px;color:#2d3f5a;">Sin registros</td></tr></tbody>
+            </table>
+          </div>
         </div>
-        <button onclick="generarOpsReportePDF()" style="background:linear-gradient(135deg,#ff6b35,#ffd700);color:var(--dark);border:none;padding:12px 22px;border-radius:10px;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;">⬇️ DESCARGAR PDF</button>
       </div>
-    </div>
-    <!-- Filtro -->
-    <div style="background:var(--card);border:1px solid rgba(255,107,53,.25);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      <span style="color:#ff6b35;font-size:10px;letter-spacing:1.5px;white-space:nowrap;">📅 FILTRAR:</span>
-      <button class="fbtn active" id="opsRepBtnTodo" onclick="setOpsRepMode('all',this)">📋 Todo el historial</button>
-      <button class="fbtn" id="opsRepBtnRango" onclick="setOpsRepMode('range',this)">📅 Por Rango</button>
-      <div id="opsRepRangoInputs" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
-        <span style="color:var(--sub);font-size:10px;">Del</span>
-        <input type="date" id="opsRepDesde" onchange="renderOpsReporte()" style="background:#0d1526;border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:11px;padding:6px 10px;border-radius:8px;outline:none;">
-        <span style="color:var(--sub);font-size:10px;">al</span>
-        <input type="date" id="opsRepHasta" onchange="renderOpsReporte()" style="background:#0d1526;border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:11px;padding:6px 10px;border-radius:8px;outline:none;">
-        <button class="fbtn" onclick="limpiarOpsRep()" style="padding:5px 10px;font-size:10px;">✕ Limpiar</button>
-      </div>
-      <span id="opsRepLabel" style="color:var(--accent3);font-size:10px;font-weight:700;margin-left:auto;">Historial completo</span>
-    </div>
-    <!-- KPIs reporte -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:16px;">
-      <div class="kpi c1"><div class="kpi-label">🔧 Instalaciones</div><div class="kpi-value" id="opsRK1" style="color:#ff6b35;">0</div><div class="kpi-sub">Período</div></div>
-      <div class="kpi c2"><div class="kpi-label">🆕 Nuevos</div><div class="kpi-value" id="opsRK2" style="color:var(--accent3);">0</div><div class="kpi-sub">Período</div></div>
-      <div class="kpi" style="border-left:4px solid #00bfff;"><div class="kpi-label">🪨 Tops</div><div class="kpi-value" id="opsRK3" style="color:#00bfff;">0</div><div class="kpi-sub">Período</div></div>
-      <div class="kpi" style="border-left:4px solid var(--gold);"><div class="kpi-label">📐 Remediciones</div><div class="kpi-value" id="opsRK4" style="color:var(--gold);">0</div><div class="kpi-sub">Período</div></div>
-      <div class="kpi c3"><div class="kpi-label">🔨 Reparaciones</div><div class="kpi-value" id="opsRK5" style="color:var(--accent2);">0</div><div class="kpi-sub">Período</div></div>
-      <div class="kpi" style="border-left:4px solid var(--accent3);"><div class="kpi-label">✅ Terminados</div><div class="kpi-value" id="opsRK6" style="color:var(--accent3);">0</div><div class="kpi-sub">Período</div></div>
-    </div>
-    <!-- Tablas reporte (dinámicas) -->
-    <div id="opsRepTablas"></div>
-  </div>
 
-  <!-- ══ TERMINADOS ══ -->
-  <div id="ops_terminados" class="ops-tab">
-    <div style="background:var(--card);border:1px solid rgba(168,255,62,.3);border-radius:12px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-      <div>
-        <div style="color:var(--accent3);font-size:13px;font-weight:700;letter-spacing:1px;">✅ CLIENTES TERMINADOS</div>
-        <div style="color:var(--sub);font-size:10px;margin-top:3px;">Instalaciones completadas exitosamente</div>
+      <!-- TERMINADOS -->
+      <div id="opsp_terminados" class="ops-panel">
+        <div class="ops-kpi-row">
+          <div class="ops-kpi kc"><div class="ops-kpi-lbl">Total Terminados</div><div class="ops-kpi-val" id="nopsTermTotal">0</div><div class="ops-kpi-bar"><div class="ops-kpi-fill" style="width:100%;background:#a8ff3e;"></div></div></div>
+          <div class="ops-kpi kb"><div class="ops-kpi-lbl">Esta Semana</div><div class="ops-kpi-val" id="nopsTermSemana">0</div><div class="ops-kpi-bar"><div class="ops-kpi-fill" id="nopsTermSemBar" style="width:0%;background:#3b82f6;"></div></div></div>
+        </div>
+        <div class="ops-card">
+          <div class="ops-card-header">
+            <span class="ops-card-title">✅ CLIENTES TERMINADOS</span>
+            <span style="margin-left:auto;background:rgba(168,255,62,.12);color:#a8ff3e;border:1px solid rgba(168,255,62,.3);border-radius:20px;padding:4px 12px;font-family:'Space Mono',monospace;font-size:9px;font-weight:700;letter-spacing:1px;">💰 LISTOS PARA COBRAR · CLIC DERECHO PARA OPCIONES</span>
+          </div>
+          <div class="ops-search-row">
+            <input class="ops-search" id="nopsTermSearch" placeholder="🔍 Buscar cliente, ciudad..." oninput="renderNopsTerminados()">
+          </div>
+          <div class="ops-table-wrap">
+            <table class="ops-table">
+              <thead><tr><th>FECHA TERM.</th><th>CLIENTE</th><th>INSTALADOR</th><th>CIUDAD</th><th>OBSERVACIONES</th><th>COBRO</th></tr></thead>
+              <tbody id="nopsTermBody"><tr><td colspan="6" style="text-align:center;padding:24px;color:#2d3f5a;">Sin registros terminados</td></tr></tbody>
+            </table>
+          </div>
+        </div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <input id="opsTermSearch" type="text" placeholder="🔍 Buscar cliente..." oninput="renderOpsTerminados()"
-          style="background:#0d1526;border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:11px;padding:7px 12px;border-radius:8px;outline:none;width:200px;">
-        <button onclick="exportarOpsTermPDF()" style="background:rgba(168,255,62,.12);color:var(--accent3);border:1px solid var(--accent3);padding:8px 14px;border-radius:8px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;">📄 PDF</button>
+
+      <!-- SEMANA -->
+      <div id="opsp_semana" class="ops-panel">
+        <div class="ops-card">
+          <div class="ops-card-header">
+            <span class="ops-card-title">📅 OPERACIONES — SEMANA ACTUAL</span>
+            <span id="nopsSemLabel" style="color:#3d5270;font-size:10px;font-family:'Space Mono',monospace;"></span>
+            <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+              <span id="nopsSemTotal" style="color:#ff6b35;font-size:18px;font-weight:700;font-family:'Space Mono',monospace;">0</span>
+              <span style="color:#3d5270;font-size:9px;font-family:'Space Mono',monospace;">registros</span>
+            </div>
+          </div>
+          <div class="ops-export-row">
+            <button class="ops-export-btn" onclick="exportarSemanaPDF && exportarSemanaPDF()">📄 Exportar PDF</button>
+            <button class="ops-export-btn" onclick="exportarSemanaExcel && exportarSemanaExcel()">⬇️ Exportar Excel</button>
+          </div>
+          <div id="nopsSemTablas"></div>
+        </div>
       </div>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:14px;">
-      <div class="kpi c2"><div class="kpi-label">✅ Total Terminados</div><div class="kpi-value" id="opsTermTotal" style="color:var(--accent3);">0</div></div>
-      <div class="kpi" style="border-left:4px solid var(--accent);"><div class="kpi-label">📅 Esta Semana</div><div class="kpi-value" id="opsTermSemana" style="color:var(--accent);">0</div></div>
-    </div>
-    <div class="table-wrap">
-      <table><thead><tr><th>FECHA</th><th>CLIENTE</th><th>CIUDAD</th><th>OBSERVACIONES</th></tr></thead>
-      <tbody id="opsTermTabla"><tr><td colspan="4" style="text-align:center;padding:24px;color:var(--sub);font-size:11px;">Sin registros terminados</td></tr></tbody></table>
-    </div>
-  </div>
-  <!-- ══ PLANIFICACIÓN ══ -->
-  <div id="ops_planif" class="ops-tab">
+
+      <!-- REPORTE -->
+      <div id="opsp_reporte" class="ops-panel">
+        <div class="ops-card">
+          <div class="ops-card-header">
+            <span class="ops-card-title">📑 REPORTE DE OPERACIONES</span>
+            <span id="nopsRepLabel" style="color:#a8ff3e;font-size:10px;font-family:'Space Mono',monospace;margin-left:auto;">Historial completo</span>
+          </div>
+          <div class="ops-search-row" style="flex-wrap:wrap;gap:8px;">
+            <button class="ops-chip active" id="nopsRepBtnTodo" onclick="setNopsRepMode('all',this)">📋 Todo el historial</button>
+            <button class="ops-chip" id="nopsRepBtnRango" onclick="setNopsRepMode('range',this)">📅 Por Rango</button>
+            <div id="nopsRepRangoInputs" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span style="color:#3d5270;font-size:10px;font-family:'Space Mono',monospace;">Desde</span>
+              <input type="date" id="nopsRepDesde" onchange="renderNopsReporte()" style="background:#07090f;border:1px solid #1a2535;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:11px;padding:5px 8px;border-radius:7px;outline:none;">
+              <span style="color:#3d5270;font-size:10px;font-family:'Space Mono',monospace;">Hasta</span>
+              <input type="date" id="nopsRepHasta" onchange="renderNopsReporte()" style="background:#07090f;border:1px solid #1a2535;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:11px;padding:5px 8px;border-radius:7px;outline:none;">
+              <button class="ops-chip" onclick="limpiarNopsRep()">✕ Limpiar</button>
+            </div>
+          </div>
+          <div style="padding:12px 14px;">
+            <div class="ops-kpi-row">
+              <div class="ops-kpi ka"><div class="ops-kpi-lbl">🔧 Instalaciones</div><div class="ops-kpi-val" id="nopsRK1">0</div></div>
+              <div class="ops-kpi kb"><div class="ops-kpi-lbl">🆕 Nuevos</div><div class="ops-kpi-val" id="nopsRK2">0</div></div>
+              <div class="ops-kpi kf"><div class="ops-kpi-lbl">🪨 Tops</div><div class="ops-kpi-val" id="nopsRK3">0</div></div>
+              <div class="ops-kpi ke"><div class="ops-kpi-lbl">📐 Remediciones</div><div class="ops-kpi-val" id="nopsRK4">0</div></div>
+              <div class="ops-kpi kd"><div class="ops-kpi-lbl">🔨 Reparaciones</div><div class="ops-kpi-val" id="nopsRK5">0</div></div>
+              <div class="ops-kpi kc"><div class="ops-kpi-lbl">✅ Terminados</div><div class="ops-kpi-val" id="nopsRK6">0</div></div>
+            </div>
+          </div>
+          <div class="ops-export-row">
+            <button class="ops-export-btn" onclick="printNopsReporte()">📄 Exportar PDF</button>
+            <button class="ops-export-btn" onclick="exportNopsExcel()">⬇️ Exportar Excel</button>
+          </div>
+          <div id="nopsRepTablas" style="padding:0 0 8px;"></div>
+        </div>
+      </div>
+
+      <!-- RENDIMIENTO -->
+      <div id="opsp_rendimiento" class="ops-panel">
+        <div class="ops-card">
+          <div class="ops-card-header"><span class="ops-card-title">🏆 RANKING DE INSTALADORES — IEI</span></div>
+          <div id="nopsRankBody"><div style="text-align:center;padding:32px;color:#2d3f5a;font-family:'Space Mono',monospace;font-size:11px;">Sin datos de instalaciones</div></div>
+        </div>
+        <div class="ops-card">
+          <div class="ops-card-header"><span class="ops-card-title">📋 PROYECTOS POR GRADO · DETALLE</span></div>
+          <div class="ops-table-wrap">
+            <table class="ops-table">
+              <thead><tr><th>FECHA</th><th>CLIENTE</th><th>INSTALADOR</th><th>ÁREAS</th><th>GRADO</th><th>PUNTOS</th><th>HORAS</th><th>CIUDAD</th></tr></thead>
+              <tbody id="nopsRendDetalleBody"><tr><td colspan="8" style="text-align:center;padding:24px;color:#2d3f5a;">Sin registros</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- PLANIFICACIÓN (contenido original preservado) -->
+      <div id="opsp_planif" class="ops-panel">
+<div id="ops_planif">
 
     <!-- ── HEADER PLANIF ── -->
     <div style="background:linear-gradient(135deg,rgba(0,220,200,.08),rgba(255,107,53,.05));border:1px solid rgba(0,220,200,.25);border-radius:14px;padding:16px 20px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
@@ -2290,7 +2343,11 @@
   </div>
 
   <!-- ══ REPORTE DIARIO DE INSTALACIÓN ══ -->
-  <div id="ops_repdiario" class="ops-tab">
+      </div>
+
+      <!-- REPORTE DIARIO (contenido original preservado) -->
+      <div id="opsp_repdiario" class="ops-panel">
+<div id="ops_repdiario">
 
     <!-- HEADER -->
     <div style="background:linear-gradient(135deg,rgba(168,85,247,.08),rgba(255,107,53,.05));border:1px solid rgba(168,85,247,.25);border-radius:14px;padding:16px 20px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
@@ -2476,6 +2533,11 @@
       <div id="rdDetalleBody"></div>
     </div>
   </div>
+      </div>
+
+    </main>
+  </div>
+</div><!-- /ops-shell -->
 
 </div><!-- fin moduloOperaciones -->
 
@@ -2489,7 +2551,8 @@
   <div class="modal" style="max-width:640px;">
     <div class="modal-title" id="modalOpsInstTitle" style="color:#ff6b35;">🔧 Nueva Instalación en Proceso</div>
     <div class="form-grid">
-      <div class="form-group"><label>Fecha</label><input id="oi_fecha" type="date"></div>
+      <div class="form-group"><label>📅 Fecha Inicio</label><input id="oi_fecha" type="date"></div>
+      <div class="form-group"><label>📅 Fecha Final</label><input id="oi_fecha_fin" type="date"></div>
       <div class="form-group"><label>Cliente</label><input id="oi_cliente" placeholder="Nombre del cliente"></div>
       <div class="form-group"><label>Supervisor</label><input id="oi_supervisor" placeholder="Nombre del supervisor"></div>
       <div class="form-group"><label>👷 Instalador</label><input id="oi_instalador" placeholder="Nombre del instalador"></div>
@@ -6983,8 +7046,7 @@ document.addEventListener('DOMContentLoaded', function(){
 // ══════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════
-// MÓDULO OPERACIONES — JS INDEPENDIENTE
-// ══════════════════════════════════════════════════════
+// MÓDULO OPERACIONES — JS INDEPENDIENTE (rediseño v2)
 
 if(!window.OPS_DATA) window.OPS_DATA = { inst:[], nuevos:[], tops:[], remedir:[], folder:[], repar:[], term:[] };
 
@@ -7008,21 +7070,10 @@ function loadOpsData(){
       window.OPS_DATA = parsed;
       ['inst','nuevos','tops','remedir','folder','repar','term'].forEach(k=>{ if(!window.OPS_DATA[k]) window.OPS_DATA[k]=[]; });
       if(!window.OPS_DATA.historial) window.OPS_DATA.historial=[];
-      if(!window.OPS_DATA.planif) window.OPS_DATA.planif={instaladores:[...PLANIF_DEFAULT_INSTALADORES],semanas:{}};
+      if(!window.OPS_DATA.planif) window.OPS_DATA.planif={instaladores:[...(typeof PLANIF_DEFAULT_INSTALADORES!=='undefined'?PLANIF_DEFAULT_INSTALADORES:[])],semanas:{}};
       if(!window.OPS_DATA.repdiario) window.OPS_DATA.repdiario=[];
       try{ localStorage.setItem('ops_v1', JSON.stringify(window.OPS_DATA)); }catch(e){}
-      const activeTab = document.querySelector('#moduloOperaciones .ops-tab.active');
-      if(activeTab){
-        const id = activeTab.id;
-        if(id==='ops_resumen')    renderOpsResumen();
-        if(id==='ops_editor')     renderOpsEditor();
-        if(id==='ops_semana')     renderOpsSemana();
-        if(id==='ops_reporte')    renderOpsReporte();
-        if(id==='ops_terminados') renderOpsTerminados();
-        if(id==='ops_detalle')    { renderOpsDetalle(); renderOpsHistorial(); }
-        if(id==='ops_rendimiento') renderOpsRendimiento();
-        if(id==='ops_planif')      renderPlanif();
-      }
+      nopsRefreshActive();
     });
   }
 }
@@ -7047,48 +7098,116 @@ function getOpsSemana(){
            term:fil(window.OPS_DATA.term), desde:fmt(lun), hasta:fmt(dom), desdeISO, hastaISO };
 }
 
-// ── Tabs ──────────────────────────────────────────────
-function showOpsTab(id, btn){
-  document.querySelectorAll('.ops-tab').forEach(s=>s.classList.remove('active'));
-  document.querySelectorAll('.otab').forEach(b=>b.classList.remove('otab-active'));
-  const sec=document.getElementById(id); if(sec) sec.classList.add('active');
-  if(btn) btn.classList.add('otab-active');
-  if(id==='ops_resumen')    renderOpsResumen();
-  if(id==='ops_editor')     renderOpsEditor();
-  if(id==='ops_semana')     renderOpsSemana();
-  if(id==='ops_reporte')    renderOpsReporte();
-  if(id==='ops_terminados') renderOpsTerminados();
-  if(id==='ops_rendimiento') renderOpsRendimiento();
+// ── Filter state ──────────────────────────────────────
+window._nopsFilters = { nopsInstCity:'', nopsReparStatus:'' };
+function nopsChipFilter(btn, key, val){
+  window._nopsFilters[key] = val;
+  const group = btn.parentElement.querySelectorAll('.ops-chip');
+  group.forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(key==='nopsInstCity') renderNopsInst();
+  if(key==='nopsReparStatus') renderNopsRepar();
 }
 
-// ── Render Resumen ─────────────────────────────────────
-function renderOpsResumen(){
+// ── Panel navigation ──────────────────────────────────
+function showOpsPanel(id, btn){
+  document.querySelectorAll('.ops-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.ops-nitem').forEach(b=>b.classList.remove('active'));
+  const panel = document.getElementById('opsp_'+id);
+  if(panel) panel.classList.add('active');
+  if(btn) btn.classList.add('active');
+  // render matching panel
+  const renders = {
+    resumen: renderNopsResumen,
+    inst: renderNopsInst,
+    nuevos: renderNopsNuevos,
+    tops: renderNopsTops,
+    repar: renderNopsRepar,
+    remedir: renderNopsRemedir,
+    folder: renderNopsFolder,
+    terminados: renderNopsTerminados,
+    semana: renderNopsSemana,
+    reporte: renderNopsReporte,
+    rendimiento: renderNopsRendimiento,
+    planif: function(){ if(typeof renderPlanif==='function') renderPlanif(); },
+    repdiario: function(){ if(typeof renderRepDiario==='function') renderRepDiario(); }
+  };
+  if(renders[id]) renders[id]();
+}
+
+// ── Refresh active panel ──────────────────────────────
+function nopsRefreshActive(){
+  nopsUpdatePills();
+  const active = document.querySelector('.ops-panel.active');
+  if(!active) return;
+  const id = active.id.replace('opsp_','');
+  showOpsPanel(id, document.querySelector('.ops-nitem.active'));
+}
+
+// ── Update topbar pills & nav dots ───────────────────
+function nopsUpdatePills(){
+  const D = window.OPS_DATA;
+  const enProceso = (D.inst||[]).length + (D.nuevos||[]).length + (D.tops||[]).length;
+  const pendientes = (D.repar||[]).filter(r=>r.estatus==='PENDIENTE'||!r.estatus).length;
+  const sem = getOpsSemana();
+  const p1=document.getElementById('opsTopPillA'); if(p1) p1.textContent=enProceso+' en proceso';
+  const p2=document.getElementById('opsTopPillB'); if(p2) p2.textContent=pendientes+' pendientes';
+  const p3=document.getElementById('opsTopPillC'); if(p3) p3.textContent=sem.term.length+' terminados semana';
+  const di=document.getElementById('opsNavDotInst'); if(di) di.style.display=(D.inst||[]).length?'block':'none';
+  const dr=document.getElementById('opsNavDotRepar'); if(dr) dr.style.display=pendientes?'block':'none';
+}
+
+// ── Badge helper ──────────────────────────────────────
+function nopsBadge(txt, cls){ return `<span class="ops-badge ${cls}">${txt||'—'}</span>`; }
+function nopsGradoBadge(g){
+  const m={A:'#14b8a6',B:'#fbbf24',C:'#fb7185'};
+  const c=m[g]||'#4b5563';
+  return g?`<span style="background:${c}22;color:${c};border:1px solid ${c}44;border-radius:6px;padding:2px 8px;font-size:9px;font-weight:800;font-family:'Space Mono',monospace;">G-${g}</span>`:'<span style="color:#4b5563;">—</span>';
+}
+function nopsActions(type, i){
+  return `<td style="white-space:nowrap;"><button class="ops-btn-edit" onclick="editOps('${type}',${i})">✏</button> <button class="ops-btn-del" onclick="deleteOps('${type}',${i})">✕</button></td>`;
+}
+
+// ── Render Resumen ────────────────────────────────────
+function renderNopsResumen(){
   const D=window.OPS_DATA;
-  const sv=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
-  sv('opK1',D.inst.length); sv('opK2',D.nuevos.length); sv('opK3',D.tops.length);
-  sv('opK4',D.remedir.length); sv('opK5',D.repar.length);
-  // opK6 = terminados esta semana
-  const sem=getOpsSemana(); sv('opK6',sem.term.length);
-  // opK7 = tiempo promedio de cierre (días entre fecha inst y fecha terminado por mismo cliente)
-  let totalDias=0, pares=0;
-  (D.term||[]).forEach(t=>{
-    if(!t.fecha||!t.cliente) return;
-    const instR = (D.inst||[]).find(r=>(r.cliente||'').toLowerCase().trim()===(t.cliente||'').toLowerCase().trim()&&r.fecha);
-    if(instR){
-      const d1=new Date(opsToISO(instR.fecha)); const d2=new Date(opsToISO(t.fecha));
-      const diff=Math.round((d2-d1)/(1000*60*60*24));
-      if(diff>=0){ totalDias+=diff; pares++; }
-    }
+  const sem=getOpsSemana();
+  const vals=[D.inst.length,D.nuevos.length,D.tops.length,D.remedir.length,D.repar.length,sem.term.length];
+  const max=Math.max(...vals,1);
+  ['nopK1','nopK2','nopK3','nopK4','nopK5','nopK6'].forEach((id,i)=>{
+    const el=document.getElementById(id); if(el) el.textContent=vals[i];
+    const bar=document.getElementById(id+'bar'); if(bar) bar.style.width=Math.round(vals[i]/max*100)+'%';
   });
-  sv('opK7', pares>0 ? Math.round(totalDias/pares)+'d' : '—');
+  nopsUpdatePills();
+  // Alert banner
+  const alerts=[];
+  const sinSup=(D.inst||[]).filter(r=>!r.supervisor||r.supervisor.trim()==='');
+  if(sinSup.length) alerts.push(`${sinSup.length} instalación(es) sin supervisor asignado`);
+  const reparPend=(D.repar||[]).filter(r=>r.estatus==='PENDIENTE'||!r.estatus);
+  if(reparPend.length) alerts.push(`${reparPend.length} reparación(es) pendiente(s)`);
+  const banner=document.getElementById('opsAlertBanner');
+  if(banner){
+    if(alerts.length){ banner.innerHTML='⚠ '+alerts.join(' · '); banner.style.display='flex'; }
+    else{ banner.style.display='none'; }
+  }
+  // Feed actividad
+  const feed=[];
+  (D.inst||[]).slice(-5).reverse().forEach(r=>feed.push({c:r.cliente,t:'🔧 Instalación',ci:r.ciudad,s:nopsBadge('En proceso','ob-proceso')}));
+  (D.nuevos||[]).slice(-3).reverse().forEach(r=>feed.push({c:r.cliente,t:'🆕 Nuevo',ci:r.ciudad,s:nopsBadge('Para producción','ob-nuevo')}));
+  (D.tops||[]).slice(-3).reverse().forEach(r=>feed.push({c:r.cliente,t:'🪨 Top',ci:r.ciudad,s:nopsBadge('En producción','ob-top')}));
+  (D.repar||[]).filter(r=>r.estatus==='PENDIENTE'||!r.estatus).slice(-3).forEach(r=>feed.push({c:r.cliente,t:'🔨 Reparación',ci:r.ciudad,s:nopsBadge('Pendiente','ob-pendiente')}));
+  (sem.term||[]).slice(-5).reverse().forEach(r=>feed.push({c:r.cliente,t:'✅ Terminado',ci:r.ciudad,s:nopsBadge('Esta semana','ob-terminado')}));
+  const fb=document.getElementById('opsFeedBody');
+  if(fb) fb.innerHTML = !feed.length
+    ? '<tr><td colspan="4" style="text-align:center;padding:24px;color:#2d3f5a;font-family:Space Mono,monospace;">Sin registros</td></tr>'
+    : feed.map(f=>`<tr><td style="font-weight:700;color:#f9fafb;">${f.c||'—'}</td><td>${f.t}</td><td style="color:#6b7280;">${f.ci||'—'}</td><td>${f.s}</td></tr>`).join('');
+  // Charts
   if(typeof Chart==='undefined') return;
-  // Chart ciudades (instalaciones)
   const cc={}; D.inst.forEach(r=>{ cc[r.ciudad]=(cc[r.ciudad]||0)+1; });
   const cv1=document.getElementById('opsChartCiudad');
   if(cv1){ if(cv1._ch) cv1._ch.destroy();
     cv1._ch=new Chart(cv1,{type:'doughnut',data:{labels:Object.keys(cc),datasets:[{data:Object.values(cc),backgroundColor:['#ff6b35','#ffd700','#a8ff3e','#00bfff','#9333ea','#f9fafb'],borderWidth:0}]},options:{plugins:{legend:{position:'bottom',labels:{color:'#9ca3af',font:{family:'Space Mono',size:9}}}}}});
   }
-  // Chart supervisores
   const cs={}; D.inst.forEach(r=>{ if(r.supervisor){cs[r.supervisor]=(cs[r.supervisor]||0)+1;} });
   const cv2=document.getElementById('opsChartSupervisor');
   if(cv2){ if(cv2._ch) cv2._ch.destroy();
@@ -7096,605 +7215,670 @@ function renderOpsResumen(){
   }
 }
 
-// ── Render Editor ──────────────────────────────────────
-function renderOpsEditor(){
+// ── Render Instalaciones ──────────────────────────────
+function renderNopsInst(){
   const D=window.OPS_DATA;
-  const setC=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v+' registro'+(v!==1?'s':'');};
-  setC('opsInstCount',D.inst.length); setC('opsNuevosCount',D.nuevos.length);
-  setC('opsTopsCount',D.tops.length); setC('opsRemedirCount',D.remedir.length);
-  setC('opsFolderCount',D.folder.length); setC('opsReparCount',D.repar.length);
-  setC('opsTermCount',D.term.length);
-  const fill=(id,rows,cols)=>{const tb=document.getElementById(id);if(!tb)return;
-    tb.innerHTML=!rows.length?`<tr><td colspan="${cols}" style="text-align:center;padding:20px;color:var(--sub);font-size:11px;">Sin registros — usa "+ Agregar"</td></tr>`:rows;};
-  // A: Instalaciones
-  fill('opsInstBody', D.inst.map((r,i)=>{
-    const gc=r.grado==='A'?'#14b8a6':r.grado==='B'?'#fbbf24':r.grado==='C'?'#fb7185':'#4b5563';
-    const gb=r.grado?`<span style="background:${gc}22;color:${gc};border:1px solid ${gc}44;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:800;letter-spacing:1px;">G-${r.grado}</span>`:'<span style="color:#4b5563;font-size:10px;">—</span>';
-    const ar=r.areas&&r.areas.length?`<span style="color:var(--sub);font-size:9px;">${r.areas.join(', ')}</span>`:'<span style="color:#4b5563;font-size:10px;">—</span>';
-    return `<tr>
-    <td style="color:#6b7280">${i+1}</td>
-    <td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td>
-    <td style="color:#ff6b35">${r.supervisor||'—'}</td>
-    <td style="color:var(--gold);font-weight:700">${r.instalador||'<span style="color:#4b5563">—</span>'}</td>
-    <td><span class="badge b-sps">${r.ciudad||'—'}</span></td>
-    <td style="text-align:center">${gb}</td>
-    <td style="color:var(--gold);font-weight:700;text-align:center">${r.horas?r.horas+'h':'<span style="color:#4b5563">—</span>'}</td>
-    <td style="max-width:160px;">${ar}</td>
-    <td style="color:#6b7280;font-size:10px;max-width:220px;">${r.obs||'—'}</td>
-    <td style="white-space:nowrap;"><button class="btn-sm btn-edit" onclick="editOps('inst',${i})">✏ Editar</button><button class="btn-sm btn-delete" onclick="deleteOps('inst',${i})">✕</button></td>
-  </tr>`;}).join(''), 10);
-  // B: Nuevos
-  fill('opsNuevosBody', D.nuevos.map((r,i)=>`<tr>
-    <td style="color:#6b7280">${i+1}</td>
-    <td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td>
-    <td style="color:var(--accent3);font-weight:700">${r.fecha||'—'}</td>
-    <td><span class="badge b-sps">${r.ciudad||'—'}</span></td>
-    <td style="color:#6b7280;font-size:10px;max-width:250px;">${r.obs||'—'}</td>
-    <td style="white-space:nowrap;"><button class="btn-sm btn-edit" onclick="editOps('nuevo',${i})">✏ Editar</button><button class="btn-sm btn-delete" onclick="deleteOps('nuevo',${i})">✕</button></td>
-  </tr>`).join(''), 6);
-  // C: Tops
-  fill('opsTopsBody', D.tops.map((r,i)=>`<tr>
-    <td style="color:#6b7280">${i+1}</td>
-    <td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td>
-    <td style="color:#00bfff">${r.color||'—'}</td>
-    <td style="color:var(--gold);font-weight:700;text-align:center">${r.laminas||'—'}</td>
-    <td style="color:var(--accent3)">${r.instalo||'—'}</td>
-    <td><span class="badge b-sps">${r.ciudad||'—'}</span></td>
-    <td style="color:#6b7280;font-size:10px;max-width:200px;">${r.obs||'—'}</td>
-    <td style="white-space:nowrap;"><button class="btn-sm btn-edit" onclick="editOps('top',${i})">✏ Editar</button><button class="btn-sm btn-delete" onclick="deleteOps('top',${i})">✕</button></td>
-  </tr>`).join(''), 8);
-  // D: Remedir
-  fill('opsRemedirBody', D.remedir.map((r,i)=>`<tr>
-    <td style="color:#6b7280">${i+1}</td>
-    <td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td>
-    <td style="color:var(--accent3)">${r.vendedora||'—'}</td>
-    <td style="color:#ff6b35">${r.supervisor||'—'}</td>
-    <td style="color:#9ca3af">${r.ubicacion||'—'}</td>
-    <td style="color:#6b7280;font-size:10px;max-width:220px;">${r.obs||'—'}</td>
-    <td style="white-space:nowrap;"><button class="btn-sm btn-edit" onclick="editOps('remedir',${i})">✏ Editar</button><button class="btn-sm btn-delete" onclick="deleteOps('remedir',${i})">✕</button></td>
-  </tr>`).join(''), 7);
-  // E: Folder
-  fill('opsFolderBody', D.folder.map((r,i)=>`<tr>
-    <td style="color:#6b7280">${i+1}</td>
-    <td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td>
-    <td style="color:var(--accent3)">${r.vendedora||'—'}</td>
-    <td style="color:var(--gold);font-size:10px">${r.areas||'—'}</td>
-    <td style="color:#ff6b35">${r.remidio||'—'}</td>
-    <td style="color:#9333ea;font-weight:700;white-space:nowrap">${r.fecha_remidio?opsDisp(r.fecha_remidio):'<span style="color:#4b5563">Sin fecha</span>'}</td>
-    <td style="color:#6b7280;font-size:10px;max-width:220px;">${r.obs||'—'}</td>
-    <td style="white-space:nowrap;"><button class="btn-sm btn-edit" onclick="editOps('folder',${i})">✏ Editar</button><button class="btn-sm btn-delete" onclick="deleteOps('folder',${i})">✕</button></td>
-  </tr>`).join(''), 8);
-  // F: Reparaciones
-  fill('opsReparBody', D.repar.map((r,i)=>{
-    const ec=r.estatus==='REALIZADO'?'b-ok':r.estatus==='PENDIENTE'?'b-block':'b-proc';
-    return `<tr>
-      <td style="color:#6b7280">${i+1}</td>
-      <td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td>
-      <td style="color:#9ca3af;font-size:10px;max-width:220px;">${r.accion||'—'}</td>
-      <td><span class="badge b-sps">${r.ciudad||'—'}</span></td>
-      <td><span class="badge ${ec}">${r.estatus||'—'}</span></td>
-      <td style="color:#6b7280;font-size:10px;max-width:200px;">${r.obs||'—'}</td>
-      <td style="white-space:nowrap;"><button class="btn-sm btn-edit" onclick="editOps('repar',${i})">✏ Editar</button><button class="btn-sm btn-delete" onclick="deleteOps('repar',${i})">✕</button></td>
-    </tr>`;}).join(''), 7);
-  // G: Terminados
-  fill('opsTermBody', D.term.map((r,i)=>`<tr>
-    <td style="color:#6b7280">${i+1}</td>
-    <td style="color:var(--gold);font-weight:700;white-space:nowrap">${opsDisp(r.fecha)}</td>
-    <td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td>
-    <td><span class="badge b-sps">${r.ciudad||'—'}</span></td>
-    <td style="color:#6b7280;font-size:10px">${r.obs||'—'}</td>
-    <td style="white-space:nowrap;"><button class="btn-sm btn-edit" onclick="editOps('term',${i})">✏ Editar</button><button class="btn-sm btn-delete" onclick="deleteOps('term',${i})">✕</button></td>
-  </tr>`).join(''), 6);
+  const q=(document.getElementById('nopsInstSearch')||{value:''}).value.toLowerCase();
+  const cityF=window._nopsFilters.nopsInstCity||'';
+  // Solo mostrar los que NO están terminados desde aquí
+  let rows=D.inst.filter(r=>{
+    if(r._terminado) return false;
+    if(cityF && (r.ciudad||'')!==cityF) return false;
+    return !q||(r.cliente||'').toLowerCase().includes(q)||(r.supervisor||'').toLowerCase().includes(q)||(r.instalador||'').toLowerCase().includes(q);
+  });
+  const cnt=document.getElementById('nopsInstCount'); if(cnt) cnt.textContent=rows.length+' registro'+(rows.length!==1?'s':'');
+  const tb=document.getElementById('nopsInstBody'); if(!tb) return;
+  tb.innerHTML=!rows.length?'<tr><td colspan="11" style="text-align:center;padding:24px;color:#2d3f5a;">Sin instalaciones en proceso — usa "+ Agregar"</td></tr>':rows.map((r,i)=>{
+    const ar=r.areas&&r.areas.length?r.areas.join(', '):'—';
+    const realI=D.inst.indexOf(r);
+    const est=r.estado||'En Proceso';
+    const estBadge=est==='Terminado'
+      ?'<span style="background:rgba(168,255,62,.15);color:#a8ff3e;border:1px solid rgba(168,255,62,.4);border-radius:20px;padding:2px 8px;font-size:9px;font-weight:700;">✅ Terminado</span>'
+      :'<span style="background:rgba(255,107,53,.12);color:#ff6b35;border:1px solid rgba(255,107,53,.35);border-radius:20px;padding:2px 8px;font-size:9px;font-weight:700;">🔄 En Proceso</span>';
+    return `<tr><td style="color:#a8ff3e;font-size:10px;white-space:nowrap;font-weight:700;">${r.fecha?opsDisp(r.fecha):'<span style="color:#4b5563;">—</span>'}</td><td style="color:#ff6b35;font-size:10px;white-space:nowrap;font-weight:700;">${r.fecha_fin?opsDisp(r.fecha_fin):'<span style="color:#4b5563;">—</span>'}</td><td style="color:#f9fafb;font-weight:700;">${r.cliente||'—'}</td><td style="color:#ff6b35;">${r.supervisor||'<span style="color:#4b5563;">—</span>'}</td><td style="color:#ffd700;font-weight:700;">${r.instalador||'<span style="color:#4b5563;">—</span>'}</td><td>${r.ciudad||'—'}</td><td>${nopsGradoBadge(r.grado)}</td><td style="color:#ffd700;">${r.horas?r.horas+'h':'—'}</td><td style="font-size:10px;color:#6b7280;max-width:140px;">${ar}</td><td style="font-size:10px;color:#6b7280;max-width:180px;">${r.obs||'—'}</td><td>${estBadge}</td><td style="white-space:nowrap;"><button class="ops-btn-edit" onclick="editOps('inst',${realI})" title="Editar">✏</button> <button class="ops-btn-del" onclick="deleteOps('inst',${realI})" title="Eliminar">✕</button> <button onclick="terminarInstalacion(${realI})" title="Marcar como terminado y mover a Terminados" style="background:rgba(168,255,62,.15);color:#a8ff3e;border:1px solid rgba(168,255,62,.4);border-radius:6px;padding:3px 8px;font-family:'Space Mono',monospace;font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap;">✓ TERMINAR</button></td></tr>`;
+  }).join('');
 }
 
-// ── Render Semana ──────────────────────────────────────
-function renderOpsSemana(){
+// ── Render Nuevos ─────────────────────────────────────
+function renderNopsNuevos(){
+  const D=window.OPS_DATA;
+  const q=(document.getElementById('nopsNuevosSearch')||{value:''}).value.toLowerCase();
+  const rows=D.nuevos.filter(r=>!q||(r.cliente||'').toLowerCase().includes(q));
+  const cnt=document.getElementById('nopsNuevosCount'); if(cnt) cnt.textContent=rows.length+' registro'+(rows.length!==1?'s':'');
+  const tb=document.getElementById('nopsNuevosBody'); if(!tb) return;
+  tb.innerHTML=!rows.length?'<tr><td colspan="6" style="text-align:center;padding:24px;color:#2d3f5a;">Sin registros</td></tr>':rows.map((r,i)=>{
+    const realI=D.nuevos.indexOf(r);
+    return `<tr><td style="color:#6b7280;">${i+1}</td><td style="color:#f9fafb;font-weight:700;">${r.cliente||'—'}</td><td style="color:#a8ff3e;font-weight:700;">${r.fecha||'—'}</td><td>${r.ciudad||'—'}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td><td style="white-space:nowrap;"><button class="ops-btn-edit" onclick="editOps('nuevo',${realI})">✏</button> <button class="ops-btn-del" onclick="deleteOps('nuevo',${realI})">✕</button></td></tr>`;
+  }).join('');
+}
+
+// ── Render Tops ───────────────────────────────────────
+function renderNopsTops(){
+  const D=window.OPS_DATA;
+  const q=(document.getElementById('nopsTopsSearch')||{value:''}).value.toLowerCase();
+  const rows=D.tops.filter(r=>!q||(r.cliente||'').toLowerCase().includes(q));
+  const cnt=document.getElementById('nopsTopsCount'); if(cnt) cnt.textContent=rows.length+' registro'+(rows.length!==1?'s':'');
+  const tb=document.getElementById('nopsTopsBody'); if(!tb) return;
+  tb.innerHTML=!rows.length?'<tr><td colspan="8" style="text-align:center;padding:24px;color:#2d3f5a;">Sin registros</td></tr>':rows.map((r,i)=>{
+    const realI=D.tops.indexOf(r);
+    return `<tr><td style="color:#6b7280;">${i+1}</td><td style="color:#f9fafb;font-weight:700;">${r.cliente||'—'}</td><td style="color:#00bfff;">${r.color||'—'}</td><td style="color:#ffd700;font-weight:700;">${r.laminas||'—'}</td><td>${r.instalo||'—'}</td><td>${r.ciudad||'—'}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td><td style="white-space:nowrap;"><button class="ops-btn-edit" onclick="editOps('top',${realI})">✏</button> <button class="ops-btn-del" onclick="deleteOps('top',${realI})">✕</button></td></tr>`;
+  }).join('');
+}
+
+// ── Render Reparaciones ───────────────────────────────
+function renderNopsRepar(){
+  const D=window.OPS_DATA;
+  const q=(document.getElementById('nopsReparSearch')||{value:''}).value.toLowerCase();
+  const stF=window._nopsFilters.nopsReparStatus||'';
+  const rows=D.repar.filter(r=>{
+    if(stF && (r.estatus||'')!==stF) return false;
+    return !q||(r.cliente||'').toLowerCase().includes(q);
+  });
+  const cnt=document.getElementById('nopsReparCount'); if(cnt) cnt.textContent=rows.length+' registro'+(rows.length!==1?'s':'');
+  const pendN=(D.repar||[]).filter(r=>r.estatus==='PENDIENTE'||!r.estatus).length;
+  const alr=document.getElementById('opsAlertRepar');
+  if(alr){ if(pendN){ alr.innerHTML=`⚠ ${pendN} reparación(es) pendiente(s) de atender`; alr.style.display='flex'; } else alr.style.display='none'; }
+  const tb=document.getElementById('nopsReparBody'); if(!tb) return;
+  tb.innerHTML=!rows.length?'<tr><td colspan="7" style="text-align:center;padding:24px;color:#2d3f5a;">Sin registros</td></tr>':rows.map((r,i)=>{
+    const ec=r.estatus==='REALIZADO'?'ob-realizado':r.estatus==='PENDIENTE'?'ob-pendiente':'ob-proceso';
+    const realI=D.repar.indexOf(r);
+    return `<tr><td style="color:#6b7280;">${i+1}</td><td style="color:#f9fafb;font-weight:700;">${r.cliente||'—'}</td><td style="font-size:10px;color:#9ca3af;max-width:180px;">${r.accion||'—'}</td><td>${r.ciudad||'—'}</td><td>${nopsBadge(r.estatus||'PENDIENTE',ec)}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td><td style="white-space:nowrap;"><button class="ops-btn-edit" onclick="editOps('repar',${realI})">✏</button> <button class="ops-btn-del" onclick="deleteOps('repar',${realI})">✕</button></td></tr>`;
+  }).join('');
+}
+
+// ── Render Remedir ────────────────────────────────────
+function renderNopsRemedir(){
+  const D=window.OPS_DATA;
+  const q=(document.getElementById('nopsRemedirSearch')||{value:''}).value.toLowerCase();
+  const rows=D.remedir.filter(r=>!q||(r.cliente||'').toLowerCase().includes(q));
+  const cnt=document.getElementById('nopsRemedirCount'); if(cnt) cnt.textContent=rows.length+' registro'+(rows.length!==1?'s':'');
+  const tb=document.getElementById('nopsRemedirBody'); if(!tb) return;
+  tb.innerHTML=!rows.length?'<tr><td colspan="7" style="text-align:center;padding:24px;color:#2d3f5a;">Sin registros</td></tr>':rows.map((r,i)=>{
+    const realI=D.remedir.indexOf(r);
+    return `<tr><td style="color:#6b7280;">${i+1}</td><td style="color:#f9fafb;font-weight:700;">${r.cliente||'—'}</td><td style="color:#a8ff3e;">${r.vendedora||'—'}</td><td style="color:#ff6b35;">${r.supervisor||'—'}</td><td style="color:#9ca3af;">${r.ubicacion||'—'}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td><td style="white-space:nowrap;"><button class="ops-btn-edit" onclick="editOps('remedir',${realI})">✏</button> <button class="ops-btn-del" onclick="deleteOps('remedir',${realI})">✕</button></td></tr>`;
+  }).join('');
+}
+
+// ── Render Folder ─────────────────────────────────────
+function renderNopsFolder(){
+  const D=window.OPS_DATA;
+  const q=(document.getElementById('nopsFolderSearch')||{value:''}).value.toLowerCase();
+  const rows=D.folder.filter(r=>!q||(r.cliente||'').toLowerCase().includes(q));
+  const cnt=document.getElementById('nopsFolderCount'); if(cnt) cnt.textContent=rows.length+' registro'+(rows.length!==1?'s':'');
+  const tb=document.getElementById('nopsFolderBody'); if(!tb) return;
+  tb.innerHTML=!rows.length?'<tr><td colspan="8" style="text-align:center;padding:24px;color:#2d3f5a;">Sin registros</td></tr>':rows.map((r,i)=>{
+    const realI=D.folder.indexOf(r);
+    return `<tr><td style="color:#6b7280;">${i+1}</td><td style="color:#f9fafb;font-weight:700;">${r.cliente||'—'}</td><td style="color:#a8ff3e;">${r.vendedora||'—'}</td><td style="color:#ffd700;font-size:10px;">${r.areas||'—'}</td><td style="color:#ff6b35;">${r.remidio||'—'}</td><td style="color:#9333ea;font-weight:700;">${r.fecha_remidio?opsDisp(r.fecha_remidio):'<span style="color:#4b5563;">Sin fecha</span>'}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td><td style="white-space:nowrap;"><button class="ops-btn-edit" onclick="editOps('folder',${realI})">✏</button> <button class="ops-btn-del" onclick="deleteOps('folder',${realI})">✕</button></td></tr>`;
+  }).join('');
+}
+
+// ── Render Terminados ─────────────────────────────────
+function renderNopsTerminados(){
+  const D=window.OPS_DATA;
+  const q=(document.getElementById('nopsTermSearch')||{value:''}).value.toLowerCase();
+  const rows=[...(D.term||[])].reverse().filter(r=>!q||(r.cliente||'').toLowerCase().includes(q)||(r.ciudad||'').toLowerCase().includes(q));
+  const sem=getOpsSemana();
+  const tot=document.getElementById('nopsTermTotal'); if(tot) tot.textContent=D.term.length;
+  const sw=document.getElementById('nopsTermSemana'); if(sw) sw.textContent=sem.term.length;
+  const bar=document.getElementById('nopsTermSemBar'); if(bar) bar.style.width=D.term.length?Math.round(sem.term.length/D.term.length*100)+'%':'0%';
+  const tb=document.getElementById('nopsTermBody'); if(!tb) return;
+  tb.innerHTML=!rows.length?'<tr><td colspan="6" style="text-align:center;padding:24px;color:#2d3f5a;">Sin registros terminados</td></tr>':rows.map(r=>{
+    const realI=D.term.indexOf(r);
+    const cobroBadge = r._cobrado
+      ? `<span style="background:rgba(0,229,255,.12);color:#00e5ff;border:1px solid rgba(0,229,255,.35);border-radius:20px;padding:3px 9px;font-size:9px;font-weight:700;white-space:nowrap;">✔ COBRADO${r.fecha_cobro?' · '+r.fecha_cobro:''}</span>`
+      : `<span onclick="cobrarProyecto(${realI})" style="cursor:pointer;background:rgba(168,255,62,.15);color:#a8ff3e;border:1px solid rgba(168,255,62,.4);border-radius:20px;padding:3px 9px;font-size:9px;font-weight:700;white-space:nowrap;transition:background .15s;" onmouseover="this.style.background='rgba(168,255,62,.3)'" onmouseout="this.style.background='rgba(168,255,62,.15)'">💰 COBRAR</span>`;
+    return `<tr style="cursor:context-menu;" oncontextmenu="showTermContextMenu(event,${realI});return false;"><td style="color:#ffd700;font-weight:700;white-space:nowrap;">${opsDisp(r.fecha_term||r.fecha)}</td><td style="color:#f9fafb;font-weight:700;">${r.cliente||'—'}</td><td style="color:#ffd700;">${r.instalador||'<span style="color:#4b5563;">—</span>'}</td><td>${r.ciudad||'—'}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td><td>${cobroBadge}</td></tr>`;
+  }).join('');
+}
+
+// ── Render Semana ─────────────────────────────────────
+function renderNopsSemana(){
   const D=window.OPS_DATA;
   const s=getOpsSemana();
-  const rl=document.getElementById('opsSemLabel'); if(rl) rl.textContent=`${opsDisp(s.desde)} → ${opsDisp(s.hasta)} (semana en curso)`;
-  // Inst/nuevos/tops/remedir/folder: mostrar TODOS (son estado activo, no eventos con fecha)
-  // Repar y term: filtrar solo esta semana
-  const inst    = D.inst    || [];
-  const nuevos  = D.nuevos  || [];
-  const tops    = D.tops    || [];
-  const remedir = D.remedir || [];
-  const folder  = D.folder  || [];
-  const repar   = s.repar;  // filtrado por semana
-  const term    = s.term;   // filtrado por semana
-  const totalRegistros = inst.length+nuevos.length+tops.length+remedir.length+folder.length+repar.length+term.length;
-  const sv=document.getElementById('opsSemTotal'); if(sv) sv.textContent=totalRegistros;
-  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
-  set('swOpK1',inst.length); set('swOpK2',nuevos.length); set('swOpK3',tops.length);
-  set('swOpK4',remedir.length); set('swOpK5',repar.length); set('swOpK6',term.length);
-  const cont=document.getElementById('opsSemTablas'); if(!cont) return;
-  const tbl=(titulo,color,hdrs,rows,cols)=>!rows.length?'':`
-    <div class="chart-card" style="border-color:${color}25;margin-bottom:12px;">
-      <div style="color:${color};font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:10px;">${titulo} <span style="color:var(--sub);font-size:10px;font-weight:400;">(${rows.split('<tr>').length-1})</span></div>
-      <div class="table-wrap"><table><thead><tr>${hdrs}</tr></thead><tbody>${rows}</tbody></table></div>
+  const rl=document.getElementById('nopsSemLabel'); if(rl) rl.textContent=`${opsDisp(s.desde)} → ${opsDisp(s.hasta)}`;
+  const inst=D.inst||[], nuevos=D.nuevos||[], tops=D.tops||[], remedir=D.remedir||[], folder=D.folder||[], repar=s.repar, term=s.term;
+  const total=inst.length+nuevos.length+tops.length+remedir.length+folder.length+repar.length+term.length;
+  const sv=document.getElementById('nopsSemTotal'); if(sv) sv.textContent=total;
+  const cont=document.getElementById('nopsSemTablas'); if(!cont) return;
+  const tbl=(titulo,color,hdrs,rows)=>!rows.length?'':`
+    <div style="border-top:1px solid #1a2535;">
+      <div class="ops-semana-grp-hdr" style="color:${color};">${titulo} <span style="color:#2d3f5a;font-weight:400;">(${rows.length})</span></div>
+      <div class="ops-table-wrap"><table class="ops-table"><thead><tr>${hdrs}</tr></thead><tbody>${rows.map(r=>r).join('')}</tbody></table></div>
     </div>`;
-  cont.innerHTML =
-    tbl('🔧 INSTALACIONES EN PROCESO','#ff6b35','<th>CLIENTE</th><th>SUPERVISOR</th><th>INSTALADOR</th><th>CIUDAD</th><th>OBSERVACIONES</th>',
-      inst.map(r=>`<tr><td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td><td style="color:#ff6b35">${r.supervisor||'—'}</td><td style="color:var(--gold)">${r.instalador||'—'}</td><td>${r.ciudad||'—'}</td><td style="font-size:10px;color:#6b7280">${r.obs||'—'}</td></tr>`).join(''),5)+
-    tbl('🆕 CLIENTES NUEVOS PROD. E INSTALACIÓN','#a8ff3e','<th>CLIENTE</th><th>FECHA INST.</th><th>CIUDAD</th><th>OBSERVACIONES</th>',
-      nuevos.map(r=>`<tr><td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td><td style="color:var(--accent3);font-weight:700">${r.fecha||'—'}</td><td>${r.ciudad||'—'}</td><td style="font-size:10px;color:#6b7280">${r.obs||'—'}</td></tr>`).join(''),4)+
-    tbl('🪨 PRODUCCIÓN DE TOPS','#00bfff','<th>CLIENTE</th><th>COLOR DEL TOP</th><th>LÁMINAS</th><th>INSTALÓ</th><th>CIUDAD</th>',
-      tops.map(r=>`<tr><td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td><td style="color:#00bfff">${r.color||'—'}</td><td style="color:var(--gold);font-weight:700">${r.laminas||'—'}</td><td>${r.instalo||'—'}</td><td>${r.ciudad||'—'}</td></tr>`).join(''),5)+
-    tbl('📐 CLIENTES PARA REMEDIR','#ffd700','<th>CLIENTE</th><th>VENDEDORA</th><th>SUPERVISOR</th><th>UBICACIÓN</th><th>OBSERVACIONES</th>',
-      remedir.map(r=>`<tr><td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td><td>${r.vendedora||'—'}</td><td style="color:#ff6b35">${r.supervisor||'—'}</td><td>${r.ubicacion||'—'}</td><td style="font-size:10px;color:#6b7280">${r.obs||'—'}</td></tr>`).join(''),5)+
-    tbl('📁 REMEDIDOS CON FOLDER PENDIENTE','#9333ea','<th>CLIENTE</th><th>VENDEDORA</th><th>ÁREAS</th><th>REMIDIÓ</th><th>OBSERVACIONES</th>',
-      folder.map(r=>`<tr><td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td><td>${r.vendedora||'—'}</td><td style="color:var(--gold)">${r.areas||'—'}</td><td style="color:#ff6b35">${r.remidio||'—'}</td><td style="font-size:10px;color:#6b7280">${r.obs||'—'}</td></tr>`).join(''),5)+
-    tbl('🔨 PENDIENTES Y REPARACIONES','#ff6b35','<th>CLIENTE</th><th>ACCIÓN</th><th>CIUDAD</th><th>ESTATUS</th><th>OBSERVACIONES</th>',
-      repar.map(r=>{const ec=r.estatus==='REALIZADO'?'b-ok':r.estatus==='PENDIENTE'?'b-block':'b-proc';return `<tr><td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td><td style="font-size:10px;color:#9ca3af">${r.accion||'—'}</td><td>${r.ciudad||'—'}</td><td><span class="badge ${ec}">${r.estatus||'—'}</span></td><td style="font-size:10px;color:#6b7280">${r.obs||'—'}</td></tr>`;}).join(''),5)+
-    tbl('✅ CLIENTES TERMINADOS ESTA SEMANA','#a8ff3e','<th>FECHA</th><th>CLIENTE</th><th>CIUDAD</th><th>OBSERVACIONES</th>',
-      term.map(r=>`<tr><td style="color:var(--gold);font-weight:700">${opsDisp(r.fecha)}</td><td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td><td>${r.ciudad||'—'}</td><td style="font-size:10px;color:#6b7280">${r.obs||'—'}</td></tr>`).join(''),4);
-  // Si todo vacío, mostrar mensaje
-  if(!totalRegistros) cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--sub);font-size:12px;font-family:Space Mono,monospace;">Sin registros activos en operaciones</div>';
+  cont.innerHTML = !total ? '<div style="text-align:center;padding:40px;color:#2d3f5a;font-family:Space Mono,monospace;font-size:11px;">Sin registros activos en operaciones</div>' :
+    tbl('🔧 INSTALACIONES EN PROCESO','#ff6b35','<th>CLIENTE</th><th>SUPERVISOR</th><th>INSTALADOR</th><th>CIUDAD</th><th>OBS</th>',
+      inst.map(r=>`<tr><td style="font-weight:700;color:#f9fafb;">${r.cliente||'—'}</td><td style="color:#ff6b35;">${r.supervisor||'—'}</td><td style="color:#ffd700;">${r.instalador||'—'}</td><td>${r.ciudad||'—'}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td></tr>`))+
+    tbl('🆕 CLIENTES NUEVOS PROD. E INSTALACIÓN','#a8ff3e','<th>CLIENTE</th><th>FECHA INST.</th><th>CIUDAD</th><th>OBS</th>',
+      nuevos.map(r=>`<tr><td style="font-weight:700;color:#f9fafb;">${r.cliente||'—'}</td><td style="color:#a8ff3e;">${r.fecha||'—'}</td><td>${r.ciudad||'—'}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td></tr>`))+
+    tbl('🪨 PRODUCCIÓN DE TOPS','#00bfff','<th>CLIENTE</th><th>COLOR</th><th>LÁMINAS</th><th>INSTALÓ</th><th>CIUDAD</th>',
+      tops.map(r=>`<tr><td style="font-weight:700;color:#f9fafb;">${r.cliente||'—'}</td><td style="color:#00bfff;">${r.color||'—'}</td><td style="color:#ffd700;">${r.laminas||'—'}</td><td>${r.instalo||'—'}</td><td>${r.ciudad||'—'}</td></tr>`))+
+    tbl('📐 PARA REMEDIR','#ffd700','<th>CLIENTE</th><th>VENDEDORA</th><th>SUPERVISOR</th><th>UBICACIÓN</th><th>OBS</th>',
+      remedir.map(r=>`<tr><td style="font-weight:700;color:#f9fafb;">${r.cliente||'—'}</td><td>${r.vendedora||'—'}</td><td style="color:#ff6b35;">${r.supervisor||'—'}</td><td>${r.ubicacion||'—'}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td></tr>`))+
+    tbl('📁 REMEDIDOS CON FOLDER PENDIENTE','#9333ea','<th>CLIENTE</th><th>VENDEDORA</th><th>ÁREAS</th><th>REMIDIÓ</th><th>OBS</th>',
+      folder.map(r=>`<tr><td style="font-weight:700;color:#f9fafb;">${r.cliente||'—'}</td><td>${r.vendedora||'—'}</td><td style="color:#ffd700;">${r.areas||'—'}</td><td style="color:#ff6b35;">${r.remidio||'—'}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td></tr>`))+
+    tbl('🔨 PENDIENTES Y REPARACIONES','#ff6b35','<th>CLIENTE</th><th>ACCIÓN</th><th>CIUDAD</th><th>ESTATUS</th><th>OBS</th>',
+      repar.map(r=>{const ec=r.estatus==='REALIZADO'?'ob-realizado':r.estatus==='PENDIENTE'?'ob-pendiente':'ob-proceso';return `<tr><td style="font-weight:700;color:#f9fafb;">${r.cliente||'—'}</td><td style="font-size:10px;color:#9ca3af;">${r.accion||'—'}</td><td>${r.ciudad||'—'}</td><td>${nopsBadge(r.estatus||'PENDIENTE',ec)}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td></tr>`}))+
+    tbl('✅ TERMINADOS ESTA SEMANA','#a8ff3e','<th>FECHA</th><th>CLIENTE</th><th>CIUDAD</th><th>OBS</th>',
+      term.map(r=>`<tr><td style="color:#ffd700;font-weight:700;">${opsDisp(r.fecha)}</td><td style="font-weight:700;color:#f9fafb;">${r.cliente||'—'}</td><td>${r.ciudad||'—'}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td></tr>`));
 }
 
-// ── Render Reporte ─────────────────────────────────────
-let opsRepMode='all';
-function setOpsRepMode(mode,btn){
-  opsRepMode=mode;
-  document.querySelectorAll('#opsRepBtnTodo,#opsRepBtnRango').forEach(b=>b.classList.remove('active'));
+// ── Reporte ───────────────────────────────────────────
+let nopsRepMode='all';
+function setNopsRepMode(mode, btn){
+  nopsRepMode=mode;
+  ['nopsRepBtnTodo','nopsRepBtnRango'].forEach(id=>{const b=document.getElementById(id);if(b)b.classList.remove('active');});
   if(btn) btn.classList.add('active');
-  const ri=document.getElementById('opsRepRangoInputs'); if(ri) ri.style.display=mode==='range'?'flex':'none';
-  if(mode==='all'){ const d=document.getElementById('opsRepDesde');const h=document.getElementById('opsRepHasta');if(d)d.value='';if(h)h.value=''; }
-  renderOpsReporte();
+  const ri=document.getElementById('nopsRepRangoInputs'); if(ri) ri.style.display=mode==='range'?'flex':'none';
+  renderNopsReporte();
 }
-function limpiarOpsRep(){ ['opsRepDesde','opsRepHasta'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';}); renderOpsReporte(); }
-function getFilteredOps(){
+function limpiarNopsRep(){ ['nopsRepDesde','nopsRepHasta'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';}); renderNopsReporte(); }
+function getNopsFiltered(){
   const D=window.OPS_DATA;
-  if(opsRepMode==='all') return {inst:D.inst,nuevos:D.nuevos,tops:D.tops,remedir:D.remedir,folder:D.folder,repar:D.repar,term:D.term};
-  const desde=document.getElementById('opsRepDesde')?.value||'';
-  const hasta=document.getElementById('opsRepHasta')?.value||'';
+  if(nopsRepMode==='all') return {inst:D.inst,nuevos:D.nuevos,tops:D.tops,remedir:D.remedir,folder:D.folder,repar:D.repar,term:D.term};
+  const desde=document.getElementById('nopsRepDesde')?.value||'';
+  const hasta=document.getElementById('nopsRepHasta')?.value||'';
   const fil=arr=>(arr||[]).filter(r=>{const iso=opsToISO(r.fecha);if(desde&&iso<desde)return false;if(hasta&&iso>hasta)return false;return true;});
   return {inst:fil(D.inst),nuevos:D.nuevos,tops:fil(D.tops),remedir:D.remedir,folder:D.folder,repar:fil(D.repar),term:fil(D.term)};
 }
-function renderOpsReporte(){
-  const f=getFilteredOps();
-  const desde=document.getElementById('opsRepDesde')?.value||'';
-  const hasta=document.getElementById('opsRepHasta')?.value||'';
-  const pLabel=opsRepMode==='all'?'Historial completo':`${desde?opsDisp(opsFromISO(desde)):'inicio'} → ${hasta?opsDisp(opsFromISO(hasta)):'hoy'}`;
+function renderNopsReporte(){
+  const f=getNopsFiltered();
+  const desde=document.getElementById('nopsRepDesde')?.value||'';
+  const hasta=document.getElementById('nopsRepHasta')?.value||'';
+  const pLabel=nopsRepMode==='all'?'Historial completo':`${desde?opsDisp(opsFromISO(desde)):'inicio'} → ${hasta?opsDisp(opsFromISO(hasta)):'hoy'}`;
   const total=f.inst.length+f.nuevos.length+f.tops.length+f.remedir.length+f.folder.length+f.repar.length+f.term.length;
-  const lbl=document.getElementById('opsRepLabel'); if(lbl) lbl.textContent=`${total} registros · ${pLabel}`;
-  const rl=document.getElementById('opsRepRangoLabel'); if(rl) rl.textContent=pLabel;
-  const sv=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
-  sv('opsRK1',f.inst.length); sv('opsRK2',f.nuevos.length); sv('opsRK3',f.tops.length);
-  sv('opsRK4',f.remedir.length); sv('opsRK5',f.repar.length); sv('opsRK6',f.term.length);
-  const cont=document.getElementById('opsRepTablas'); if(!cont) return;
+  const lbl=document.getElementById('nopsRepLabel'); if(lbl) lbl.textContent=`${total} registros · ${pLabel}`;
+  ['nopsRK1','nopsRK2','nopsRK3','nopsRK4','nopsRK5','nopsRK6'].forEach((id,i)=>{
+    const vs=[f.inst.length,f.nuevos.length,f.tops.length,f.remedir.length,f.repar.length,f.term.length];
+    const el=document.getElementById(id); if(el) el.textContent=vs[i];
+  });
+  const cont=document.getElementById('nopsRepTablas'); if(!cont) return;
   const tbl=(titulo,color,hdrs,rows,cols)=>`
-    <div class="chart-card" style="border-color:${color}25;margin-bottom:14px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div style="color:${color};font-size:11px;font-weight:700;letter-spacing:1px;">${titulo} <span style="color:var(--sub);font-size:10px;font-weight:400;">(${rows.split('<tr>').length-1})</span></div>
-      </div>
-      <div class="table-wrap"><table><thead><tr>${hdrs}</tr></thead><tbody>${rows||`<tr><td colspan="${cols}" style="text-align:center;padding:14px;color:var(--sub);font-size:11px;">Sin registros</td></tr>`}</tbody></table></div>
+    <div style="border-top:1px solid #1a2535;">
+      <div class="ops-semana-grp-hdr" style="color:${color};">${titulo} <span style="color:#2d3f5a;font-weight:400;">(${rows.length})</span></div>
+      <div class="ops-table-wrap"><table class="ops-table"><thead><tr>${hdrs}</tr></thead><tbody>${rows.length?rows.map(r=>r).join(''):`<tr><td colspan="${cols}" style="text-align:center;padding:14px;color:#2d3f5a;">Sin registros</td></tr>`}</tbody></table></div>
     </div>`;
   cont.innerHTML =
-    tbl('🔧 INSTALACIONES EN PROCESO','#ff6b35','<th>CLIENTE</th><th>SUPERVISOR</th><th>CIUDAD</th><th>OBSERVACIONES</th>',
-      f.inst.map(r=>`<tr><td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td><td style="color:#ff6b35">${r.supervisor||'—'}</td><td>${r.ciudad||'—'}</td><td style="font-size:10px;color:#6b7280">${r.obs||'—'}</td></tr>`).join(''),4)+
-    tbl('🆕 CLIENTES NUEVOS PROD. E INSTALACIÓN','#a8ff3e','<th>CLIENTE</th><th>FECHA INST.</th><th>CIUDAD</th><th>OBSERVACIONES</th>',
-      f.nuevos.map(r=>`<tr><td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td><td style="color:var(--accent3);font-weight:700">${r.fecha||'—'}</td><td>${r.ciudad||'—'}</td><td style="font-size:10px;color:#6b7280">${r.obs||'—'}</td></tr>`).join(''),4)+
-    tbl('🪨 PRODUCCIÓN DE TOPS','#00bfff','<th>CLIENTE</th><th>COLOR DEL TOP</th><th>LÁMINAS</th><th>INSTALÓ</th><th>CIUDAD</th><th>OBSERVACIONES</th>',
-      f.tops.map(r=>`<tr><td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td><td style="color:#00bfff">${r.color||'—'}</td><td style="color:var(--gold);font-weight:700">${r.laminas||'—'}</td><td>${r.instalo||'—'}</td><td>${r.ciudad||'—'}</td><td style="font-size:10px;color:#6b7280">${r.obs||'—'}</td></tr>`).join(''),6)+
-    tbl('📐 CLIENTES PARA REMEDIR','#ffd700','<th>CLIENTE</th><th>VENDEDORA</th><th>SUPERVISOR</th><th>UBICACIÓN</th><th>OBSERVACIONES</th>',
-      f.remedir.map(r=>`<tr><td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td><td>${r.vendedora||'—'}</td><td style="color:#ff6b35">${r.supervisor||'—'}</td><td>${r.ubicacion||'—'}</td><td style="font-size:10px;color:#6b7280">${r.obs||'—'}</td></tr>`).join(''),5)+
-    tbl('📁 REMEDIDOS CON FOLDER PENDIENTE','#9333ea','<th>CLIENTE</th><th>VENDEDORA</th><th>ÁREAS</th><th>REMIDIÓ</th><th>OBSERVACIONES</th>',
-      f.folder.map(r=>`<tr><td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td><td>${r.vendedora||'—'}</td><td style="color:var(--gold)">${r.areas||'—'}</td><td style="color:#ff6b35">${r.remidio||'—'}</td><td style="font-size:10px;color:#6b7280">${r.obs||'—'}</td></tr>`).join(''),5)+
-    tbl('🔨 PENDIENTES Y REPARACIONES','#ff6b35','<th>CLIENTE</th><th>ACCIÓN</th><th>CIUDAD</th><th>ESTATUS</th><th>OBSERVACIONES</th>',
-      f.repar.map(r=>{const ec=r.estatus==='REALIZADO'?'b-ok':r.estatus==='PENDIENTE'?'b-block':'b-proc';return `<tr><td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td><td style="font-size:10px;color:#9ca3af">${r.accion||'—'}</td><td>${r.ciudad||'—'}</td><td><span class="badge ${ec}">${r.estatus||'—'}</span></td><td style="font-size:10px;color:#6b7280">${r.obs||'—'}</td></tr>`;}).join(''),5)+
-    tbl('✅ CLIENTES TERMINADOS','#a8ff3e','<th>FECHA</th><th>CLIENTE</th><th>CIUDAD</th><th>OBSERVACIONES</th>',
-      f.term.map(r=>`<tr><td style="color:var(--gold);font-weight:700">${opsDisp(r.fecha)}</td><td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td><td>${r.ciudad||'—'}</td><td style="font-size:10px;color:#6b7280">${r.obs||'—'}</td></tr>`).join(''),4);
+    tbl('🔧 INSTALACIONES','#ff6b35','<th>CLIENTE</th><th>SUPERVISOR</th><th>CIUDAD</th><th>OBS</th>',
+      f.inst.map(r=>`<tr><td style="font-weight:700;color:#f9fafb;">${r.cliente||'—'}</td><td style="color:#ff6b35;">${r.supervisor||'—'}</td><td>${r.ciudad||'—'}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td></tr>`),4)+
+    tbl('🆕 NUEVOS PARA PRODUCCIÓN','#a8ff3e','<th>CLIENTE</th><th>FECHA</th><th>CIUDAD</th><th>OBS</th>',
+      f.nuevos.map(r=>`<tr><td style="font-weight:700;color:#f9fafb;">${r.cliente||'—'}</td><td style="color:#a8ff3e;">${r.fecha||'—'}</td><td>${r.ciudad||'—'}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td></tr>`),4)+
+    tbl('🪨 TOPS','#00bfff','<th>CLIENTE</th><th>COLOR</th><th>LÁMINAS</th><th>INSTALÓ</th><th>CIUDAD</th><th>OBS</th>',
+      f.tops.map(r=>`<tr><td style="font-weight:700;color:#f9fafb;">${r.cliente||'—'}</td><td style="color:#00bfff;">${r.color||'—'}</td><td style="color:#ffd700;">${r.laminas||'—'}</td><td>${r.instalo||'—'}</td><td>${r.ciudad||'—'}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td></tr>`),6)+
+    tbl('📐 REMEDICIONES','#ffd700','<th>CLIENTE</th><th>VENDEDORA</th><th>SUPERVISOR</th><th>UBICACIÓN</th><th>OBS</th>',
+      f.remedir.map(r=>`<tr><td style="font-weight:700;color:#f9fafb;">${r.cliente||'—'}</td><td>${r.vendedora||'—'}</td><td style="color:#ff6b35;">${r.supervisor||'—'}</td><td>${r.ubicacion||'—'}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td></tr>`),5)+
+    tbl('📁 FOLDERS PENDIENTES','#9333ea','<th>CLIENTE</th><th>VENDEDORA</th><th>ÁREAS</th><th>REMIDIÓ</th><th>OBS</th>',
+      f.folder.map(r=>`<tr><td style="font-weight:700;color:#f9fafb;">${r.cliente||'—'}</td><td>${r.vendedora||'—'}</td><td style="color:#ffd700;">${r.areas||'—'}</td><td style="color:#ff6b35;">${r.remidio||'—'}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td></tr>`),5)+
+    tbl('🔨 REPARACIONES','#ff6b35','<th>CLIENTE</th><th>ACCIÓN</th><th>CIUDAD</th><th>ESTATUS</th><th>OBS</th>',
+      f.repar.map(r=>{const ec=r.estatus==='REALIZADO'?'ob-realizado':r.estatus==='PENDIENTE'?'ob-pendiente':'ob-proceso';return `<tr><td style="font-weight:700;color:#f9fafb;">${r.cliente||'—'}</td><td style="font-size:10px;color:#9ca3af;">${r.accion||'—'}</td><td>${r.ciudad||'—'}</td><td>${nopsBadge(r.estatus||'PENDIENTE',ec)}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td></tr>`}),5)+
+    tbl('✅ TERMINADOS','#a8ff3e','<th>FECHA</th><th>CLIENTE</th><th>CIUDAD</th><th>OBS</th>',
+      f.term.map(r=>`<tr><td style="color:#ffd700;font-weight:700;">${opsDisp(r.fecha)}</td><td style="font-weight:700;color:#f9fafb;">${r.cliente||'—'}</td><td>${r.ciudad||'—'}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td></tr>`),4);
 }
 
-// ── Render Terminados ──────────────────────────────────
-function renderOpsTerminados(){
-  const D=window.OPS_DATA;
-  const q=(document.getElementById('opsTermSearch')||{value:''}).value.toLowerCase();
-  const filtered=(D.term||[]).filter(r=>!q||(r.cliente||'').toLowerCase().includes(q)||(r.ciudad||'').toLowerCase().includes(q));
-  const sv=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
-  sv('opsTermTotal',D.term.length);
-  const sem=getOpsSemana(); sv('opsTermSemana',sem.term.length);
-  const tb=document.getElementById('opsTermTabla'); if(!tb) return;
-  tb.innerHTML=!filtered.length
-    ?'<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--sub);font-size:11px;">Sin registros terminados</td></tr>'
-    :filtered.map(r=>`<tr>
-      <td style="color:var(--gold);font-weight:700;white-space:nowrap">${opsDisp(r.fecha)}</td>
-      <td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td>
-      <td><span class="badge b-sps">${r.ciudad||'—'}</span></td>
-      <td style="color:#6b7280;font-size:10px">${r.obs||'—'}</td>
-    </tr>`).join('');
-}
+// ── Exportar Reporte PDF ──────────────────────────────
+function printNopsReporte(){
+  const f=getNopsFiltered();
+  const periodo=document.getElementById('nopsRepLabel')?.textContent||'Historial';
+  const fecha=new Date().toLocaleDateString('es-HN',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+  const total=f.inst.length+f.nuevos.length+f.tops.length+f.remedir.length+f.repar.length+(f.term||[]).length+(f.folder||[]).length;
 
-// ── Modales abrir/cerrar ───────────────────────────────
-let opsEditMode={type:null,index:-1};
-function openModalOps(type){
-  opsEditMode={type,index:-1};
-  const today=new Date().toISOString().split('T')[0];
-  const clr=(ids)=>ids.forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  if(type==='inst'){
-    document.getElementById('modalOpsInstTitle').textContent='🔧 Nueva Instalación en Proceso';
-    clr(['oi_cliente','oi_supervisor','oi_instalador','oi_obs','oi_horas']); document.getElementById('oi_fecha').value=today;
-    document.getElementById('oi_grado').value='';
-    document.querySelectorAll('.svi-grade-btn').forEach(b=>{b.style.outline='none';b.style.transform='scale(1)';});
-    document.querySelectorAll('#svi_areas_selector input[type=checkbox]').forEach(c=>{c.checked=false;toggleAreaChip(c);});
-    document.getElementById('modalOpsInst').classList.add('open');
-  } else if(type==='nuevo'){
-    document.getElementById('modalOpsNuevoTitle').textContent='🆕 Nuevo Cliente para Producción e Instalación';
-    clr(['on_cliente','on_fecha','on_obs']);
-    document.getElementById('modalOpsNuevo').classList.add('open');
-  } else if(type==='top'){
-    document.getElementById('modalOpsTopTitle').textContent='🪨 Nueva Producción de Top';
-    clr(['ot_cliente','ot_color','ot_laminas','ot_instalo','ot_obs']); document.getElementById('ot_fecha').value=today;
-    document.getElementById('modalOpsTop').classList.add('open');
-  } else if(type==='remedir'){
-    document.getElementById('modalOpsRemedirTitle').textContent='📐 Nuevo Cliente para Remedir';
-    clr(['or_cliente','or_vendedora','or_supervisor','or_ubicacion','or_obs']);
-    document.getElementById('modalOpsRemedir').classList.add('open');
-  } else if(type==='folder'){
-    document.getElementById('modalOpsFolderTitle').textContent='📁 Remedido con Folder Pendiente';
-    clr(['of_cliente','of_vendedora','of_areas','of_remidio','of_obs']);
-    const ofFechaField = document.getElementById('of_fecha_remidio'); if(ofFechaField) ofFechaField.value='';
-    document.getElementById('modalOpsFolder').classList.add('open');
-  } else if(type==='repar'){
-    document.getElementById('modalOpsReparTitle').textContent='🔨 Pendiente / Reparación';
-    clr(['oRep_cliente','oRep_accion','oRep_obs']); document.getElementById('oRep_fecha').value=today;
-    document.getElementById('oRep_estatus').value='PENDIENTE';
-    document.getElementById('modalOpsRepar').classList.add('open');
-  } else if(type==='term'){
-    document.getElementById('modalOpsTermTitle').textContent='✅ Cliente Terminado';
-    clr(['oTerm_cliente','oTerm_obs']); document.getElementById('oTerm_fecha').value=today;
-    document.getElementById('modalOpsTerm').classList.add('open');
-  }
-}
-function closeOpsModal(id){ document.getElementById(id).classList.remove('open'); }
+  const sec=(emoji,titulo,color,bg,hdrs,rows)=>{
+    if(!rows.length) return '';
+    const rHtml=rows.map((r,i)=>`<tr>${r}</tr>`).join('');
+    return `
+    <div class="section-title" style="background:${bg};color:${color};border-left:4px solid ${color};">${emoji} ${titulo} (${rows.length})</div>
+    <table><thead><tr>${hdrs}</tr></thead>
+    <tbody>${rHtml}</tbody></table>`;
+  };
 
-// ── Editar ─────────────────────────────────────────────
-function editOps(type,index){
-  opsEditMode={type,index};
-  const D=window.OPS_DATA;
-  if(type==='inst'){
-    const r=D.inst[index];
-    document.getElementById('modalOpsInstTitle').textContent='🔧 Editar Instalación';
-    document.getElementById('oi_fecha').value=opsToISO(r.fecha)||'';
-    document.getElementById('oi_cliente').value=r.cliente||'';
-    document.getElementById('oi_supervisor').value=r.supervisor||'';
-    const oiInst = document.getElementById('oi_instalador'); if(oiInst) oiInst.value=r.instalador||'';
-    document.getElementById('oi_ciudad').value=r.ciudad||'SPS';
-    document.getElementById('oi_horas').value=r.horas||'';
-    document.getElementById('oi_obs').value=r.obs||'';
-    // Restore grado
-    document.getElementById('oi_grado').value=r.grado||'';
-    document.querySelectorAll('.svi-grade-btn').forEach(b=>{
-      const selected=(b.dataset.grado===(r.grado||''));
-      b.style.outline=selected?`2px solid ${r.grado==='A'?'#14b8a6':r.grado==='B'?'#fbbf24':r.grado==='C'?'#fb7185':'var(--border)'}`:' none';
-      b.style.transform=selected?'scale(1.04)':'scale(1)';
-    });
-    // Restore areas
-    const ar=r.areas||[];
-    document.querySelectorAll('#svi_areas_selector input[type=checkbox]').forEach(c=>{c.checked=ar.includes(c.value);toggleAreaChip(c);});
-    document.getElementById('modalOpsInst').classList.add('open');
-  } else if(type==='nuevo'){
-    const r=D.nuevos[index];
-    document.getElementById('modalOpsNuevoTitle').textContent='🆕 Editar Cliente Nuevo';
-    document.getElementById('on_cliente').value=r.cliente||'';
-    document.getElementById('on_fecha').value=r.fecha||'';
-    document.getElementById('on_ciudad').value=r.ciudad||'SPS';
-    document.getElementById('on_obs').value=r.obs||'';
-    document.getElementById('modalOpsNuevo').classList.add('open');
-  } else if(type==='top'){
-    const r=D.tops[index];
-    document.getElementById('modalOpsTopTitle').textContent='🪨 Editar Top';
-    document.getElementById('ot_fecha').value=opsToISO(r.fecha)||'';
-    document.getElementById('ot_cliente').value=r.cliente||'';
-    document.getElementById('ot_color').value=r.color||'';
-    document.getElementById('ot_laminas').value=r.laminas||'';
-    document.getElementById('ot_instalo').value=r.instalo||'';
-    document.getElementById('ot_ciudad').value=r.ciudad||'SPS';
-    document.getElementById('ot_obs').value=r.obs||'';
-    document.getElementById('modalOpsTop').classList.add('open');
-  } else if(type==='remedir'){
-    const r=D.remedir[index];
-    document.getElementById('modalOpsRemedirTitle').textContent='📐 Editar Remedición';
-    document.getElementById('or_cliente').value=r.cliente||'';
-    document.getElementById('or_vendedora').value=r.vendedora||'';
-    document.getElementById('or_supervisor').value=r.supervisor||'';
-    document.getElementById('or_ubicacion').value=r.ubicacion||'';
-    document.getElementById('or_obs').value=r.obs||'';
-    document.getElementById('modalOpsRemedir').classList.add('open');
-  } else if(type==='folder'){
-    const r=D.folder[index];
-    document.getElementById('modalOpsFolderTitle').textContent='📁 Editar Folder';
-    document.getElementById('of_cliente').value=r.cliente||'';
-    document.getElementById('of_vendedora').value=r.vendedora||'';
-    document.getElementById('of_areas').value=r.areas||'';
-    document.getElementById('of_remidio').value=r.remidio||'';
-    const ofFechaEdit = document.getElementById('of_fecha_remidio'); if(ofFechaEdit) ofFechaEdit.value=opsToISO(r.fecha_remidio)||'';
-    document.getElementById('of_obs').value=r.obs||'';
-    document.getElementById('modalOpsFolder').classList.add('open');
-  } else if(type==='repar'){
-    const r=D.repar[index];
-    document.getElementById('modalOpsReparTitle').textContent='🔨 Editar Reparación';
-    document.getElementById('oRep_fecha').value=opsToISO(r.fecha)||'';
-    document.getElementById('oRep_cliente').value=r.cliente||'';
-    document.getElementById('oRep_accion').value=r.accion||'';
-    document.getElementById('oRep_ciudad').value=r.ciudad||'SPS';
-    document.getElementById('oRep_estatus').value=r.estatus||'PENDIENTE';
-    document.getElementById('oRep_obs').value=r.obs||'';
-    document.getElementById('modalOpsRepar').classList.add('open');
-  } else if(type==='term'){
-    const r=D.term[index];
-    document.getElementById('modalOpsTermTitle').textContent='✅ Editar Terminado';
-    document.getElementById('oTerm_fecha').value=opsToISO(r.fecha)||'';
-    document.getElementById('oTerm_cliente').value=r.cliente||'';
-    document.getElementById('oTerm_ciudad').value=r.ciudad||'SPS';
-    document.getElementById('oTerm_obs').value=r.obs||'';
-    document.getElementById('modalOpsTerm').classList.add('open');
-  }
-}
+  const instRows  = f.inst.map(r=>`<td>${r.cliente||'—'}</td><td>${r.instalador||r.supervisor||'—'}</td><td>${r.ciudad||'—'}</td><td>${r.grado||'—'}</td><td>${r.horas||'—'}</td><td>${r.obs||'—'}</td>`);
+  const nuevRows  = f.nuevos.map(r=>`<td>${r.fecha||'—'}</td><td>${r.cliente||'—'}</td><td>${r.vendedora||'—'}</td><td>${r.ciudad||'—'}</td><td>${r.obs||'—'}</td>`);
+  const topRows   = f.tops.map(r=>`<td>${r.cliente||'—'}</td><td>${r.color||'—'}</td><td>${r.laminas||'—'}</td><td>${r.instalo||'—'}</td><td>${r.ciudad||'—'}</td><td>${r.obs||'—'}</td>`);
+  const remRows   = f.remedir.map(r=>`<td>${r.cliente||'—'}</td><td>${r.vendedora||'—'}</td><td>${r.supervisor||'—'}</td><td>${r.ubicacion||'—'}</td><td>${r.obs||'—'}</td>`);
+  const repRows   = f.repar.map(r=>`<td>${r.cliente||'—'}</td><td>${r.accion||'—'}</td><td>${r.ciudad||'—'}</td><td>${r.estatus||'—'}</td><td>${r.obs||'—'}</td>`);
+  const termRows  = (f.term||[]).map(r=>`<td>${opsDisp(r.fecha)}</td><td>${r.cliente||'—'}</td><td>${r.instalador||'—'}</td><td>${r.ciudad||'—'}</td><td>${r.obs||'—'}</td>`);
+  const foldRows  = (f.folder||[]).map(r=>`<td>${r.cliente||'—'}</td><td>${r.vendedora||'—'}</td><td>${r.ciudad||'—'}</td><td>${r.obs||'—'}</td>`);
 
-// ── Guardar ────────────────────────────────────────────
-function saveOps(type){
-  const D=window.OPS_DATA;
-  const g=id=>(document.getElementById(id)||{value:''}).value.trim();
-  let obj={};
-  const modals={inst:'modalOpsInst',nuevo:'modalOpsNuevo',top:'modalOpsTop',remedir:'modalOpsRemedir',folder:'modalOpsFolder',repar:'modalOpsRepar',term:'modalOpsTerm'};
-  const arrays={inst:'inst',nuevo:'nuevos',top:'tops',remedir:'remedir',folder:'folder',repar:'repar',term:'term'};
-  if(type==='inst'){
-    if(!g('oi_cliente')){ toast('⚠ Ingresa el cliente','var(--pink)'); return; }
-    const areasChecked=[...document.querySelectorAll('#svi_areas_selector input[type=checkbox]:checked')].map(c=>c.value);
-    obj={fecha:opsFromISO(document.getElementById('oi_fecha').value),cliente:g('oi_cliente'),supervisor:g('oi_supervisor'),instalador:g('oi_instalador'),ciudad:document.getElementById('oi_ciudad').value,grado:document.getElementById('oi_grado').value,horas:g('oi_horas'),areas:areasChecked,obs:g('oi_obs')};
-  } else if(type==='nuevo'){
-    if(!g('on_cliente')){ toast('⚠ Ingresa el cliente','var(--pink)'); return; }
-    obj={cliente:g('on_cliente'),fecha:g('on_fecha'),ciudad:document.getElementById('on_ciudad').value,obs:g('on_obs')};
-  } else if(type==='top'){
-    if(!g('ot_cliente')){ toast('⚠ Ingresa el cliente','var(--pink)'); return; }
-    obj={fecha:opsFromISO(document.getElementById('ot_fecha').value),cliente:g('ot_cliente'),color:g('ot_color'),laminas:g('ot_laminas'),instalo:g('ot_instalo'),ciudad:document.getElementById('ot_ciudad').value,obs:g('ot_obs')};
-  } else if(type==='remedir'){
-    if(!g('or_cliente')){ toast('⚠ Ingresa el cliente','var(--pink)'); return; }
-    obj={cliente:g('or_cliente'),vendedora:g('or_vendedora'),supervisor:g('or_supervisor'),ubicacion:g('or_ubicacion'),obs:g('or_obs')};
-  } else if(type==='folder'){
-    if(!g('of_cliente')){ toast('⚠ Ingresa el cliente','var(--pink)'); return; }
-    obj={cliente:g('of_cliente'),vendedora:g('of_vendedora'),areas:g('of_areas'),remidio:g('of_remidio'),fecha_remidio:opsFromISO((document.getElementById('of_fecha_remidio')||{value:''}).value),obs:g('of_obs')};
-  } else if(type==='repar'){
-    if(!g('oRep_cliente')){ toast('⚠ Ingresa el cliente','var(--pink)'); return; }
-    obj={fecha:opsFromISO(document.getElementById('oRep_fecha').value),cliente:g('oRep_cliente'),accion:g('oRep_accion'),ciudad:document.getElementById('oRep_ciudad').value,estatus:document.getElementById('oRep_estatus').value,obs:g('oRep_obs')};
-  } else if(type==='term'){
-    if(!g('oTerm_cliente')){ toast('⚠ Ingresa el cliente','var(--pink)'); return; }
-    obj={fecha:opsFromISO(document.getElementById('oTerm_fecha').value),cliente:g('oTerm_cliente'),ciudad:document.getElementById('oTerm_ciudad').value,obs:g('oTerm_obs')};
-  }
-  const arr=arrays[type];
-  if(opsEditMode.index>=0){ D[arr][opsEditMode.index]=obj; toast('✓ Actualizado'); }
-  else{ D[arr].push(obj); toast('✓ Agregado'); }
-  saveOpsData(); closeOpsModal(modals[type]); renderOpsEditor(); renderOpsResumen(); renderOpsRendimiento();
-}
-
-// ── Eliminar ───────────────────────────────────────────
-function deleteOps(type,index){
-  if(!confirm('¿Eliminar este registro?')) return;
-  const arrays={inst:'inst',nuevo:'nuevos',top:'tops',remedir:'remedir',folder:'folder',repar:'repar',term:'term'};
-  window.OPS_DATA[arrays[type]].splice(index,1);
-  saveOpsData(); renderOpsEditor(); renderOpsResumen();
-  toast('✓ Eliminado','var(--pink)');
-}
-
-// ── PDFs ───────────────────────────────────────────────
-function exportarOpsSemanaPDF(){
-  const s=getOpsSemana();
-  const total=s.inst.length+s.nuevos.length+s.tops.length+s.remedir.length+s.folder.length+s.repar.length+s.term.length;
-  if(!total){ toast('Sin datos esta semana','var(--pink)'); return; }
-  const fecha=new Date().toLocaleDateString('es-HN',{day:'2-digit',month:'long',year:'numeric'});
   const win=window.open('','_blank');
-  const sec=(titulo,color,hdrs,rows)=>!rows?'':`<div class="sec-title" style="background:${color}22;color:${color};border-left:4px solid ${color};">${titulo}</div><table><thead><tr>${hdrs}</tr></thead><tbody>${rows}</tbody></table>`;
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Ops Semana</title><style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a2e;padding:32px;}h1{color:#ff6b35;font-size:24px;margin-bottom:4px;}p.sub{color:#6b7280;font-size:11px;margin-bottom:24px;}.sec-title{font-size:12px;font-weight:800;letter-spacing:1px;padding:7px 12px;border-radius:6px;margin:20px 0 10px;}table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:8px;}th{background:#1F3864;color:#fff;padding:7px 8px;text-align:left;font-size:9px;}td{padding:6px 8px;border-bottom:1px solid #e5e7eb;}tr:nth-child(even){background:#f9fafb;}.footer{margin-top:32px;padding-top:10px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;font-size:10px;color:#9ca3af;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body>
-  <h1>🏗️ Operaciones — Semana Actual</h1>
-  <p class="sub">${opsDisp(s.desde)} → ${opsDisp(s.hasta)} · ${fecha} · ${total} registros</p>
-  ${sec('🔧 Instalaciones en Proceso','#ff6b35','<th>Cliente</th><th>Supervisor</th><th>Ciudad</th><th>Observaciones</th>',s.inst.map(r=>`<tr><td><strong>${r.cliente||'—'}</strong></td><td>${r.supervisor||'—'}</td><td>${r.ciudad||'—'}</td><td>${r.obs||'—'}</td></tr>`).join(''))}
-  ${sec('🆕 Clientes Nuevos','#16a34a','<th>Cliente</th><th>Fecha Inst.</th><th>Ciudad</th><th>Observaciones</th>',s.nuevos.map(r=>`<tr><td><strong>${r.cliente||'—'}</strong></td><td>${r.fecha||'—'}</td><td>${r.ciudad||'—'}</td><td>${r.obs||'—'}</td></tr>`).join(''))}
-  ${sec('🪨 Tops','#0284c7','<th>Cliente</th><th>Color</th><th>Láminas</th><th>Instaló</th><th>Ciudad</th>',s.tops.map(r=>`<tr><td><strong>${r.cliente||'—'}</strong></td><td>${r.color||'—'}</td><td>${r.laminas||'—'}</td><td>${r.instalo||'—'}</td><td>${r.ciudad||'—'}</td></tr>`).join(''))}
-  ${sec('🔨 Reparaciones','#d97706','<th>Cliente</th><th>Acción</th><th>Ciudad</th><th>Estatus</th>',s.repar.map(r=>`<tr><td><strong>${r.cliente||'—'}</strong></td><td>${r.accion||'—'}</td><td>${r.ciudad||'—'}</td><td><strong>${r.estatus||'—'}</strong></td></tr>`).join(''))}
-  ${sec('✅ Terminados','#16a34a','<th>Fecha</th><th>Cliente</th><th>Ciudad</th>',s.term.map(r=>`<tr><td>${opsDisp(r.fecha)}</td><td><strong>${r.cliente||'—'}</strong></td><td>${r.ciudad||'—'}</td></tr>`).join(''))}
-  <div class="footer"><span>Panel de Control — Operaciones</span><span>${opsDisp(s.desde)} → ${opsDisp(s.hasta)}</span></div>
-  <script>window.onload=()=>{window.print();}<\/script></body></html>`);
-  win.document.close(); toast('✓ PDF listo');
-}
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Reporte de Operaciones</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a2e;background:#fff;}
 
-function generarOpsReportePDF(){
-  const f=getFilteredOps();
-  const total=f.inst.length+f.nuevos.length+f.tops.length+f.remedir.length+f.folder.length+f.repar.length+f.term.length;
-  if(!total){ toast('Sin datos para exportar','var(--pink)'); return; }
-  const fecha=new Date().toLocaleDateString('es-HN',{day:'2-digit',month:'long',year:'numeric'});
-  const desde=document.getElementById('opsRepDesde')?.value||'';
-  const hasta=document.getElementById('opsRepHasta')?.value||'';
-  const periodo=opsRepMode==='all'?'Historial completo':`${desde?opsDisp(opsFromISO(desde)):'inicio'} → ${hasta?opsDisp(opsFromISO(hasta)):'hoy'}`;
-  const win=window.open('','_blank');
-  const sec=(titulo,color,hdrs,rows)=>`<div class="sec-title" style="background:${color}22;color:${color};border-left:4px solid ${color};">${titulo} (${rows.split('<tr>').length-1})</div><table><thead><tr>${hdrs}</tr></thead><tbody>${rows||'<tr><td colspan="10" style="text-align:center;padding:12px;color:#9ca3af;font-size:10px;">Sin registros</td></tr>'}</tbody></table>`;
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Reporte Operaciones</title>
-  <style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a2e;background:#fff;}
-  .cover{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:40px;page-break-after:always;}
-  .cover-accent{width:6px;height:60px;background:linear-gradient(180deg,#ff6b35,#ffd700);border-radius:4px;margin:0 auto 24px;}
-  .cover h1{font-size:38px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:#ff6b35;margin-bottom:6px;}
-  .cover h2{font-size:18px;font-weight:300;color:#6b7280;margin-bottom:28px;}
-  .cover-div{width:60px;height:2px;background:linear-gradient(90deg,#ff6b35,#ffd700);margin:20px auto;}
-  .kpi-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:24px;}
-  .kpi-box{background:#f8faff;border:1px solid #e5e7eb;border-radius:12px;padding:16px 20px;text-align:center;}
-  .kpi-box .num{font-size:28px;font-weight:900;}.kpi-box .lbl{font-size:9px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;margin-top:4px;}
-  .page{padding:32px 40px;}.sec-title{font-size:12px;font-weight:800;letter-spacing:1px;padding:8px 14px;border-radius:6px;margin:20px 0 10px;}
-  table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:8px;}
-  th{background:#1F3864;color:#fff;padding:7px 8px;text-align:left;font-size:9px;text-transform:uppercase;}
-  td{padding:6px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top;}tr:nth-child(even){background:#f9fafb;}
-  .footer{margin-top:40px;padding-top:10px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;font-size:10px;color:#9ca3af;}
-  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.cover{min-height:100vh;}}</style></head><body>
+    /* PORTADA */
+    .cover{background:#fff;color:#1a1a2e;min-height:100vh;display:flex;flex-direction:column;
+      justify-content:center;align-items:center;text-align:center;padding:40px;
+      page-break-after:always;border-bottom:3px solid #e5e7eb;}
+    .cover-accent{width:6px;height:60px;background:linear-gradient(180deg,#1F3864,#374151);border-radius:4px;margin:0 auto 24px;}
+    .cover h1{font-size:38px;font-weight:900;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;color:#1F3864;}
+    .cover h2{font-size:20px;font-weight:300;color:#6b7280;letter-spacing:1px;margin-bottom:32px;}
+    .cover-divider{width:60px;height:2px;background:linear-gradient(90deg,#1F3864,#374151);margin:24px auto;}
+    .cover-range{font-size:16px;color:#1F3864;font-weight:700;letter-spacing:1px;margin-bottom:8px;}
+    .cover-date{font-size:12px;color:#6b7280;margin-bottom:40px;}
+    .kpi-row{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:20px;}
+    .kpi-box{background:#f8faff;border:1px solid #e5e7eb;border-radius:14px;padding:18px 24px;text-align:center;min-width:110px;}
+    .kpi-box .num{font-size:34px;font-weight:900;line-height:1;}
+    .kpi-box .lbl{font-size:10px;color:#6b7280;letter-spacing:1px;text-transform:uppercase;margin-top:4px;}
+    .kpi-box.c1 .num{color:#0284c7;} .kpi-box.c2 .num{color:#d97706;}
+    .kpi-box.c3 .num{color:#db2777;} .kpi-box.c4 .num{color:#16a34a;}
+    .kpi-box.c5 .num{color:#7c3aed;} .kpi-box.c6 .num{color:#0891b2;}
+    .kpi-box.c7 .num{color:#b45309;}
+
+    /* CONTENIDO */
+    .page{padding:36px 40px;}
+    .section-title{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:800;
+      letter-spacing:1.5px;text-transform:uppercase;padding:10px 16px;border-radius:8px;
+      margin-bottom:14px;margin-top:28px;}
+
+    table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:8px;}
+    th{background:#1F3864;color:#fff;padding:8px 10px;text-align:left;font-size:10px;letter-spacing:.5px;text-transform:uppercase;}
+    td{padding:8px 10px;border-bottom:1px solid #e5e7eb;vertical-align:top;}
+    tr:nth-child(even){background:#f9fafb;}
+    tr:last-child td{border-bottom:none;}
+
+    .footer{margin-top:40px;padding-top:12px;border-top:1px solid #e5e7eb;display:flex;
+      justify-content:space-between;font-size:10px;color:#9ca3af;}
+    @media print{
+      .cover{min-height:100vh;}
+      .page{padding:28px 32px;}
+      body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    }
+  </style></head><body>
+
+  <!-- PORTADA -->
   <div class="cover">
     <div class="cover-accent"></div>
     <h1>Reporte de Operaciones</h1>
     <h2>Panel de Control — Módulo Operaciones</h2>
-    <div class="cover-div"></div>
-    <div style="font-size:15px;color:#ff6b35;font-weight:700;margin-bottom:6px;">📅 ${periodo}</div>
-    <div style="font-size:12px;color:#6b7280;margin-bottom:32px;">Generado: ${fecha}</div>
+    <div class="cover-divider"></div>
+    <div class="cover-range">📅 ${periodo}</div>
+    <div class="cover-date">Generado: ${fecha}</div>
     <div class="kpi-row">
-      <div class="kpi-box"><div class="num" style="color:#ff6b35;">${f.inst.length}</div><div class="lbl">Instalaciones</div></div>
-      <div class="kpi-box"><div class="num" style="color:#16a34a;">${f.nuevos.length}</div><div class="lbl">Nuevos</div></div>
-      <div class="kpi-box"><div class="num" style="color:#0284c7;">${f.tops.length}</div><div class="lbl">Tops</div></div>
-      <div class="kpi-box"><div class="num" style="color:#d97706;">${f.remedir.length}</div><div class="lbl">Remediciones</div></div>
-      <div class="kpi-box"><div class="num" style="color:#d97706;">${f.repar.length}</div><div class="lbl">Reparaciones</div></div>
-      <div class="kpi-box"><div class="num" style="color:#16a34a;">${f.term.length}</div><div class="lbl">Terminados</div></div>
+      <div class="kpi-box c1"><div class="num">${f.inst.length}</div><div class="lbl">Instalaciones</div></div>
+      <div class="kpi-box c2"><div class="num">${f.nuevos.length}</div><div class="lbl">Nuevos</div></div>
+      <div class="kpi-box c3"><div class="num">${f.tops.length}</div><div class="lbl">Tops</div></div>
+      <div class="kpi-box c4"><div class="num">${f.remedir.length}</div><div class="lbl">Remediciones</div></div>
+      <div class="kpi-box c5"><div class="num">${f.repar.length}</div><div class="lbl">Reparaciones</div></div>
+      <div class="kpi-box c6"><div class="num">${(f.term||[]).length}</div><div class="lbl">Terminados</div></div>
+      <div class="kpi-box c7"><div class="num">${total}</div><div class="lbl">Total</div></div>
     </div>
   </div>
+
+  <!-- CONTENIDO -->
   <div class="page">
-    ${sec('🔧 Instalaciones en Proceso','#ff6b35','<th>Cliente</th><th>Supervisor</th><th>Ciudad</th><th>Observaciones</th>',f.inst.map(r=>`<tr><td><strong>${r.cliente||'—'}</strong></td><td>${r.supervisor||'—'}</td><td>${r.ciudad||'—'}</td><td>${r.obs||'—'}</td></tr>`).join(''))}
-    ${sec('🆕 Clientes Nuevos Prod. e Instalación','#16a34a','<th>Cliente</th><th>Fecha Inst.</th><th>Ciudad</th><th>Observaciones</th>',f.nuevos.map(r=>`<tr><td><strong>${r.cliente||'—'}</strong></td><td>${r.fecha||'—'}</td><td>${r.ciudad||'—'}</td><td>${r.obs||'—'}</td></tr>`).join(''))}
-    ${sec('🪨 Producción de Tops','#0284c7','<th>Cliente</th><th>Color</th><th>Láminas</th><th>Instaló</th><th>Ciudad</th><th>Obs.</th>',f.tops.map(r=>`<tr><td><strong>${r.cliente||'—'}</strong></td><td>${r.color||'—'}</td><td>${r.laminas||'—'}</td><td>${r.instalo||'—'}</td><td>${r.ciudad||'—'}</td><td>${r.obs||'—'}</td></tr>`).join(''))}
-    ${sec('📐 Clientes para Remedir','#d97706','<th>Cliente</th><th>Vendedora</th><th>Supervisor</th><th>Ubicación</th><th>Observaciones</th>',f.remedir.map(r=>`<tr><td><strong>${r.cliente||'—'}</strong></td><td>${r.vendedora||'—'}</td><td>${r.supervisor||'—'}</td><td>${r.ubicacion||'—'}</td><td>${r.obs||'—'}</td></tr>`).join(''))}
-    ${sec('📁 Remedidos con Folder Pendiente','#9333ea','<th>Cliente</th><th>Vendedora</th><th>Áreas</th><th>Remidió</th><th>Observaciones</th>',f.folder.map(r=>`<tr><td><strong>${r.cliente||'—'}</strong></td><td>${r.vendedora||'—'}</td><td>${r.areas||'—'}</td><td>${r.remidio||'—'}</td><td>${r.obs||'—'}</td></tr>`).join(''))}
-    ${sec('🔨 Pendientes y Reparaciones','#d97706','<th>Cliente</th><th>Acción</th><th>Ciudad</th><th>Estatus</th><th>Observaciones</th>',f.repar.map(r=>`<tr><td><strong>${r.cliente||'—'}</strong></td><td>${r.accion||'—'}</td><td>${r.ciudad||'—'}</td><td><strong>${r.estatus||'—'}</strong></td><td>${r.obs||'—'}</td></tr>`).join(''))}
-    ${sec('✅ Clientes Terminados','#16a34a','<th>Fecha</th><th>Cliente</th><th>Ciudad</th><th>Observaciones</th>',f.term.map(r=>`<tr><td>${opsDisp(r.fecha)}</td><td><strong>${r.cliente||'—'}</strong></td><td>${r.ciudad||'—'}</td><td>${r.obs||'—'}</td></tr>`).join(''))}
-    <div class="footer"><span>Panel de Control — Módulo Operaciones</span><span>${periodo} · ${fecha}</span></div>
+    ${sec('🔧','Instalaciones','#1d4ed8','#eff6ff',
+      '<th>Cliente</th><th>Instalador</th><th>Ciudad</th><th>Grado</th><th>Horas</th><th>Observación</th>',instRows)}
+    ${sec('🆕','Nuevos Clientes','#b45309','#fefce8',
+      '<th>Fecha</th><th>Cliente</th><th>Vendedora</th><th>Ciudad</th><th>Observación</th>',nuevRows)}
+    ${sec('🪨','Tops','#0891b2','#ecfeff',
+      '<th>Cliente</th><th>Color</th><th>Láminas</th><th>Instaló</th><th>Ciudad</th><th>Observación</th>',topRows)}
+    ${sec('📐','Remediciones','#7c3aed','#f5f3ff',
+      '<th>Cliente</th><th>Vendedora</th><th>Supervisor</th><th>Ubicación</th><th>Observación</th>',remRows)}
+    ${sec('🔨','Reparaciones','#dc2626','#fff1f2',
+      '<th>Cliente</th><th>Acción</th><th>Ciudad</th><th>Estatus</th><th>Observación</th>',repRows)}
+    ${sec('✅','Terminados','#16a34a','#f0fdf4',
+      '<th>Fecha</th><th>Cliente</th><th>Instalador</th><th>Ciudad</th><th>Observación</th>',termRows)}
+    ${sec('📁','Folders','#db2777','#fdf2f8',
+      '<th>Cliente</th><th>Vendedora</th><th>Ciudad</th><th>Observación</th>',foldRows)}
+
+    <div class="footer">
+      <span>Panel de Control — Módulo Operaciones</span>
+      <span>${periodo} &nbsp;·&nbsp; ${fecha}</span>
+    </div>
   </div>
-  <script>window.onload=()=>{window.print();}<\/script></body></html>`);
-  win.document.close(); toast('✓ Reporte PDF listo');
+  <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`);
+  win.document.close(); win.focus();
 }
 
-function exportarOpsTermPDF(){
+// ── Exportar Excel ────────────────────────────────────
+function exportNopsExcel(){
+  const f=getNopsFiltered();
+  const esc=s=>`"${(s||'').toString().replace(/"/g,'""')}"`;
+  let csv='TIPO,CLIENTE,SUPERVISOR/VENDEDORA,CIUDAD,ESTATUS/FECHA,OBSERVACIONES\n';
+  (f.inst||[]).forEach(r=>{ csv+=`Instalación,${esc(r.cliente)},${esc(r.supervisor)},${esc(r.ciudad)},En proceso,${esc(r.obs)}\n`; });
+  (f.nuevos||[]).forEach(r=>{ csv+=`Nuevo,${esc(r.cliente)},,${esc(r.ciudad)},${esc(r.fecha)},${esc(r.obs)}\n`; });
+  (f.tops||[]).forEach(r=>{ csv+=`Top,${esc(r.cliente)},,${esc(r.ciudad)},${esc(r.color)},${esc(r.obs)}\n`; });
+  (f.remedir||[]).forEach(r=>{ csv+=`Remedir,${esc(r.cliente)},${esc(r.vendedora)},—,En cola,${esc(r.obs)}\n`; });
+  (f.repar||[]).forEach(r=>{ csv+=`Reparación,${esc(r.cliente)},,${esc(r.ciudad)},${esc(r.estatus)},${esc(r.obs)}\n`; });
+  (f.term||[]).forEach(r=>{ csv+=`Terminado,${esc(r.cliente)},,${esc(r.ciudad)},${esc(r.fecha)},${esc(r.obs)}\n`; });
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='operaciones_'+new Date().toISOString().split('T')[0]+'.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Render Rendimiento ────────────────────────────────
+function renderNopsRendimiento(){
   const D=window.OPS_DATA;
-  if(!D.term.length){ toast('Sin terminados para exportar','var(--pink)'); return; }
-  const fecha=new Date().toLocaleDateString('es-HN',{day:'2-digit',month:'long',year:'numeric'});
-  const win=window.open('','_blank');
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Terminados Operaciones</title><style>body{font-family:'Segoe UI',Arial,sans-serif;padding:32px;color:#1a1a2e;}h1{color:#16a34a;font-size:24px;margin-bottom:4px;}p.sub{color:#6b7280;font-size:11px;margin-bottom:20px;}table{width:100%;border-collapse:collapse;font-size:11px;}th{background:#1F3864;color:#fff;padding:8px;text-align:left;font-size:10px;}td{padding:7px 8px;border-bottom:1px solid #e5e7eb;}tr:nth-child(even){background:#f9fafb;}.footer{margin-top:24px;padding-top:10px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;font-size:10px;color:#9ca3af;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body>
-  <h1>✅ Clientes Terminados — Operaciones</h1>
-  <p class="sub">${D.term.length} registros · Generado: ${fecha}</p>
-  <table><thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Ciudad</th><th>Observaciones</th></tr></thead><tbody>
-  ${D.term.map((r,i)=>`<tr><td>${i+1}</td><td>${opsDisp(r.fecha)}</td><td><strong>${r.cliente||'—'}</strong></td><td>${r.ciudad||'—'}</td><td>${r.obs||'—'}</td></tr>`).join('')}
-  </tbody></table>
-  <div class="footer"><span>Panel de Control — Operaciones</span><span>${fecha}</span></div>
-  <script>window.onload=()=>{window.print();}<\/script></body></html>`);
-  win.document.close(); toast('✓ PDF terminados listo');
-}
-
-// ── Cerrar modales al click fuera ──────────────────────
-['modalOpsInst','modalOpsNuevo','modalOpsTop','modalOpsRemedir','modalOpsFolder','modalOpsRepar','modalOpsTerm'].forEach(id=>{
-  document.addEventListener('DOMContentLoaded',function(){
-    const el=document.getElementById(id);
-    if(el) el.addEventListener('click',e=>{ if(e.target===el) el.classList.remove('open'); });
+  // IEI: puntos por grado (A=3, B=2, C=1) / total proyectos
+  const inst=D.inst||[];
+  const instMap={};
+  inst.forEach(r=>{
+    if(!r.instalador) return;
+    if(!instMap[r.instalador]) instMap[r.instalador]={name:r.instalador,total:0,A:0,B:0,C:0,horas:0,pts:0};
+    instMap[r.instalador].total++;
+    if(r.grado) instMap[r.instalador][r.grado]=(instMap[r.instalador][r.grado]||0)+1;
+    if(r.horas) instMap[r.instalador].horas+=parseFloat(r.horas)||0;
+    const p={A:3,B:2,C:1}[r.grado]||1;
+    instMap[r.instalador].pts+=p;
   });
-});
-
-// ── Inicializar ────────────────────────────────────────
-loadOpsData();
-
-// ── SVI — Helpers de UI ────────────────────────────────
-function selectGrado(el, grado){
-  document.querySelectorAll('.svi-grade-btn').forEach(b=>{
-    b.style.outline='none'; b.style.transform='scale(1)';
-  });
-  document.getElementById('oi_grado').value=grado;
-  if(grado){
-    const c=grado==='A'?'#14b8a6':grado==='B'?'#fbbf24':'#fb7185';
-    el.style.outline=`2px solid ${c}`; el.style.transform='scale(1.04)';
+  const ranked=Object.values(instMap).sort((a,b)=>b.pts-a.pts);
+  const maxPts=ranked.length?ranked[0].pts:1;
+  const rb=document.getElementById('nopsRankBody');
+  if(rb){
+    if(!ranked.length){ rb.innerHTML='<div style="text-align:center;padding:32px;color:#2d3f5a;font-family:Space Mono,monospace;font-size:11px;">Sin datos de instalaciones con instalador asignado</div>'; }
+    else {
+      rb.innerHTML = ranked.map((r,i)=>`
+        <div class="ops-rank-row">
+          <span class="ops-rank-n">${i+1}</span>
+          <span class="ops-rank-name">${r.name}</span>
+          <div class="ops-rank-bar"><div class="ops-prog-bg"><div class="ops-prog-fill" style="width:${Math.round(r.pts/maxPts*100)}%;background:${i===0?'#ffd700':i===1?'#9ca3af':i===2?'#cd7f32':'#3d5270'};"></div></div></div>
+          <span style="color:#6b7280;font-size:10px;font-family:'Space Mono',monospace;min-width:60px;text-align:right;">A:${r.A} B:${r.B} C:${r.C}</span>
+          <span class="ops-rank-pts">${r.pts} pts</span>
+        </div>`).join('');
+    }
   }
-}
-
-function toggleAreaChip(cb){
-  const label=cb.closest('label');
-  if(!label) return;
-  if(cb.checked){
-    label.style.background='rgba(255,107,53,.12)';
-    label.style.borderColor='rgba(255,107,53,.5)';
-    label.style.color='#ff6b35';
-  } else {
-    label.style.background='';
-    label.style.borderColor='var(--border)';
-    label.style.color='var(--sub)';
+  const det=document.getElementById('nopsRendDetalleBody');
+  if(det){
+    det.innerHTML=!inst.length?'<tr><td colspan="8" style="text-align:center;padding:24px;color:#2d3f5a;">Sin registros</td></tr>':
+      inst.map((r,i)=>{
+        const p={A:3,B:2,C:1}[r.grado]||1;
+        return `<tr><td style="color:#ffd700;white-space:nowrap;">${r.fecha||'—'}</td><td style="color:#f9fafb;font-weight:700;">${r.cliente||'—'}</td><td>${r.instalador||'—'}</td><td style="font-size:10px;color:#6b7280;">${r.areas?.join(', ')||'—'}</td><td>${nopsGradoBadge(r.grado)}</td><td style="color:#ff6b35;font-weight:700;">${p}</td><td style="color:#ffd700;">${r.horas?r.horas+'h':'—'}</td><td>${r.ciudad||'—'}</td></tr>`;
+      }).join('');
   }
 }
 
-// ── SVI — Render Rendimiento ───────────────────────────
-function renderOpsRendimiento(){
-  const D=window.OPS_DATA;
-  const PUNTOS={A:1,B:2,C:3};
-  const sv=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+// ── CRUD ──────────────────────────────────────────────
 
-  // Solo proyectos con grado
-  const conGrado=(D.inst||[]).filter(r=>r.grado);
-  sv('sviK1', conGrado.length);
-  sv('sviKA', conGrado.filter(r=>r.grado==='A').length);
-  sv('sviKB', conGrado.filter(r=>r.grado==='B').length);
-  sv('sviKC', conGrado.filter(r=>r.grado==='C').length);
-  const totalHrs=conGrado.reduce((s,r)=>s+(parseFloat(r.horas)||0),0);
-  sv('sviKHrs', totalHrs.toFixed(1));
+// Estado de edición
+window._opsEditMode = { type: null, index: -1 };
 
-  // Agrupar por instalador
-  const inst_map={};
-  conGrado.forEach(r=>{
-    const key=(r.instalador||'Sin asignar').trim();
-    if(!inst_map[key]) inst_map[key]={nombre:key,total:0,A:0,B:0,C:0,puntos:0,horas:0};
-    const m=inst_map[key];
-    m.total++; m[r.grado]++; m.puntos+=(PUNTOS[r.grado]||0);
-    m.horas+=parseFloat(r.horas)||0;
+// Map type → modal ID y array key
+const _OPS_MODAL_MAP = {
+  inst:    { modal:'modalOpsInst',    arr:'inst',    title:'🔧 Nueva Instalación en Proceso',          titleEdit:'🔧 Editar Instalación' },
+  nuevo:   { modal:'modalOpsNuevo',   arr:'nuevos',  title:'🆕 Nuevo Cliente para Producción e Instalación', titleEdit:'🆕 Editar Cliente Nuevo' },
+  top:     { modal:'modalOpsTop',     arr:'tops',    title:'🪨 Nueva Producción de Top',                titleEdit:'🪨 Editar Top' },
+  remedir: { modal:'modalOpsRemedir', arr:'remedir', title:'📐 Nuevo Cliente para Remedir',             titleEdit:'📐 Editar Remedición' },
+  folder:  { modal:'modalOpsFolder',  arr:'folder',  title:'📁 Remedido con Folder Pendiente',          titleEdit:'📁 Editar Folder' },
+  repar:   { modal:'modalOpsRepar',   arr:'repar',   title:'🔨 Pendiente / Reparación',                 titleEdit:'🔨 Editar Reparación' },
+  term:    { modal:'modalOpsTerm',    arr:'term',    title:'✅ Cliente Terminado',                      titleEdit:'✅ Editar Terminado' },
+};
+
+// Render panels que dependen del tipo
+const _OPS_RENDER_MAP = {
+  inst:    renderNopsInst,
+  nuevo:   renderNopsNuevos,
+  top:     renderNopsTops,
+  remedir: renderNopsRemedir,
+  folder:  renderNopsFolder,
+  repar:   renderNopsRepar,
+  term:    renderNopsTerminados,
+};
+
+// ── Abrir modal ───────────────────────────────────────
+function openModalOps(type){
+  const cfg = _OPS_MODAL_MAP[type];
+  if(!cfg){ console.warn('openModalOps: tipo desconocido', type); return; }
+  window._opsEditMode = { type, index: -1 };
+  // Resetear campos según tipo
+  _opsClearModal(type);
+  // Título "Nuevo"
+  const titleEl = document.getElementById(cfg.modal.replace('modal','modal') + 'Title') ||
+                  document.querySelector('#' + cfg.modal + ' .modal-title');
+  if(titleEl) titleEl.textContent = cfg.title;
+  // Fecha por defecto = hoy
+  const today = new Date().toISOString().split('T')[0];
+  const dateFields = { inst:'oi_fecha', top:'ot_fecha', repar:'oRep_fecha', term:'oTerm_fecha' };
+  if(dateFields[type]){ const f=document.getElementById(dateFields[type]); if(f) f.value=today; }
+  document.getElementById(cfg.modal).classList.add('open');
+}
+
+// ── Cerrar modal ──────────────────────────────────────
+function closeOpsModal(modalId){
+  const el = document.getElementById(modalId);
+  if(el) el.classList.remove('open');
+  window._opsEditMode = { type: null, index: -1 };
+}
+
+// ── Limpiar campos modal ──────────────────────────────
+function _opsClearModal(type){
+  const clears = {
+    inst:    ['oi_fecha','oi_cliente','oi_supervisor','oi_instalador','oi_horas','oi_obs'],
+    nuevo:   ['on_cliente','on_fecha','on_obs'],
+    top:     ['ot_fecha','ot_cliente','ot_color','ot_laminas','ot_instalo','ot_obs'],
+    remedir: ['or_cliente','or_vendedora','or_supervisor','or_ubicacion','or_obs'],
+    folder:  ['of_cliente','of_vendedora','of_areas','of_remidio','of_fecha_remidio','of_obs'],
+    repar:   ['oRep_fecha','oRep_cliente','oRep_accion','oRep_obs'],
+    term:    ['oTerm_fecha','oTerm_cliente','oTerm_obs'],
+  };
+  (clears[type]||[]).forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
   });
-
-  const ranking=Object.values(inst_map)
-    .map(m=>({...m,iei:m.horas>0?(m.puntos/m.horas):null}))
-    .sort((a,b)=>(b.iei||0)-(a.iei||0));
-
-  if(ranking.length){
-    const best=ranking[0];
-    sv('sviKBest', best.iei!=null ? best.iei.toFixed(2) : '—');
-    const el=document.getElementById('sviKBest');
-    if(el && best.nombre) el.title=best.nombre;
-  } else {
-    sv('sviKBest','—');
-  }
-
-  // Ranking table
-  const rb=document.getElementById('sviRankingBody'); if(!rb) return;
-  if(!ranking.length){
-    rb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--sub);font-size:11px;">Sin datos — agrega instalaciones con Grado y Horas</td></tr>';
-  } else {
-    rb.innerHTML=ranking.map((m,i)=>{
-      const iei=m.iei!=null?m.iei.toFixed(2):'—';
-      const eiColor=m.iei==null?'#4b5563':m.iei>=1.0?'#22c55e':m.iei>=0.7?'#fbbf24':'#fb7185';
-      const eiLabel=m.iei==null?'Sin horas':m.iei>=1.0?'Sobre estándar':m.iei>=0.7?'En estándar':'Por debajo';
-      const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
-      return `<tr>
-        <td style="color:#6b7280;font-weight:700">${medal||i+1}</td>
-        <td style="color:#f9fafb;font-weight:700">${m.nombre}</td>
-        <td style="color:var(--sub);text-align:center">${m.total}</td>
-        <td style="color:#14b8a6;font-weight:700;text-align:center">${m.A}</td>
-        <td style="color:#fbbf24;font-weight:700;text-align:center">${m.B}</td>
-        <td style="color:#fb7185;font-weight:700;text-align:center">${m.C}</td>
-        <td style="color:#ff6b35;font-weight:700;text-align:center">${m.puntos}</td>
-        <td style="color:var(--gold);text-align:center">${m.horas>0?m.horas.toFixed(1)+'h':'—'}</td>
-        <td style="font-size:14px;font-weight:800;color:${eiColor};text-align:center">${iei}</td>
-        <td><span style="background:${eiColor}22;color:${eiColor};border:1px solid ${eiColor}44;border-radius:6px;padding:2px 8px;font-size:9px;font-weight:700;white-space:nowrap;">${eiLabel}</span></td>
-      </tr>`;
-    }).join('');
-  }
-
-  // Detalle
-  const db=document.getElementById('sviDetalleBody'); if(!db) return;
-  if(!conGrado.length){
-    db.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--sub);font-size:11px;">Sin proyectos registrados con grado</td></tr>';
-  } else {
-    const sorted=[...conGrado].sort((a,b)=>{
-      const g={A:1,B:2,C:3};
-      return (g[b.grado]||0)-(g[a.grado]||0);
+  // Resetear selects a primera opción
+  const selects = {
+    inst:  ['oi_ciudad'],
+    top:   ['ot_ciudad'],
+    repar: ['oRep_ciudad','oRep_estatus'],
+    term:  ['oTerm_ciudad'],
+    nuevo: ['on_ciudad'],
+  };
+  (selects[type]||[]).forEach(id=>{
+    const el=document.getElementById(id); if(el) el.selectedIndex=0;
+  });
+  // Resetear grado y áreas si es inst
+  if(type==='inst'){
+    const g=document.getElementById('oi_grado'); if(g) g.value='';
+    document.querySelectorAll('.svi-grade-btn').forEach(b=>b.style.opacity='1');
+    document.querySelectorAll('#svi_areas_selector input[type=checkbox]').forEach(c=>{
+      c.checked=false;
+      const lbl=c.closest('label');
+      if(lbl){ lbl.style.borderColor='var(--border)'; lbl.style.background=''; lbl.style.color='var(--sub)'; }
     });
-    db.innerHTML=sorted.map(r=>{
-      const gc=r.grado==='A'?'#14b8a6':r.grado==='B'?'#fbbf24':'#fb7185';
-      const pts=PUNTOS[r.grado]||0;
-      return `<tr>
-        <td style="color:var(--gold);white-space:nowrap">${opsDisp(r.fecha)}</td>
-        <td style="color:#f9fafb;font-weight:700">${r.cliente||'—'}</td>
-        <td style="color:var(--gold)">${r.instalador||'—'}</td>
-        <td style="color:var(--sub);font-size:10px">${(r.areas||[]).join(', ')||'—'}</td>
-        <td><span style="background:${gc}22;color:${gc};border:1px solid ${gc}44;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:800;">G-${r.grado}</span></td>
-        <td style="color:#ff6b35;font-weight:700;text-align:center">${pts}</td>
-        <td style="color:var(--gold);text-align:center">${r.horas?r.horas+'h':'—'}</td>
-        <td><span class="badge b-sps">${r.ciudad||'—'}</span></td>
-      </tr>`;
-    }).join('');
   }
 }
+
+// ── Guardar (nuevo o edición) ─────────────────────────
+function saveOps(type){
+  const cfg = _OPS_MODAL_MAP[type];
+  if(!cfg) return;
+  const D = window.OPS_DATA;
+  const g = id => (document.getElementById(id)||{value:''}).value.trim();
+  let obj = {};
+
+  if(type==='inst'){
+    if(!g('oi_cliente')){ toast('⚠ Ingresa el cliente','var(--pink)'); return; }
+    const areasChecked=[...document.querySelectorAll('#svi_areas_selector input[type=checkbox]:checked')].map(c=>c.value);
+    obj={ fecha:opsFromISO(g('oi_fecha')), fecha_fin:opsFromISO(g('oi_fecha_fin')), cliente:g('oi_cliente'), supervisor:g('oi_supervisor'),
+          instalador:g('oi_instalador'), ciudad:g('oi_ciudad'),
+          grado:g('oi_grado'), horas:g('oi_horas'), areas:areasChecked, obs:g('oi_obs') };
+  } else if(type==='nuevo'){
+    if(!g('on_cliente')){ toast('⚠ Ingresa el cliente','var(--pink)'); return; }
+    obj={ cliente:g('on_cliente'), fecha:g('on_fecha'), ciudad:g('on_ciudad'), obs:g('on_obs') };
+  } else if(type==='top'){
+    if(!g('ot_cliente')){ toast('⚠ Ingresa el cliente','var(--pink)'); return; }
+    obj={ fecha:opsFromISO(g('ot_fecha')), cliente:g('ot_cliente'), color:g('ot_color'),
+          laminas:g('ot_laminas'), instalo:g('ot_instalo'), ciudad:g('ot_ciudad'), obs:g('ot_obs') };
+  } else if(type==='remedir'){
+    if(!g('or_cliente')){ toast('⚠ Ingresa el cliente','var(--pink)'); return; }
+    obj={ cliente:g('or_cliente'), vendedora:g('or_vendedora'), supervisor:g('or_supervisor'),
+          ubicacion:g('or_ubicacion'), obs:g('or_obs') };
+  } else if(type==='folder'){
+    if(!g('of_cliente')){ toast('⚠ Ingresa el cliente','var(--pink)'); return; }
+    obj={ cliente:g('of_cliente'), vendedora:g('of_vendedora'), areas:g('of_areas'),
+          remidio:g('of_remidio'), fecha_remidio:opsFromISO(g('of_fecha_remidio')), obs:g('of_obs') };
+  } else if(type==='repar'){
+    if(!g('oRep_cliente')){ toast('⚠ Ingresa el cliente','var(--pink)'); return; }
+    obj={ fecha:opsFromISO(g('oRep_fecha')), cliente:g('oRep_cliente'), accion:g('oRep_accion'),
+          ciudad:g('oRep_ciudad'), estatus:g('oRep_estatus')||'PENDIENTE', obs:g('oRep_obs') };
+  } else if(type==='term'){
+    if(!g('oTerm_cliente')){ toast('⚠ Ingresa el cliente','var(--pink)'); return; }
+    obj={ fecha:opsFromISO(g('oTerm_fecha')), cliente:g('oTerm_cliente'),
+          ciudad:g('oTerm_ciudad'), obs:g('oTerm_obs') };
+  }
+
+  const arr = D[cfg.arr];
+  const em = window._opsEditMode;
+  if(em.index >= 0){
+    arr[em.index] = obj;
+    toast('✓ Registro actualizado');
+  } else {
+    arr.push(obj);
+    toast('✓ Registro agregado');
+  }
+  saveOpsData();
+  closeOpsModal(cfg.modal);
+  // Refrescar panel activo y resumen
+  if(_OPS_RENDER_MAP[type]) _OPS_RENDER_MAP[type]();
+  renderNopsResumen();
+  nopsUpdatePills();
+}
+
+// ── Editar ────────────────────────────────────────────
+function editOps(type, index){
+  const cfg = _OPS_MODAL_MAP[type];
+  if(!cfg) return;
+  const D = window.OPS_DATA;
+  const arr = D[cfg.arr];
+  const r = arr[index];
+  if(!r) return;
+  window._opsEditMode = { type, index };
+
+  // Limpiar y llenar modal
+  _opsClearModal(type);
+  const ov = (id, val) => { const el=document.getElementById(id); if(el) el.value=val||''; };
+
+  if(type==='inst'){
+    ov('oi_fecha', opsToISO(r.fecha)); ov('oi_fecha_fin', opsToISO(r.fecha_fin)); ov('oi_cliente',r.cliente);
+    ov('oi_supervisor',r.supervisor); ov('oi_instalador',r.instalador);
+    ov('oi_ciudad',r.ciudad); ov('oi_horas',r.horas); ov('oi_obs',r.obs);
+    // Grado
+    if(r.grado){ const btn=document.querySelector(`.svi-grade-btn[data-grado="${r.grado}"]`); if(btn) selectGrado(btn,r.grado); }
+    // Áreas
+    if(r.areas && r.areas.length){
+      document.querySelectorAll('#svi_areas_selector input[type=checkbox]').forEach(c=>{
+        if(r.areas.includes(c.value)){ c.checked=true; toggleAreaChip(c); }
+      });
+    }
+  } else if(type==='nuevo'){
+    ov('on_cliente',r.cliente); ov('on_fecha',r.fecha); ov('on_ciudad',r.ciudad); ov('on_obs',r.obs);
+  } else if(type==='top'){
+    ov('ot_fecha',opsToISO(r.fecha)); ov('ot_cliente',r.cliente); ov('ot_color',r.color);
+    ov('ot_laminas',r.laminas); ov('ot_instalo',r.instalo); ov('ot_ciudad',r.ciudad); ov('ot_obs',r.obs);
+  } else if(type==='remedir'){
+    ov('or_cliente',r.cliente); ov('or_vendedora',r.vendedora); ov('or_supervisor',r.supervisor);
+    ov('or_ubicacion',r.ubicacion); ov('or_obs',r.obs);
+  } else if(type==='folder'){
+    ov('of_cliente',r.cliente); ov('of_vendedora',r.vendedora); ov('of_areas',r.areas);
+    ov('of_remidio',r.remidio); ov('of_fecha_remidio',opsToISO(r.fecha_remidio)); ov('of_obs',r.obs);
+  } else if(type==='repar'){
+    ov('oRep_fecha',opsToISO(r.fecha)); ov('oRep_cliente',r.cliente); ov('oRep_accion',r.accion);
+    ov('oRep_ciudad',r.ciudad); ov('oRep_estatus',r.estatus||'PENDIENTE'); ov('oRep_obs',r.obs);
+  } else if(type==='term'){
+    ov('oTerm_fecha',opsToISO(r.fecha)); ov('oTerm_cliente',r.cliente);
+    ov('oTerm_ciudad',r.ciudad); ov('oTerm_obs',r.obs);
+  }
+
+  // Actualizar título
+  const titleEl = document.querySelector('#' + cfg.modal + ' .modal-title');
+  if(titleEl) titleEl.textContent = cfg.titleEdit;
+  document.getElementById(cfg.modal).classList.add('open');
+}
+
+// ── Eliminar ──────────────────────────────────────────
+async function deleteOps(type, index){
+  const cfg = _OPS_MODAL_MAP[type];
+  if(!cfg) return;
+  const arr = window.OPS_DATA[cfg.arr];
+  const r = arr[index];
+  const nombre = r ? (r.cliente||'este registro').slice(0,32) : 'este registro';
+  const ok = await showConfirm('¿Eliminar "'+nombre+'"?','Esta acción no se puede deshacer','🗑️');
+  if(!ok) return;
+  arr.splice(index, 1);
+  saveOpsData();
+  if(_OPS_RENDER_MAP[type]) _OPS_RENDER_MAP[type]();
+  renderNopsResumen();
+  nopsUpdatePills();
+  toast('✓ Registro eliminado','var(--pink)');
+}
+
+// ── SVI: selección de grado ───────────────────────────
+function selectGrado(btn, grado){
+  document.querySelectorAll('.svi-grade-btn').forEach(b=>{
+    b.style.opacity='0.45'; b.style.transform='scale(.96)';
+  });
+  btn.style.opacity='1'; btn.style.transform='scale(1)';
+  btn.style.boxShadow='0 0 0 2px #fff3';
+  const hiddenInput = document.getElementById('oi_grado');
+  if(hiddenInput) hiddenInput.value = grado;
+}
+
+// ── SVI: toggle área chip ─────────────────────────────
+function toggleAreaChip(checkbox){
+  const lbl = checkbox.closest('label');
+  if(!lbl) return;
+  if(checkbox.checked){
+    lbl.style.borderColor='#ff6b35'; lbl.style.background='rgba(255,107,53,.12)'; lbl.style.color='#ff6b35';
+  } else {
+    lbl.style.borderColor='var(--border)'; lbl.style.background=''; lbl.style.color='var(--sub)';
+  }
+}
+
+// ── Compatibilidad con código original ───────────────
+// Mantiene aliases para funciones que pueden ser llamadas desde otros módulos
+function showOpsTab(id, btn){
+  const panelMap = {
+    ops_resumen:'resumen', ops_editor:'inst', ops_semana:'semana',
+    ops_reporte:'reporte', ops_terminados:'terminados', ops_rendimiento:'rendimiento',
+    ops_planif:'planif', ops_repdiario:'repdiario'
+  };
+  const panelId = panelMap[id] || id.replace('ops_','');
+  const btn2 = document.querySelector(`.ops-nitem[onclick*="${panelId}"]`);
+  showOpsPanel(panelId, btn2);
+}
+function renderOpsResumen(){ renderNopsResumen(); }
+function renderOpsEditor(){ renderNopsInst(); }
+function renderOpsSemana(){ renderNopsSemana(); }
+function renderOpsReporte(){ renderNopsReporte(); }
+function renderOpsTerminados(){ renderNopsTerminados(); }
+function renderOpsRendimiento(){ renderNopsRendimiento(); }
+// Alias reporte/semana export
+function exportarSemanaExcel(){
+  const s=getOpsSemana();
+  const D=window.OPS_DATA;
+  const inst=D.inst||[], nuevos=D.nuevos||[], tops=D.tops||[], remedir=D.remedir||[], folder=D.folder||[], repar=s.repar, term=s.term;
+  const esc=v=>`"${(v||'').toString().replace(/"/g,'""')}"`;
+  let csv='TIPO,CLIENTE,SUPERVISOR,INSTALADOR,CIUDAD,OBSERVACIONES\n';
+  inst.forEach(r=>csv+=`Instalación,${esc(r.cliente)},${esc(r.supervisor)},${esc(r.instalador)},${esc(r.ciudad)},${esc(r.obs)}\n`);
+  nuevos.forEach(r=>csv+=`Nuevo,${esc(r.cliente)},,,,${esc(r.fecha)},${esc(r.ciudad)},${esc(r.obs)}\n`);
+  tops.forEach(r=>csv+=`Top,${esc(r.cliente)},,,${esc(r.ciudad)},${esc(r.color)}\n`);
+  remedir.forEach(r=>csv+=`Remedir,${esc(r.cliente)},${esc(r.vendedora)},,,${esc(r.ubicacion)}\n`);
+  folder.forEach(r=>csv+=`Folder,${esc(r.cliente)},${esc(r.vendedora)},,,${esc(r.areas)}\n`);
+  repar.forEach(r=>csv+=`Reparación,${esc(r.cliente)},,,${esc(r.ciudad)},${esc(r.estatus)}\n`);
+  term.forEach(r=>csv+=`Terminado,${esc(r.cliente)},,,${esc(r.ciudad)},${esc(r.fecha)}\n`);
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='semana_ops_'+new Date().toISOString().split('T')[0]+'.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+function exportarSemanaPDF(){
+  const s=getOpsSemana();
+  const D=window.OPS_DATA;
+  const fecha=new Date().toLocaleDateString('es-HN');
+  const win=window.open('','_blank');
+  const tbl=(t,hdrs,rows)=>!rows.length?'':`<h3>${t}</h3><table><thead><tr>${hdrs}</tr></thead><tbody>${rows}</tbody></table>`;
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Semana Operaciones</title><style>body{font-family:'Segoe UI',Arial,sans-serif;padding:28px;color:#1a1a2e;}h1{color:#dc4e0d;font-size:20px;}h3{color:#374151;font-size:12px;margin:14px 0 5px;}table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:6px;}th{background:#1F3864;color:#fff;padding:5px 8px;text-align:left;font-size:9px;}td{padding:5px 8px;border-bottom:1px solid #e5e7eb;}tr:nth-child(even){background:#f9fafb;}.footer{margin-top:20px;padding-top:8px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;font-size:10px;color:#9ca3af;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body>
+  <h1>🏗️ Operaciones — Semana ${opsDisp(s.desde)} → ${opsDisp(s.hasta)}</h1>
+  ${tbl('Instalaciones en proceso','<th>Cliente</th><th>Supervisor</th><th>Ciudad</th>',(D.inst||[]).map(r=>`<tr><td>${r.cliente||'—'}</td><td>${r.supervisor||'—'}</td><td>${r.ciudad||'—'}</td></tr>`).join(''))}
+  ${tbl('Nuevos para producción','<th>Cliente</th><th>Fecha</th><th>Ciudad</th>',(D.nuevos||[]).map(r=>`<tr><td>${r.cliente||'—'}</td><td>${r.fecha||'—'}</td><td>${r.ciudad||'—'}</td></tr>`).join(''))}
+  ${tbl('Terminados esta semana','<th>Fecha</th><th>Cliente</th><th>Ciudad</th>',s.term.map(r=>`<tr><td>${opsDisp(r.fecha)}</td><td>${r.cliente||'—'}</td><td>${r.ciudad||'—'}</td></tr>`).join(''))}
+  <div class="footer"><span>Panel de Control — Operaciones</span><span>${opsDisp(s.desde)} → ${opsDisp(s.hasta)} · ${fecha}</span></div>
+  </body></html>`);
+  win.document.close(); win.focus(); setTimeout(()=>win.print(),400);
+}
+
+// FIN MÓDULO OPERACIONES BASE
+// ══════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════
 // MÓDULO PLANIFICACIÓN DE INSTALACIÓN
@@ -8226,6 +8410,7 @@ document.addEventListener('keydown', e=>{
 });
 
 // ══════════════════════════════════════════════════════
+
 // MÓDULO REPORTE DIARIO DE INSTALACIÓN
 // ══════════════════════════════════════════════════════
 
@@ -8788,6 +8973,11 @@ function closeConfirm(result){
   if(el) el.classList.remove('open');
   if(_confirmResolve){ _confirmResolve(result); _confirmResolve=null; }
 }
+// customConfirm — wrapper con callback (usado por terminarInstalacion y termCtxAction)
+function customConfirm(msg, sub, onConfirm){
+  showConfirm(msg, sub, '❓').then(ok=>{ if(ok && typeof onConfirm==='function') onConfirm(); });
+}
+
 // Close on backdrop click
 document.addEventListener('DOMContentLoaded',()=>{
   const el = document.getElementById('confirmDialog');
@@ -9463,6 +9653,152 @@ window.lmShowTab = function(id) {
 
 <script>
 // ══════════════════════════════════════════════════════
+// FLUJO TERMINADOS — Mover entre tabs
+// ══════════════════════════════════════════════════════
+function terminarInstalacion(realIdx){
+  const D = window.OPS_DATA;
+  const r = D.inst[realIdx];
+  if(!r) return;
+  const hoy = new Date().toLocaleDateString('es-HN',{day:'2-digit',month:'2-digit',year:'numeric'});
+  customConfirm(
+    '✅ Marcar como Terminado',
+    `¿Confirmar que "${r.cliente||'este proyecto'}" fue terminado y está listo para cobrar?`,
+    function(){
+      // Crear registro en term con todos los datos del inst
+      const termRecord = {
+        ...r,
+        fecha_term: hoy,
+        fecha: r.fecha || hoy,
+        obs: r.obs || ''
+      };
+      if(!D.term) D.term = [];
+      D.term.push(termRecord);
+      // Marcar en inst como terminado (o remover)
+      D.inst.splice(realIdx, 1);
+      saveOpsData();
+      renderNopsInst();
+      renderNopsTerminados();
+      nopsUpdatePills();
+      toast('✅ Proyecto terminado — ¡listo para cobrar!');
+      // Ir a tab terminados
+      setTimeout(()=>showOpsPanel('terminados', document.querySelector('.ops-nitem[onclick*="terminados"]')), 600);
+    }
+  );
+}
+
+// ── Menú contextual Terminados ────────────────────────
+let _termCtxIdx = null;
+
+window.showTermContextMenu = function(e, realIdx){
+  _termCtxIdx = realIdx;
+  const menu = document.getElementById('termContextMenu');
+  if(!menu) return;
+  const r = (window.OPS_DATA.term||[])[realIdx];
+  const lbl = document.getElementById('termCtxLabel');
+  if(lbl && r) lbl.textContent = (r.cliente||'PROYECTO').slice(0,26);
+  menu.style.display = 'block';
+  const vw=window.innerWidth, vh=window.innerHeight;
+  const mw=menu.offsetWidth||220, mh=menu.offsetHeight||160;
+  let x=e.clientX+6, y=e.clientY+6;
+  if(x+mw>vw-8) x=e.clientX-mw-6;
+  if(y+mh>vh-8) y=e.clientY-mh-6;
+  menu.style.left=x+'px'; menu.style.top=y+'px';
+};
+
+window.termCtxAction = function(action){
+  const menu = document.getElementById('termContextMenu');
+  if(menu) menu.style.display='none';
+  if(_termCtxIdx===null) return;
+  const D = window.OPS_DATA;
+  const idx = _termCtxIdx;
+  _termCtxIdx = null;
+  const r = (D.term||[])[idx];
+  if(!r) return;
+
+  if(action==='edit'){
+    editOps('term', idx);
+  }
+  else if(action==='toInst'){
+    customConfirm('🔧 Devolver a Instalaciones',
+      `¿Devolver "${r.cliente||'este proyecto'}" al módulo de Instalaciones?`,
+      function(){
+        const instRecord = { ...r };
+        delete instRecord.fecha_term;
+        delete instRecord._terminado;
+        if(!D.inst) D.inst=[];
+        D.inst.push(instRecord);
+        D.term.splice(idx, 1);
+        saveOpsData();
+        renderNopsInst();
+        renderNopsTerminados();
+        nopsUpdatePills();
+        toast('🔧 Proyecto devuelto a Instalaciones');
+        setTimeout(()=>showOpsPanel('inst', document.querySelector('.ops-nitem[onclick*="inst"]')), 500);
+      }
+    );
+  }
+  else if(action==='toRepar'){
+    customConfirm('🔨 Devolver a Reparaciones',
+      `¿Devolver "${r.cliente||'este proyecto'}" a Reparaciones por reclamo de cliente?`,
+      function(){
+        const reparRecord = {
+          cliente: r.cliente||'',
+          ciudad: r.ciudad||'',
+          accion: 'Reclamo post-entrega — revisar instalación',
+          estatus: 'PENDIENTE',
+          obs: r.obs||''
+        };
+        if(!D.repar) D.repar=[];
+        D.repar.push(reparRecord);
+        D.term.splice(idx, 1);
+        saveOpsData();
+        renderNopsRepar();
+        renderNopsTerminados();
+        nopsUpdatePills();
+        toast('🔨 Proyecto enviado a Reparaciones');
+        setTimeout(()=>showOpsPanel('repar', document.querySelector('.ops-nitem[onclick*="repar"]')), 500);
+      }
+    );
+  }
+  else if(action==='delete'){
+    deleteOps('term', idx);
+  }
+};
+
+// Cerrar menú al hacer clic fuera
+document.addEventListener('click', function(e){
+  const menu=document.getElementById('termContextMenu');
+  if(menu && !menu.contains(e.target)) menu.style.display='none';
+});
+document.addEventListener('keydown', function(e){
+  if(e.key==='Escape'){ const menu=document.getElementById('termContextMenu'); if(menu) menu.style.display='none'; }
+});
+document.addEventListener('scroll', function(){
+  const menu=document.getElementById('termContextMenu');
+  if(menu && menu.style.display!=='none') menu.style.display='none';
+}, true);
+
+// ── Cobrar proyecto desde Terminados ─────────────────
+window.cobrarProyecto = function(realIdx){
+  const D = window.OPS_DATA;
+  const r = (D.term||[])[realIdx];
+  if(!r) return;
+  const hoy = new Date().toLocaleDateString('es-HN',{day:'2-digit',month:'2-digit',year:'numeric'});
+  customConfirm(
+    '💰 Confirmar Cobro',
+    `¿Marcar "${r.cliente||'este proyecto'}" como cobrado? Fecha: ${hoy}`,
+    function(){
+      D.term[realIdx] = { ...r, _cobrado: true, fecha_cobro: hoy };
+      saveOpsData();
+      renderNopsTerminados();
+      nopsUpdatePills();
+      toast('💰 Cobro registrado — ¡' + (r.cliente||'Proyecto') + '!');
+    }
+  );
+};
+// ══════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════
 // ANÁLISIS PRO — CONSULTOR SENIOR EN SISTEMAS LOGÍSTICOS
 // Disponible en consola: window.ANALISIS_PRO
 // ══════════════════════════════════════════════════════
@@ -9534,4 +9870,15 @@ window.ANALISIS_PRO = {
 // ══════════════════════════════════════════════════════
 </script>
 
+
+<!-- ══ MENÚ CONTEXTUAL TERMINADOS ══ -->
+<div id="termContextMenu" style="display:none;position:fixed;z-index:99999;background:#0f1923;border:1px solid rgba(168,255,62,.35);border-radius:12px;padding:6px;min-width:210px;box-shadow:0 8px 30px rgba(0,0,0,.6);font-family:'Space Mono',monospace;">
+  <div style="padding:7px 12px 9px;border-bottom:1px solid #1a2535;font-size:10px;font-weight:700;color:#a8ff3e;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" id="termCtxLabel">PROYECTO</div>
+  <div onclick="termCtxAction('edit')"   style="display:flex;align-items:center;gap:9px;padding:8px 12px;border-radius:8px;cursor:pointer;color:#e5e7eb;font-size:11px;transition:background .15s;" onmouseover="this.style.background='rgba(0,229,255,.08)'" onmouseout="this.style.background='transparent'">✏️ <span>Editar registro</span></div>
+  <div onclick="termCtxAction('toInst')" style="display:flex;align-items:center;gap:9px;padding:8px 12px;border-radius:8px;cursor:pointer;color:#ff6b35;font-size:11px;transition:background .15s;" onmouseover="this.style.background='rgba(255,107,53,.1)'" onmouseout="this.style.background='transparent'">🔧 <span>Devolver a Instalaciones</span></div>
+  <div onclick="termCtxAction('toRepar')" style="display:flex;align-items:center;gap:9px;padding:8px 12px;border-radius:8px;cursor:pointer;color:#fb7185;font-size:11px;transition:background .15s;" onmouseover="this.style.background='rgba(251,113,133,.1)'" onmouseout="this.style.background='transparent'">🔨 <span>Devolver a Reparaciones</span></div>
+  <div style="border-top:1px solid #1a2535;margin-top:4px;padding-top:4px;">
+    <div onclick="termCtxAction('delete')" style="display:flex;align-items:center;gap:9px;padding:8px 12px;border-radius:8px;cursor:pointer;color:#f87171;font-size:11px;transition:background .15s;" onmouseover="this.style.background='rgba(248,113,113,.1)'" onmouseout="this.style.background='transparent'">✕ <span>Eliminar registro</span></div>
+  </div>
+</div>
 </body></html>
