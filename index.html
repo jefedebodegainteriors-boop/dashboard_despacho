@@ -1,3 +1,4 @@
+
 <html lang="es"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="theme-color" content="#0a0e1a">
@@ -28,6 +29,7 @@
   const docRef    = doc(db, "dashboard", "main");
   const docRefProd = doc(db, "dashboard", "produccion");
   const docRefOps  = doc(db, "dashboard", "operaciones");
+  const docRefVentas = doc(db, "dashboard", "ventas");
 
   // _fbSaveOps — definido más abajo con status indicator
   window._fbStartListenOps = function(onData) {
@@ -122,6 +124,16 @@
   window._fbSave     = _wrapSave(async (data) => { await setDoc(docRef,     { payload: JSON.stringify(data) }); });
   window._fbSaveProd = _wrapSave(async (data) => { await setDoc(docRefProd, { payload: JSON.stringify(data) }); });
   window._fbSaveOps  = _wrapSave(async (data) => { await setDoc(docRefOps,  { payload: JSON.stringify(data) }); });
+  window._fbSaveVentas = _wrapSave(async (data) => { await setDoc(docRefVentas, { payload: JSON.stringify(data) }); });
+
+  window._fbStartListenVentas = function(onData) {
+    onSnapshot(docRefVentas, (snap) => {
+      if(snap.exists()) {
+        try { onData(JSON.parse(snap.data().payload)); }
+        catch(e) { console.error("Firebase ventas parse error:", e); }
+      }
+    });
+  };
 
 </script>
 <script>
@@ -511,117 +523,265 @@
 </style>
 <body>
 <!-- ═══════════════════════════════════════════════════
-     SPLASH SCREEN — PORTADA
+     LOGIN SCREEN — ESTILO ISC
 ═══════════════════════════════════════════════════ -->
-<div id="splashScreen" style="position:fixed;inset:0;z-index:9999;background:#0a0a0a;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Space Mono',monospace;">
+<style>
+/* ── Login Screen Full ── */
+#iscLoginScreen {
+  position:fixed;inset:0;z-index:99999;
+  background:#05070d;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Space Mono',monospace;
+  overflow:hidden;
+}
 
-  <!-- FASE 1: Intro INTERIORS -->
-  <div id="splashIntro" style="display:flex;flex-direction:column;align-items:center;justify-content:center;position:absolute;inset:0;opacity:0;transition:opacity .8s ease;">
-    <div style="text-align:center;">
-      <!-- Línea decorativa superior -->
-      <div id="splashLine" style="width:0px;height:1px;background:linear-gradient(90deg,transparent,#c8a96e,transparent);margin:0 auto 48px;transition:width 1.2s ease;"></div>
-      <!-- Título -->
-      <div id="splashTitle" style="font-family:'Barlow Condensed',sans-serif;font-size:clamp(42px,8vw,88px);font-weight:700;letter-spacing:0.35em;color:#f0ece4;opacity:0;transform:translateY(12px);transition:all 1s ease;text-transform:uppercase;">INTERIORS</div>
-      <!-- Línea roja debajo -->
-      <div id="splashRed" style="width:0px;height:2px;background:#9b1c1c;margin:18px auto 0;transition:width .8s ease .4s;"></div>
-      <!-- Subtítulo -->
-      <div id="splashSub" style="margin-top:22px;font-size:10px;letter-spacing:0.3em;color:#6b6457;opacity:0;transition:opacity .8s ease;text-transform:uppercase;">SISTEMA DE CONTROL</div>
-    </div>
+/* Fondo con grid sutil */
+#iscLoginScreen::before {
+  content:'';position:absolute;inset:0;
+  background-image:
+    linear-gradient(rgba(200,169,110,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(200,169,110,.03) 1px, transparent 1px);
+  background-size:60px 60px;
+  pointer-events:none;
+}
+
+/* Línea decorativa izquierda */
+#iscLoginScreen::after {
+  content:'';position:absolute;left:0;top:0;bottom:0;
+  width:3px;
+  background:linear-gradient(180deg,transparent,#c8a96e 30%,#c8a96e 70%,transparent);
+  opacity:.5;
+}
+
+/* Panel central */
+.isc-login-panel {
+  width:90%;max-width:460px;
+  position:relative;z-index:1;
+  opacity:0;transform:translateY(20px);
+  animation:iscPanelIn .8s ease .6s forwards;
+}
+@keyframes iscPanelIn {
+  to { opacity:1; transform:translateY(0); }
+}
+
+/* Logo / marca */
+.isc-login-logo {
+  display:flex;align-items:center;gap:16px;margin-bottom:40px;
+}
+.isc-login-logo-box {
+  width:56px;height:56px;border-radius:10px;
+  background:linear-gradient(135deg,#0f1a2e,#1a2a40);
+  border:1px solid rgba(200,169,110,.5);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+  box-shadow:0 0 24px rgba(200,169,110,.12);
+}
+.isc-login-logo-box svg { display:block; }
+.isc-login-brand-name {
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:28px;font-weight:700;letter-spacing:.12em;
+  color:#f0ece4;text-transform:uppercase;line-height:1;
+  margin-bottom:5px;
+}
+.isc-login-brand-sub {
+  font-size:9px;letter-spacing:.35em;color:#4a5568;
+  text-transform:uppercase;
+}
+
+/* Separador */
+.isc-login-sep {
+  width:100%;height:1px;
+  background:linear-gradient(90deg,rgba(200,169,110,.4),rgba(200,169,110,.1),transparent);
+  margin-bottom:36px;
+}
+
+/* Campos */
+.isc-field {
+  margin-bottom:14px;
+}
+.isc-field label {
+  display:block;font-size:9px;letter-spacing:.25em;color:#4a5568;
+  text-transform:uppercase;margin-bottom:6px;
+}
+.isc-field input {
+  width:100%;background:#080d16;
+  border:1px solid #1a2535;
+  border-radius:8px;
+  padding:13px 16px;
+  color:#f0ece4;font-family:'Space Mono',monospace;font-size:13px;
+  outline:none;transition:border-color .2s,box-shadow .2s;
+  letter-spacing:.05em;
+}
+.isc-field input:focus {
+  border-color:rgba(200,169,110,.6);
+  box-shadow:0 0 0 3px rgba(200,169,110,.08);
+}
+
+/* Botón acceder */
+.isc-login-btn {
+  width:100%;margin-top:22px;padding:14px;
+  background:linear-gradient(135deg,rgba(200,169,110,.18),rgba(200,169,110,.08));
+  border:1px solid rgba(200,169,110,.45);
+  border-radius:8px;
+  color:#c8a96e;font-family:'Space Mono',monospace;
+  font-size:11px;font-weight:700;letter-spacing:.25em;text-transform:uppercase;
+  cursor:pointer;
+  transition:all .2s;
+  position:relative;overflow:hidden;
+}
+.isc-login-btn::before {
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(200,169,110,.15),transparent);
+  opacity:0;transition:opacity .2s;
+}
+.isc-login-btn:hover { border-color:rgba(200,169,110,.7);color:#e0c87a; }
+.isc-login-btn:hover::before { opacity:1; }
+.isc-login-btn:active { transform:scale(.99); }
+
+/* Error */
+.isc-login-err {
+  margin-top:10px;font-size:10px;letter-spacing:.1em;
+  color:#ef4444;text-align:center;min-height:16px;
+  opacity:0;transition:opacity .2s;
+}
+.isc-login-err.show { opacity:1; }
+
+/* Footer info */
+.isc-login-footer {
+  margin-top:32px;display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:8px;
+}
+.isc-login-footer-left { font-size:9px;letter-spacing:.15em;color:#2a3545;text-transform:uppercase; }
+.isc-status-dot {
+  width:6px;height:6px;border-radius:50%;background:#a8ff3e;
+  box-shadow:0 0 6px #a8ff3e;display:inline-block;margin-right:6px;
+  animation:iscPulse 2s infinite;
+}
+@keyframes iscPulse { 0%,100%{opacity:1}50%{opacity:.4} }
+
+/* Decoraciones esquina */
+.isc-corner {
+  position:absolute;width:60px;height:60px;
+  border-color:rgba(200,169,110,.2);border-style:solid;
+}
+.isc-corner.tl { top:24px;left:24px;border-width:1px 0 0 1px; }
+.isc-corner.br { bottom:24px;right:24px;border-width:0 1px 1px 0; }
+
+/* Intro animation */
+#iscLoginIntro {
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  z-index:2;background:#05070d;
+  transition:opacity .8s ease;
+}
+#iscLoginIntro.hide { opacity:0;pointer-events:none; }
+.isc-intro-line {
+  width:0;height:1px;
+  background:linear-gradient(90deg,transparent,#c8a96e,transparent);
+  transition:width 1s ease;margin-bottom:36px;
+}
+.isc-intro-title {
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:clamp(48px,9vw,96px);font-weight:700;
+  letter-spacing:.35em;color:#f0ece4;text-transform:uppercase;
+  opacity:0;transform:translateY(10px);
+  transition:all 1s ease;
+}
+.isc-intro-bar {
+  width:0;height:2px;background:#9b1c1c;
+  margin:16px auto 0;transition:width .8s ease .4s;
+}
+.isc-intro-sub {
+  margin-top:20px;font-size:10px;letter-spacing:.35em;
+  color:#3a3530;text-transform:uppercase;
+  opacity:0;transition:opacity .8s ease;
+}
+
+/* Módulo activo indicador */
+#iscActiveUser {
+  display:none;position:fixed;top:12px;right:16px;z-index:99998;
+  background:rgba(5,7,13,.9);border:1px solid rgba(200,169,110,.25);
+  border-radius:20px;padding:6px 14px;
+  display:none;align-items:center;gap:8px;
+  font-family:'Space Mono',monospace;font-size:10px;color:#c8a96e;
+  letter-spacing:.1em;backdrop-filter:blur(8px);
+}
+#iscActiveUser.visible { display:flex; }
+</style>
+
+<!-- Pantalla de intro + login -->
+<div id="iscLoginScreen">
+  <!-- Esquinas decorativas -->
+  <div class="isc-corner tl"></div>
+  <div class="isc-corner br"></div>
+
+  <!-- Intro animada -->
+  <div id="iscLoginIntro">
+    <div class="isc-intro-line" id="iscIntroLine"></div>
+    <div class="isc-intro-title" id="iscIntroTitle">INTERIORS</div>
+    <div class="isc-intro-bar" id="iscIntroBar"></div>
+    <div class="isc-intro-sub" id="iscIntroSub">Sistema de Control</div>
   </div>
 
-  <!-- FASE 2: Selector de bloques -->
-  <div id="splashSelector" style="display:none;position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;background:#0a0a0a;">
+  <!-- Panel de login -->
+  <div class="isc-login-panel" id="iscLoginPanel">
 
-    <!-- Header -->
-    <div style="text-align:center;margin-bottom:48px;opacity:0;transform:translateY(-16px);transition:all .6s ease;" id="selHeader">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:0.4em;color:#6b6457;text-transform:uppercase;margin-bottom:12px;">PANEL DE CONTROL</div>
-      <div style="width:40px;height:1px;background:#9b1c1c;margin:0 auto;"></div>
+    <!-- Logo -->
+    <div class="isc-login-logo">
+      <div class="isc-login-logo-box">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <rect x="4" y="4" width="10" height="10" rx="2" stroke="#c8a96e" stroke-width="1.4"/>
+          <rect x="18" y="4" width="10" height="10" rx="2" stroke="#c8a96e" stroke-width="1.4"/>
+          <rect x="4" y="18" width="10" height="10" rx="2" stroke="#c8a96e" stroke-width="1.4"/>
+          <rect x="18" y="18" width="10" height="10" rx="2" stroke="#c8a96e" stroke-width="1.4"/>
+          <line x1="9" y1="9" x2="9" y2="9" stroke="#c8a96e" stroke-width="2" stroke-linecap="round"/>
+          <line x1="23" y1="9" x2="23" y2="9" stroke="#c8a96e" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div>
+        <div class="isc-login-brand-name">SDC Interiors</div>
+        <div class="isc-login-brand-sub">Sistema de Control · Acceso Seguro</div>
+      </div>
     </div>
 
-    <!-- Bloques -->
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;width:100%;max-width:900px;" id="selGrid">
+    <div class="isc-login-sep"></div>
 
-      <!-- LOGÍSTICA -->
-      <div class="splash-block" onclick="enterDashboard('logistica')" id="blkLogistica"
-        style="opacity:0;transform:translateY(30px);transition:all .5s ease;cursor:pointer;background:#0f1a0f;border:1px solid #1a3a1a;border-radius:16px;padding:40px 24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;min-height:260px;position:relative;overflow:hidden;">
-        <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(34,197,94,.08),transparent 70%);pointer-events:none;"></div>
-        <!-- Ícono SVG Logística (camión/despacho) -->
-        <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="4" y="20" width="42" height="28" rx="4" fill="none" stroke="#22c55e" stroke-width="2"/>
-          <path d="M46 28 L46 48 L64 48 L64 34 L54 28 Z" fill="none" stroke="#22c55e" stroke-width="2" stroke-linejoin="round"/>
-          <circle cx="18" cy="50" r="6" fill="none" stroke="#22c55e" stroke-width="2"/>
-          <circle cx="54" cy="50" r="6" fill="none" stroke="#22c55e" stroke-width="2"/>
-          <line x1="24" y1="50" x2="48" y2="50" stroke="#22c55e" stroke-width="2"/>
-          <line x1="16" y1="30" x2="28" y2="30" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="16" y1="36" x2="24" y2="36" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        <div style="text-align:center;">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;letter-spacing:0.2em;color:#f0ece4;text-transform:uppercase;margin-bottom:6px;">Logística</div>
-          <div style="font-size:9px;letter-spacing:0.2em;color:#4a6a4a;text-transform:uppercase;">Despachos · Bodega · Pendientes</div>
-        </div>
-        <div style="width:24px;height:1px;background:#22c55e;opacity:.4;"></div>
-      </div>
-
-      <!-- PRODUCCIÓN -->
-      <div class="splash-block" onclick="enterDashboard('produccion')" id="blkProduccion"
-        style="opacity:0;transform:translateY(30px);transition:all .5s ease .1s;cursor:pointer;background:#0f0f1a;border:1px solid #1a1a3a;border-radius:16px;padding:40px 24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;min-height:260px;position:relative;overflow:hidden;">
-        <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(0,191,255,.08),transparent 70%);pointer-events:none;"></div>
-        <!-- Ícono SVG Producción (engranaje/máquina) -->
-        <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="36" cy="36" r="10" fill="none" stroke="#00bfff" stroke-width="2"/>
-          <circle cx="36" cy="36" r="4" fill="#00bfff" opacity=".3"/>
-          <path d="M36 14 L38.5 20 L41 14 M36 58 L38.5 52 L41 58 M14 36 L20 33.5 L14 31 M58 36 L52 38.5 L58 41" stroke="#00bfff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M19.5 19.5 L24 25 L25 24 M52.5 52.5 L48 47 L47 48 M19.5 52.5 L25 48 L24 47 M52.5 19.5 L47 25 L48 24" stroke="#00bfff" stroke-width="2" stroke-linecap="round"/>
-          <circle cx="36" cy="36" r="18" fill="none" stroke="#00bfff" stroke-width="1" stroke-dasharray="3 5" opacity=".3"/>
-        </svg>
-        <div style="text-align:center;">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;letter-spacing:0.2em;color:#f0ece4;text-transform:uppercase;margin-bottom:6px;">Producción</div>
-          <div style="font-size:9px;letter-spacing:0.2em;color:#2a4a6a;text-transform:uppercase;">Corte · Armado · En Proceso</div>
-        </div>
-        <div style="width:24px;height:1px;background:#00bfff;opacity:.4;"></div>
-      </div>
-
-      <!-- OPERACIONES -->
-      <div class="splash-block" onclick="enterDashboard('operaciones')" id="blkOperaciones"
-        style="opacity:0;transform:translateY(30px);transition:all .5s ease .2s;cursor:pointer;background:#1a0f0a;border:1px solid #3a1a0a;border-radius:16px;padding:40px 24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;min-height:260px;position:relative;overflow:hidden;">
-        <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(255,107,53,.08),transparent 70%);pointer-events:none;"></div>
-        <!-- Ícono SVG Operaciones (clipboard/tareas) -->
-        <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="16" y="14" width="40" height="50" rx="4" fill="none" stroke="#ff6b35" stroke-width="2"/>
-          <rect x="26" y="10" width="20" height="8" rx="3" fill="none" stroke="#ff6b35" stroke-width="2"/>
-          <line x1="24" y1="30" x2="48" y2="30" stroke="#ff6b35" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="24" y1="38" x2="48" y2="38" stroke="#ff6b35" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="24" y1="46" x2="38" y2="46" stroke="#ff6b35" stroke-width="1.5" stroke-linecap="round"/>
-          <circle cx="20" cy="30" r="2.5" fill="#ff6b35"/>
-          <circle cx="20" cy="38" r="2.5" fill="#ff6b35"/>
-          <circle cx="20" cy="46" r="2.5" fill="none" stroke="#ff6b35" stroke-width="1.5"/>
-        </svg>
-        <div style="text-align:center;">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;letter-spacing:0.2em;color:#f0ece4;text-transform:uppercase;margin-bottom:6px;">Operaciones</div>
-          <div style="font-size:9px;letter-spacing:0.2em;color:#6a3a2a;text-transform:uppercase;">Próximamente</div>
-        </div>
-        <div style="width:24px;height:1px;background:#ff6b35;opacity:.4;"></div>
-      </div>
-
+    <!-- Formulario -->
+    <div class="isc-field">
+      <label>Usuario / ID</label>
+      <input type="text" id="iscUserId" placeholder="Ingresa tu usuario" autocomplete="off"
+        onkeydown="if(event.key==='Enter')document.getElementById('iscPassField').focus()"/>
     </div>
+    <div class="isc-field">
+      <label>Contraseña</label>
+      <input type="password" id="iscPassField" placeholder="••••••••" autocomplete="off"
+        onkeydown="if(event.key==='Enter')iscDoLogin()"/>
+    </div>
+
+    <div class="isc-login-err" id="iscLoginErr">Usuario o contraseña incorrectos</div>
+
+    <button class="isc-login-btn" onclick="iscDoLogin()">
+      Acceder al Sistema →
+    </button>
 
     <!-- Footer -->
-    <div style="margin-top:40px;font-size:9px;letter-spacing:0.3em;color:#2a2a2a;text-transform:uppercase;opacity:0;transition:opacity .6s ease .8s;" id="selFooter">
-      SELECCIONA UN MÓDULO PARA CONTINUAR
+    <div class="isc-login-footer">
+      <div class="isc-login-footer-left">
+        <span class="isc-status-dot"></span>Sistema en línea
+      </div>
+      <div style="font-size:9px;letter-spacing:.1em;color:#1e2d40;">SDC · 2025</div>
     </div>
   </div>
-
 </div>
 
-<!-- Estilos hover para bloques -->
-<style>
-  .splash-block { transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease !important; }
-  .splash-block:hover { transform: translateY(-6px) !important; box-shadow: 0 20px 40px rgba(0,0,0,.5); }
-  #blkLogistica:hover  { border-color: rgba(34,197,94,.5) !important; }
-  #blkProduccion:hover { border-color: rgba(0,191,255,.5) !important; }
-  #blkOperaciones:hover{ border-color: rgba(255,107,53,.5) !important; }
-  @keyframes splashFadeOut { to { opacity:0; pointer-events:none; } }
-</style>
+<!-- Indicador de usuario activo (esquina) -->
+<div id="iscActiveUser">
+  <span id="iscActiveUserIcon">👤</span>
+  <span id="iscActiveUserName">—</span>
+  <span style="color:#2d3f5a;margin:0 4px;">·</span>
+  <span id="iscActiveUserModule" style="color:#6b7280;font-size:9px;"></span>
+  <button onclick="iscLogout()" style="margin-left:10px;background:none;border:none;color:#4b5563;cursor:pointer;font-size:10px;font-family:'Space Mono',monospace;" title="Cerrar sesión">✕</button>
+</div>
 
 <div class="toast" id="toast" style="border-color: var(--accent); color: var(--accent);">✓ PDF listo — presiona Ctrl+P para imprimir o guardar</div>
 
@@ -679,6 +839,7 @@
         <button class="tab lm-nitem" id="lmtab-detalle"     onclick="lmShowTab('detalle')">    <span class="ni">≡</span> Despachos <div class="lm-ndot ok"></div></button>
         <button class="tab lm-nitem" id="lmtab-semana"      onclick="lmShowTab('semana')">     <span class="ni">◷</span> Semana</button>
         <div class="lm-nav-lbl">GESTIÓN</div>
+        <button class="tab lm-nitem" id="lmtab-expedientes" onclick="lmShowTab('expedientes')"><span class="ni">📋</span> Expedientes <div class="lm-ndot w" id="lmDotExpedientes" style="display:none;"></div></button>
         <button class="tab lm-nitem" id="lmtab-pendientes"  onclick="lmShowTab('pendientes')"> <span class="ni">⏳</span> Pendientes <div class="lm-ndot w"></div></button>
         <button class="tab lm-nitem" id="lmtab-bodega"      onclick="lmShowTab('bodega')">     <span class="ni">▣</span> Bodega <div class="lm-ndot w"></div></button>
         <button class="tab lm-nitem" id="lmtab-gestion_herrajes" onclick="lmShowTab('gestion_herrajes')"><span class="ni">⬡</span> Producto</button>
@@ -701,6 +862,30 @@
   </div>
 </div>
 
+
+<!-- EXPEDIENTES (desde Ventas/Producción) -->
+<div id="expedientes" class="section">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#f9fafb;letter-spacing:.8px;">🔩 HERRAJES — LOGÍSTICA</div>
+        <div style="font-size:10px;color:#4b5563;margin-top:3px;">Marca cuando los herrajes estén listos para enviar a instalación</div>
+      </div>
+      <input type="text" id="lmExpSearch" placeholder="Buscar cliente..." oninput="lmRenderExpedientes()"
+        style="background:#0d1526;border:1px solid var(--border);color:#e5e7eb;font-family:'Space Mono',monospace;font-size:11px;padding:7px 12px;border-radius:8px;outline:none;width:200px;">
+    </div>
+
+    <!-- Info box -->
+    <div style="background:rgba(168,255,62,.06);border:1px solid rgba(168,255,62,.15);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:10px;color:#a8ff3e;letter-spacing:.5px;">
+      🔩 Solo aparecen los expedientes que están en espera de herrajes. Cuando estén listos, márcalos aquí para que pasen a Planificación.
+    </div>
+
+    <!-- Lista herrajes (única vista) -->
+    <div id="lmExpListaHerrajes">
+      <div style="text-align:center;padding:40px;color:#2d3f5a;font-size:11px;">No hay expedientes con herrajes pendientes</div>
+    </div>
+  </div>
+</div>
 
 <!-- OVERVIEW -->
 <div id="overview" class="section">
@@ -1385,6 +1570,10 @@
     <button class="ptab" onclick="showProdTab('prod_detalle',this)">📋 Detalle</button>
     <button class="ptab" onclick="showProdTab('prod_editor',this)">✏️ Editor</button>
     <button class="ptab" onclick="showProdTab('prod_semana',this)">📅 Semana Actual</button>
+    <button class="ptab" onclick="showProdTab('prod_expedientes',this)" id="prodTabExpedientes" style="position:relative;">
+      📦 Expedientes Ventas
+      <span id="prodExpBadge" style="display:none;position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;border-radius:50%;width:16px;height:16px;font-size:8px;font-weight:700;align-items:center;justify-content:center;">0</span>
+    </button>
     <button class="ptab" onclick="showProdTab('prod_reporte',this)">📑 Reporte</button>
   </div>
 
@@ -1730,6 +1919,21 @@
     </div>
   </div><!-- fin prod_reporte -->
 
+  <!-- ══ EXPEDIENTES DE VENTAS ══ -->
+  <div id="prod_expedientes" class="prod-tab">
+    <div style="background:#0d1117;border:1px solid #1e2d40;border-radius:14px;padding:18px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#f9fafb;letter-spacing:.8px;">📦 EXPEDIENTES ASIGNADOS A PRODUCCIÓN</div>
+          <div style="font-size:10px;color:#4b5563;margin-top:3px;">Marca las áreas a producir, el checklist y la fecha estimada de entrega</div>
+        </div>
+      </div>
+      <div id="prodExpLista">
+        <div style="text-align:center;padding:40px;color:#2d3f5a;font-size:11px;">No hay expedientes de Ventas asignados a Producción aún</div>
+      </div>
+    </div>
+  </div>
+
 </div><!-- fin moduloProduccion -->
 
 <!-- MODALES PRODUCCIÓN -->
@@ -1966,20 +2170,21 @@
       <button class="ops-nitem" onclick="showOpsPanel('semana',this)">📅 Semana <span class="ops-ndot ops-ndot-ok"></span></button>
       <button class="ops-nitem" onclick="showOpsPanel('reporte',this)">📑 Reportes</button>
 
+      <div class="ops-nav-lbl">Expedientes</div>
+      <button class="ops-nitem" onclick="showOpsPanel('folder',this)">📋 Expedientes</button>
+
       <div class="ops-nav-lbl">Trabajo activo</div>
-      <button class="ops-nitem" onclick="showOpsPanel('inst',this)">🔧 Instalaciones <span class="ops-ndot ops-ndot-w" id="opsNavDotInst" style="display:none;"></span></button>
-      <button class="ops-nitem" onclick="showOpsPanel('nuevos',this)">🆕 Nuevos</button>
-      <button class="ops-nitem" onclick="showOpsPanel('tops',this)">🪨 Tops</button>
+      <button class="ops-nitem" onclick="showOpsPanel('planif',this)">🗓️ Planificación</button>
+      <button class="ops-nitem" onclick="showOpsPanel('inst',this)">🔧 Instalaciones en Proceso <span class="ops-ndot ops-ndot-w" id="opsNavDotInst" style="display:none;"></span></button>
+      <button class="ops-nitem" onclick="showOpsPanel('terminados',this)">✅ Terminados <span class="ops-ndot ops-ndot-ok"></span></button>
       <button class="ops-nitem" onclick="showOpsPanel('repar',this)">🔨 Reparaciones <span class="ops-ndot ops-ndot-w" id="opsNavDotRepar" style="display:none;"></span></button>
 
       <div class="ops-nav-lbl">Seguimiento</div>
-      <button class="ops-nitem" onclick="showOpsPanel('remedir',this)">📐 Remedir</button>
-      <button class="ops-nitem" onclick="showOpsPanel('folder',this)">📁 Folders</button>
-      <button class="ops-nitem" onclick="showOpsPanel('terminados',this)">✅ Terminados <span class="ops-ndot ops-ndot-ok"></span></button>
+      <button class="ops-nitem" onclick="showOpsPanel('nuevos',this)">🆕 Nuevos</button>
+      <button class="ops-nitem" onclick="showOpsPanel('tops',this)">🪨 Tops</button>
 
       <div class="ops-nav-lbl">Análisis</div>
       <button class="ops-nitem" onclick="showOpsPanel('rendimiento',this)">🏆 Rendimiento</button>
-      <button class="ops-nitem" onclick="showOpsPanel('planif',this)">🗓️ Planificación</button>
       <button class="ops-nitem" onclick="showOpsPanel('repdiario',this)">📝 Rep. Diario</button>
     </nav>
 
@@ -2122,19 +2327,40 @@
 
       <!-- FOLDER -->
       <div id="opsp_folder" class="ops-panel">
+        <!-- Expedientes de Ventas -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+          <input class="ops-search" id="vtExpOpsSearch" placeholder="🔍 Buscar cliente..." oninput="renderVtExpOps()" style="width:220px;">
+          <button class="ops-chip active" id="vtExpOpsChipTodos"    onclick="vtExpOpsChip(this,'')">Todos</button>
+          <button class="ops-chip"        id="vtExpOpsChipRem"     onclick="vtExpOpsChip(this,'en_remedir')" style="border-color:rgba(0,229,255,.4);color:#00e5ff;">📐 En Remedir</button>
+          <button class="ops-chip"        id="vtExpOpsChipProd"    onclick="vtExpOpsChip(this,'produccion')">En Producción</button>
+          <button class="ops-chip"        id="vtExpOpsChipLogis"   onclick="vtExpOpsChip(this,'logistica')">Listos / Logística</button>
+          <button class="ops-chip"        id="vtExpOpsChipInst"    onclick="vtExpOpsChip(this,'instalacion')">En Instalación</button>
+          <button class="ops-chip"        id="vtExpOpsChipTerm"    onclick="vtExpOpsChip(this,'terminado')">Terminados</button>
+          <span class="ops-card-count" id="vtExpOpsCount" style="margin-left:auto;">0 registros</span>
+          <!-- ── BOTÓN AGREGAR EXPEDIENTE MANUAL ── -->
+          <button onclick="opsAbrirModalExpediente()"
+            style="background:linear-gradient(135deg,rgba(0,229,255,.18),rgba(168,255,62,.1));color:#00e5ff;border:1px solid rgba(0,229,255,.45);padding:8px 16px;border-radius:9px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:.5px;white-space:nowrap;transition:all .2s;display:flex;align-items:center;gap:6px;"
+            onmouseover="this.style.background='rgba(0,229,255,.28)'" onmouseout="this.style.background='linear-gradient(135deg,rgba(0,229,255,.18),rgba(168,255,62,.1))'">
+            ＋ Nuevo Expediente
+          </button>
+        </div>
         <div class="ops-card">
-          <div class="ops-card-header">
-            <span class="ops-card-title">📁 REMEDIDOS CON FOLDER PENDIENTE</span>
-            <span class="ops-card-count" id="nopsFolderCount">0 registros</span>
-            <button class="ops-add-btn" onclick="openModalOps('folder')">+ Agregar</button>
-          </div>
-          <div class="ops-search-row">
-            <input class="ops-search" id="nopsFolderSearch" placeholder="🔍 Buscar cliente..." oninput="renderNopsFolder()">
-          </div>
           <div class="ops-table-wrap">
             <table class="ops-table">
-              <thead><tr><th>#</th><th>CLIENTE</th><th>VENDEDORA</th><th>ÁREAS PEND.</th><th>REMIDIÓ</th><th>FECHA REMEDICIÓN</th><th>OBS</th><th>ACCIONES</th></tr></thead>
-              <tbody id="nopsFolderBody"><tr><td colspan="8" style="text-align:center;padding:24px;color:#2d3f5a;">Sin registros</td></tr></tbody>
+              <thead><tr>
+                <th>#</th>
+                <th>CLIENTE</th>
+                <th>VENDEDORA</th>
+                <th>CIUDAD</th>
+                <th>ÁREAS</th>
+                <th>ESTADO</th>
+                <th>FECHA EST.</th>
+                <th>ACCIÓN</th>
+                <th>ELIMINAR</th>
+              </tr></thead>
+              <tbody id="vtExpOpsBody">
+                <tr><td colspan="9" style="text-align:center;padding:32px;color:#2d3f5a;">Cargando expedientes de Ventas...</td></tr>
+              </tbody>
             </table>
           </div>
         </div>
@@ -2269,6 +2495,29 @@
       </div>
     </div>
 
+    <!-- ── LISTOS PARA PLANIFICAR ── -->
+    <div id="planifListosWrap" style="background:linear-gradient(135deg,rgba(255,215,0,.06),rgba(0,220,200,.04));border:1px solid rgba(255,215,0,.3);border-radius:14px;padding:18px;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+        <div>
+          <div style="font-size:9px;letter-spacing:2px;color:#ffd700;font-weight:700;margin-bottom:3px;">COLA DE PLANIFICACIÓN</div>
+          <div style="font-size:16px;font-weight:800;color:#f9fafb;">Listos para Planificar</div>
+          <div style="font-size:10px;color:var(--sub);margin-top:2px;">Clientes confirmados por Producción — asígnales fecha e instalador</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span id="planifListosCount" style="background:rgba(255,215,0,.15);color:#ffd700;border:1px solid rgba(255,215,0,.3);border-radius:20px;padding:4px 14px;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;">0 pendientes</span>
+          <!-- ── BOTÓN AGREGAR CLIENTE CONFIRMADO MANUAL ── -->
+          <button onclick="opsAbrirModalClienteConfirmado()"
+            style="background:linear-gradient(135deg,rgba(255,215,0,.2),rgba(0,220,200,.1));color:#ffd700;border:1px solid rgba(255,215,0,.5);padding:7px 14px;border-radius:9px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:.5px;white-space:nowrap;transition:all .2s;display:flex;align-items:center;gap:6px;"
+            onmouseover="this.style.background='rgba(255,215,0,.32)'" onmouseout="this.style.background='linear-gradient(135deg,rgba(255,215,0,.2),rgba(0,220,200,.1))'">
+            ＋ Agregar Cliente
+          </button>
+        </div>
+      </div>
+      <div id="planifListosBody">
+        <div style="text-align:center;padding:30px;color:#2d3f5a;font-size:11px;">No hay clientes pendientes de planificar</div>
+      </div>
+    </div>
+
     <!-- ── GRID SEMANAL ── -->
     <div style="background:var(--card);border:1px solid rgba(0,220,200,.18);border-radius:14px;overflow:hidden;margin-bottom:14px;">
       <div id="planifGridWrap" style="overflow-x:auto;">
@@ -2278,13 +2527,54 @@
     </div>
 
     <!-- ── LEYENDA ── -->
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:0 4px;margin-bottom:4px;">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:0 4px;margin-bottom:14px;">
       <div style="display:flex;align-items:center;gap:5px;"><div style="width:10px;height:10px;border-radius:3px;background:rgba(0,220,200,.25);border:1px solid rgba(0,220,200,.5);"></div><span style="color:var(--sub);font-size:9px;letter-spacing:.5px;">CON PROYECTO</span></div>
       <div style="display:flex;align-items:center;gap:5px;"><div style="width:10px;height:10px;border-radius:3px;background:rgba(255,107,53,.15);border:1px solid rgba(255,107,53,.4);"></div><span style="color:var(--sub);font-size:9px;letter-spacing:.5px;">HOY</span></div>
       <div style="display:flex;align-items:center;gap:5px;"><div style="width:10px;height:10px;border-radius:3px;background:rgba(255,255,255,.03);border:1px solid var(--border);"></div><span style="color:var(--sub);font-size:9px;letter-spacing:.5px;">VACÍO — clic para asignar</span></div>
       <span style="color:var(--sub);font-size:9px;margin-left:auto;letter-spacing:.3px;">Doble clic en el nombre del instalador para editar</span>
     </div>
-  </div>
+
+    <!-- ── AGENDA DE CLIENTES PLANIFICADOS ── -->
+    <div style="background:var(--card);border:1px solid rgba(255,215,0,.2);border-radius:14px;overflow:hidden;margin-bottom:14px;">
+      <div style="padding:14px 18px;border-bottom:1px solid rgba(255,215,0,.12);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div>
+          <div style="font-size:9px;letter-spacing:2px;color:#ffd700;font-weight:700;margin-bottom:2px;">AGENDA DE INSTALACIONES</div>
+          <div style="font-size:14px;font-weight:700;color:#f9fafb;">Clientes Planificados</div>
+          <div style="font-size:10px;color:var(--sub);margin-top:2px;">Desde aquí puedes reprogramar o devolver un cliente a la cola</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <input id="planifAgendaSearch" placeholder="Buscar cliente..." oninput="if(typeof planifRenderAgenda==='function')planifRenderAgenda()"
+            style="background:#060a10;border:1px solid #1e2d40;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:11px;padding:7px 12px;border-radius:8px;outline:none;width:160px;">
+          <select id="planifAgendaFilter" onchange="if(typeof planifRenderAgenda==='function')planifRenderAgenda()"
+            style="background:#060a10;border:1px solid #1e2d40;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:10px;padding:7px 10px;border-radius:8px;outline:none;cursor:pointer;">
+            <option value="">Todos los estados</option>
+            <option value="planificado">📋 Planificado</option>
+            <option value="instalacion_en_proceso">🔧 En proceso</option>
+            <option value="terminado">✅ Terminado</option>
+            <option value="reprogramado">🔄 Reprogramado</option>
+          </select>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;">
+          <thead>
+            <tr style="background:#0d1526;">
+              <th style="padding:10px 12px;text-align:left;color:#4b5563;letter-spacing:1px;font-weight:700;border-bottom:1px solid #1e2d40;white-space:nowrap;">CLIENTE</th>
+              <th style="padding:10px 12px;text-align:left;color:#4b5563;letter-spacing:1px;font-weight:700;border-bottom:1px solid #1e2d40;">INSTALADOR</th>
+              <th style="padding:10px 12px;text-align:left;color:#4b5563;letter-spacing:1px;font-weight:700;border-bottom:1px solid #1e2d40;white-space:nowrap;">FECHA</th>
+              <th style="padding:10px 12px;text-align:left;color:#4b5563;letter-spacing:1px;font-weight:700;border-bottom:1px solid #1e2d40;">ESTADO</th>
+              <th style="padding:10px 12px;text-align:left;color:#4b5563;letter-spacing:1px;font-weight:700;border-bottom:1px solid #1e2d40;">COMENTARIO</th>
+              <th style="padding:10px 12px;text-align:center;color:#4b5563;letter-spacing:1px;font-weight:700;border-bottom:1px solid #1e2d40;white-space:nowrap;">ACCIONES</th>
+            </tr>
+          </thead>
+          <tbody id="planifAgendaBody">
+            <tr><td colspan="6" style="text-align:center;padding:40px;color:#2d3f5a;font-family:'Space Mono',monospace;font-size:11px;">Cargando agenda...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- fin ops_planif -->
 
   <!-- ── MODAL: GESTIONAR INSTALADORES ── -->
   <div id="planifModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);z-index:9000;align-items:center;justify-content:center;">
@@ -2312,7 +2602,7 @@
 
   <!-- ── MODAL: EDITAR CELDA ── -->
   <div id="planifCeldaModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:9100;align-items:center;justify-content:center;">
-    <div style="background:#0d1526;border:1px solid rgba(255,107,53,.35);border-radius:16px;padding:24px;width:380px;max-width:90vw;box-shadow:0 20px 50px rgba(0,0,0,.5);">
+    <div style="background:#0d1526;border:1px solid rgba(255,107,53,.35);border-radius:16px;padding:24px;width:420px;max-width:90vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 50px rgba(0,0,0,.5);">
       <div id="planifCeldaHeader" style="margin-bottom:16px;">
         <div style="font-size:9px;letter-spacing:2px;color:#ff6b35;font-weight:700;margin-bottom:3px;">ASIGNAR TRABAJO</div>
         <div id="planifCeldaTitle" style="font-size:14px;font-weight:800;color:#f9fafb;"></div>
@@ -2320,9 +2610,28 @@
       <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px;">
         <div>
           <label style="font-size:9px;letter-spacing:1.5px;color:var(--sub);font-weight:700;display:block;margin-bottom:5px;">📍 PROYECTO / CLIENTE</label>
-          <input id="planifCeldaProyecto" type="text" placeholder="Nombre del proyecto..."
+          <select id="planifCeldaProyecto"
             style="width:100%;box-sizing:border-box;background:#0a0e1a;border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:11px;padding:9px 12px;border-radius:9px;outline:none;transition:border .2s;"
             onfocus="this.style.borderColor='#ff6b35'" onblur="this.style.borderColor='var(--border)'">
+            <option value="">— Selecciona cliente listo —</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:9px;letter-spacing:1.5px;color:var(--sub);font-weight:700;display:block;margin-bottom:5px;">📅 FECHA DE INSTALACIÓN</label>
+          <input id="planifCeldaFechaInst" type="date"
+            style="width:100%;box-sizing:border-box;background:#0a0e1a;border:1px solid var(--border);color:#ffd700;font-family:'Space Mono',monospace;font-size:11px;padding:9px 12px;border-radius:9px;outline:none;transition:border .2s;"
+            onfocus="this.style.borderColor='#ffd700'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+        <div>
+          <label style="font-size:9px;letter-spacing:1.5px;color:var(--sub);font-weight:700;display:block;margin-bottom:5px;">🏷 ESTADO INSTALACIÓN</label>
+          <select id="planifCeldaEstado"
+            style="width:100%;box-sizing:border-box;background:#0a0e1a;border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:11px;padding:9px 12px;border-radius:9px;outline:none;transition:border .2s;"
+            onfocus="this.style.borderColor='#00dcc8'" onblur="this.style.borderColor='var(--border)'">
+            <option value="planificado">📋 Planificado</option>
+            <option value="instalacion_en_proceso">🔧 Instalación en proceso</option>
+            <option value="terminado">✅ Terminado</option>
+            <option value="reprogramado">🔄 Reprogramado</option>
+          </select>
         </div>
         <div>
           <label style="font-size:9px;letter-spacing:1.5px;color:var(--sub);font-weight:700;display:block;margin-bottom:5px;">💬 COMENTARIO / ACTIVIDAD</label>
@@ -2338,6 +2647,45 @@
           style="background:rgba(255,62,62,.1);color:#fb7185;border:1px solid rgba(255,62,62,.3);padding:10px 14px;border-radius:10px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;">🗑</button>
         <button onclick="planifCerrarCeldaModal()"
           style="background:transparent;color:var(--sub);border:1px solid var(--border);padding:10px 14px;border-radius:10px;font-family:'Space Mono',monospace;font-size:10px;cursor:pointer;">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ MODAL: ASIGNAR FECHA DESDE LISTA ══ -->
+  <div id="planifAsignarModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);z-index:9200;align-items:center;justify-content:center;">
+    <div style="background:#0d1526;border:1px solid rgba(255,215,0,.4);border-radius:18px;padding:28px;width:440px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,.5);">
+      <div style="margin-bottom:20px;">
+        <div style="font-size:9px;letter-spacing:2px;color:#ffd700;font-weight:700;margin-bottom:4px;">ASIGNAR A PLANIFICACIÓN</div>
+        <div id="planifAsignarCliente" style="font-size:17px;font-weight:800;color:#f9fafb;"></div>
+        <div id="planifAsignarSub" style="font-size:10px;color:#4b5563;margin-top:3px;"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px;">
+        <div>
+          <label style="font-size:9px;letter-spacing:1.5px;color:var(--sub);font-weight:700;display:block;margin-bottom:5px;">👷 INSTALADOR</label>
+          <select id="planifAsignarInst"
+            style="width:100%;box-sizing:border-box;background:#0a0e1a;border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:11px;padding:9px 12px;border-radius:9px;outline:none;transition:border .2s;"
+            onfocus="this.style.borderColor='#ffd700'" onblur="this.style.borderColor='var(--border)'">
+            <option value="">— Selecciona instalador —</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:9px;letter-spacing:1.5px;color:var(--sub);font-weight:700;display:block;margin-bottom:5px;">📅 FECHA DE INSTALACIÓN</label>
+          <input id="planifAsignarFecha" type="date"
+            style="width:100%;box-sizing:border-box;background:#0a0e1a;border:1px solid var(--border);color:#ffd700;font-family:'Space Mono',monospace;font-size:13px;padding:9px 12px;border-radius:9px;outline:none;transition:border .2s;"
+            onfocus="this.style.borderColor='#ffd700'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+        <div>
+          <label style="font-size:9px;letter-spacing:1.5px;color:var(--sub);font-weight:700;display:block;margin-bottom:5px;">💬 COMENTARIO / ÁREAS</label>
+          <textarea id="planifAsignarComentario" rows="2" placeholder="Áreas a instalar, notas..."
+            style="width:100%;box-sizing:border-box;background:#0a0e1a;border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:11px;padding:9px 12px;border-radius:9px;outline:none;resize:vertical;transition:border .2s;"
+            onfocus="this.style.borderColor='#ffd700'" onblur="this.style.borderColor='var(--border)'"></textarea>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="planifAsignarGuardar()"
+          style="flex:1;background:linear-gradient(135deg,rgba(255,215,0,.25),rgba(0,220,200,.15));color:#ffd700;border:1px solid rgba(255,215,0,.5);padding:11px;border-radius:10px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:.5px;">📅 GUARDAR EN PLANIFICACIÓN</button>
+        <button onclick="document.getElementById('planifAsignarModal').style.display='none'"
+          style="background:transparent;color:var(--sub);border:1px solid var(--border);padding:11px 16px;border-radius:10px;font-family:'Space Mono',monospace;font-size:10px;cursor:pointer;">✕</button>
       </div>
     </div>
   </div>
@@ -2540,6 +2888,284 @@
 </div><!-- /ops-shell -->
 
 </div><!-- fin moduloOperaciones -->
+
+<!-- ═══════════════════════════════════════════════════
+     MÓDULO VENTAS
+═══════════════════════════════════════════════════ -->
+<style>
+#moduloVentas {
+  position:fixed;inset:0;overflow:hidden;
+  background:#080a0f;z-index:10;display:none;
+  font-family:'Space Mono',monospace;
+}
+.vt-root { display:flex;width:100%;height:100%;overflow:hidden;min-height:0; }
+
+/* Sidebar */
+.vt-sidebar {
+  width:48px;background:#060810;border-right:1px solid #141e30;
+  display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:8px;flex-shrink:0;
+}
+.vt-sico {
+  width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:#2d3f5a;transition:all .2s;
+}
+.vt-sico:hover { background:rgba(200,169,110,.12);color:#c8a96e; }
+.vt-sico.active { background:rgba(200,169,110,.18);color:#c8a96e; }
+.vt-sdiv { width:24px;height:1px;background:#141e30;margin:4px 0; }
+
+/* Main area */
+.vt-main { flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden; }
+
+/* Topbar */
+.vt-topbar {
+  height:52px;background:#060810;border-bottom:1px solid #141e30;
+  display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;
+}
+.vt-topbar-title {
+  font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;
+  letter-spacing:.15em;color:#f0ece4;text-transform:uppercase;
+}
+.vt-topbar-sub { font-size:9px;color:#2d3f5a;letter-spacing:.15em;text-transform:uppercase;margin-left:2px; }
+
+/* Nav tabs */
+.vt-nav {
+  display:flex;align-items:center;gap:6px;padding:10px 16px;
+  background:#060810;border-bottom:1px solid #141e30;flex-shrink:0;overflow-x:auto;
+}
+.vt-ntab {
+  padding:6px 14px;border-radius:8px;border:1px solid rgba(200,169,110,.25);
+  cursor:pointer;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;
+  transition:all .2s;background:transparent;color:rgba(200,169,110,.5);white-space:nowrap;
+  position:relative;
+}
+.vt-ntab.active { background:rgba(200,169,110,.18);color:#c8a96e;border-color:rgba(200,169,110,.5); }
+.vt-ntab:hover:not(.active) { border-color:rgba(200,169,110,.4);color:rgba(200,169,110,.8); }
+.vt-ntab .vt-badge {
+  position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;
+  border-radius:50%;width:16px;height:16px;font-size:8px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+}
+
+/* Content */
+.vt-content { flex:1;overflow-y:auto;padding:16px;min-height:0; }
+.vt-tab-pane { display:none; }
+.vt-tab-pane.active { display:block; }
+
+/* Cards */
+.vt-card {
+  background:#0d1117;border:1px solid #1e2d40;border-radius:14px;
+  padding:16px;margin-bottom:12px;
+}
+.vt-card-header {
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:14px;flex-wrap:wrap;gap:8px;
+}
+.vt-card-title { font-size:12px;font-weight:700;color:#f9fafb;letter-spacing:.8px; }
+
+/* Expediente item */
+.vt-exp-item {
+  background:#0a0e18;border:1px solid #1a2535;border-radius:10px;
+  padding:12px 14px;margin-bottom:8px;cursor:default;
+  transition:border-color .2s;
+}
+.vt-exp-item:hover { border-color:rgba(200,169,110,.3); }
+.vt-exp-item .exp-cliente { font-size:13px;font-weight:700;color:#f0ece4;margin-bottom:3px; }
+.vt-exp-item .exp-meta { font-size:10px;color:#4b5563;letter-spacing:.5px; }
+.vt-exp-item .exp-actions { display:flex;gap:6px;margin-top:10px;flex-wrap:wrap; }
+.vt-exp-item .exp-status {
+  display:inline-block;padding:2px 10px;border-radius:20px;font-size:9px;font-weight:700;
+  letter-spacing:.8px;text-transform:uppercase;margin-left:6px;
+}
+.status-pendiente { background:rgba(255,215,0,.12);color:#ffd700; }
+.status-remedido  { background:rgba(0,229,255,.12);color:#00e5ff; }
+.status-produccion{ background:rgba(0,191,255,.12);color:#00bfff; }
+.status-logistica { background:rgba(168,255,62,.12);color:#a8ff3e; }
+
+/* Form inside modal */
+.vt-form-group { display:flex;flex-direction:column;gap:5px;margin-bottom:12px; }
+.vt-form-group label { color:#6b7280;font-size:10px;letter-spacing:1px;text-transform:uppercase; }
+.vt-form-group input,.vt-form-group select,.vt-form-group textarea {
+  background:#060a10;border:1px solid #1e2d40;color:#e5e7eb;
+  font-family:'Space Mono',monospace;font-size:12px;padding:9px 12px;border-radius:8px;outline:none;
+}
+.vt-form-group input:focus,.vt-form-group select:focus,.vt-form-group textarea:focus { border-color:#c8a96e; }
+.vt-form-group textarea { resize:vertical;min-height:60px; }
+
+/* Flow status indicator */
+.vt-flow-bar {
+  display:flex;align-items:center;gap:0;margin-bottom:20px;overflow-x:auto;padding:2px;
+}
+.vt-flow-step {
+  display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;min-width:80px;
+}
+.vt-flow-circle {
+  width:36px;height:36px;border-radius:50%;border:2px solid #1e2d40;
+  display:flex;align-items:center;justify-content:center;font-size:14px;
+  background:#0d1117;position:relative;z-index:1;
+}
+.vt-flow-circle.done { border-color:#a8ff3e;background:rgba(168,255,62,.1); }
+.vt-flow-circle.active { border-color:#c8a96e;background:rgba(200,169,110,.1);box-shadow:0 0 0 4px rgba(200,169,110,.15); }
+.vt-flow-label { font-size:9px;color:#4b5563;letter-spacing:.5px;text-align:center;white-space:nowrap; }
+.vt-flow-label.active { color:#c8a96e; }
+.vt-flow-label.done { color:#a8ff3e; }
+.vt-flow-line {
+  flex:1;height:2px;background:#1e2d40;margin:0 -2px;margin-bottom:18px;min-width:20px;
+}
+.vt-flow-line.done { background:#a8ff3e; }
+</style>
+
+<div id="moduloVentas">
+<div class="vt-root">
+
+  <!-- Sidebar -->
+  <div class="vt-sidebar">
+    <div class="vt-sico active" title="Ventas">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="5.5" r="2.5" stroke="currentColor" stroke-width="1.3"/><path d="M3 13c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M11 2l2-2M13 2h-2v2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="vt-sdiv"></div>
+    <div class="vt-sico" title="Inicio" onclick="volverPortada()">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1.5 6.5L7.5 1.5L13.5 6.5V13.5H9.5V9.5H5.5V13.5H1.5V6.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="vt-main">
+
+    <!-- Topbar -->
+    <div class="vt-topbar">
+      <div>
+        <div class="vt-topbar-title">Ventas</div>
+        <div class="vt-topbar-sub">SDC Interiors · Gestión de Expedientes</div>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:10px;">
+        <button onclick="vtAbrirNuevoExpediente()" style="background:rgba(200,169,110,.15);color:#c8a96e;border:1px solid rgba(200,169,110,.4);border-radius:8px;padding:7px 14px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:.5px;">+ Nuevo Expediente</button>
+      </div>
+    </div>
+
+    <!-- Nav tabs -->
+    <div class="vt-nav">
+      <div class="vt-ntab active" id="vtTabBtn_expedientes" onclick="vtShowTab('expedientes')">
+        📋 Expedientes
+        <span class="vt-badge" id="vtBadge_expedientes" style="display:none">0</span>
+      </div>
+      <div class="vt-ntab" id="vtTabBtn_remedicion" onclick="vtShowTab('remedicion')">
+        📐 Por Remedir
+        <span class="vt-badge" id="vtBadge_remedicion" style="display:none">0</span>
+      </div>
+      <div class="vt-ntab" id="vtTabBtn_listos" onclick="vtShowTab('listos')">
+        ✅ Listos p/ Producción
+        <span class="vt-badge" id="vtBadge_listos" style="display:none">0</span>
+      </div>
+      <div class="vt-ntab" id="vtTabBtn_seguimiento" onclick="vtShowTab('seguimiento')">
+        📊 Seguimiento
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="vt-content">
+
+      <!-- === TAB: EXPEDIENTES === -->
+      <div class="vt-tab-pane active" id="vtTab_expedientes">
+        <div class="vt-card">
+          <div class="vt-card-header">
+            <div class="vt-card-title">📋 Todos los Expedientes</div>
+            <input type="text" id="vtSearchExp" placeholder="Buscar cliente..." oninput="vtRenderExpedientes()"
+              style="background:#060a10;border:1px solid #1e2d40;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:11px;padding:7px 12px;border-radius:8px;outline:none;width:200px;">
+          </div>
+          <div id="vtListaExpedientes">
+            <div style="text-align:center;padding:40px;color:#2d3f5a;font-size:11px;">No hay expedientes aún. Crea uno con "+ Nuevo Expediente"</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- === TAB: REMEDICIÓN === -->
+      <div class="vt-tab-pane" id="vtTab_remedicion">
+        <div class="vt-card">
+          <div class="vt-card-header">
+            <div class="vt-card-title">📐 Expedientes Remedidos — Listos para Enviar a Producción</div>
+          </div>
+          <div style="background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.2);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:10px;color:#00e5ff;letter-spacing:.5px;">
+            ℹ️ Estos expedientes fueron medidos por Operaciones y están listos. Revisa y envía a Producción.
+          </div>
+          <div id="vtListaRemedidos">
+            <div style="text-align:center;padding:40px;color:#2d3f5a;font-size:11px;">Sin expedientes remedidos pendientes</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- === TAB: LISTOS === -->
+      <div class="vt-tab-pane" id="vtTab_listos">
+        <div class="vt-card">
+          <div class="vt-card-header">
+            <div class="vt-card-title">✅ Expedientes Aprobados — Enviados a Producción</div>
+          </div>
+          <div id="vtListaListos">
+            <div style="text-align:center;padding:40px;color:#2d3f5a;font-size:11px;">No hay expedientes en esta etapa</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- === TAB: SEGUIMIENTO === -->
+      <div class="vt-tab-pane" id="vtTab_seguimiento">
+        <div class="vt-card">
+          <div class="vt-card-header">
+            <div class="vt-card-title">📊 Seguimiento de Proyectos — Flujo Completo</div>
+          </div>
+          <div id="vtListaSeguimiento">
+            <div style="text-align:center;padding:40px;color:#2d3f5a;font-size:11px;">No hay proyectos en seguimiento</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- fin vt-content -->
+  </div><!-- fin vt-main -->
+</div><!-- fin vt-root -->
+</div><!-- fin moduloVentas -->
+
+<!-- ── Modal Nuevo Expediente (Ventas) ── -->
+<div id="vtModalExpediente" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10000;align-items:center;justify-content:center;">
+  <div style="background:#0d1117;border:1px solid #1e2d40;border-radius:16px;padding:28px;width:90%;max-width:520px;max-height:85vh;overflow-y:auto;">
+    <div style="font-size:14px;font-weight:700;color:#f9fafb;margin-bottom:20px;letter-spacing:.8px;">📋 NUEVO EXPEDIENTE</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="vt-form-group" style="grid-column:1/-1">
+        <label>Nombre del Cliente *</label>
+        <input type="text" id="vtExpCliente" placeholder="Ej: María García">
+      </div>
+      <div class="vt-form-group">
+        <label>Ciudad</label>
+        <input type="text" id="vtExpCiudad" placeholder="Ej: Tegucigalpa">
+      </div>
+      <div class="vt-form-group">
+        <label>Teléfono</label>
+        <input type="text" id="vtExpTel" placeholder="Ej: +504 9999-9999">
+      </div>
+      <div class="vt-form-group" style="grid-column:1/-1">
+        <label>Áreas Vendidas</label>
+        <input type="text" id="vtExpAreas" placeholder="Ej: Cocina, Closet Principal, Baño">
+      </div>
+      <div class="vt-form-group">
+        <label>Vendedora</label>
+        <input type="text" id="vtExpVendedora" placeholder="Nombre de la vendedora">
+      </div>
+      <div class="vt-form-group">
+        <label>Fecha de Venta</label>
+        <input type="date" id="vtExpFecha">
+      </div>
+      <div class="vt-form-group" style="grid-column:1/-1">
+        <label>Notas / Observaciones</label>
+        <textarea id="vtExpNotas" rows="3" placeholder="Detalles adicionales del proyecto..."></textarea>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">
+      <button onclick="document.getElementById('vtModalExpediente').style.display='none'"
+        style="background:transparent;color:#6b7280;border:1px solid #1e2d40;border-radius:8px;padding:9px 18px;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;">Cancelar</button>
+      <button onclick="vtGuardarExpediente()"
+        style="background:rgba(200,169,110,.15);color:#c8a96e;border:1px solid rgba(200,169,110,.4);border-radius:8px;padding:9px 18px;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;">Guardar Expediente →</button>
+    </div>
+  </div>
+</div>
 
 <!-- ╔══════════════════════════════════════════════════════╗
      ║  MÓDULO: PLANIFICACIÓN DE INSTALACIÓN               ║
@@ -7074,6 +7700,8 @@ function loadOpsData(){
       if(!window.OPS_DATA.repdiario) window.OPS_DATA.repdiario=[];
       try{ localStorage.setItem('ops_v1', JSON.stringify(window.OPS_DATA)); }catch(e){}
       nopsRefreshActive();
+      // Auto-transición: verificar si hay instalaciones cuya fecha ya llegó
+      if(typeof checkInstallationsForToday === 'function') setTimeout(()=>checkInstallationsForToday(true), 600);
     });
   }
 }
@@ -7129,7 +7757,7 @@ function showOpsPanel(id, btn){
     semana: renderNopsSemana,
     reporte: renderNopsReporte,
     rendimiento: renderNopsRendimiento,
-    planif: function(){ if(typeof renderPlanif==='function') renderPlanif(); },
+    planif: function(){ if(typeof renderPlanif==='function') renderPlanif(); if(typeof planifRenderAgenda==='function') setTimeout(planifRenderAgenda,100); },
     repdiario: function(){ if(typeof renderRepDiario==='function') renderRepDiario(); }
   };
   if(renders[id]) renders[id]();
@@ -7295,9 +7923,47 @@ function renderNopsRemedir(){
   const tb=document.getElementById('nopsRemedirBody'); if(!tb) return;
   tb.innerHTML=!rows.length?'<tr><td colspan="7" style="text-align:center;padding:24px;color:#2d3f5a;">Sin registros</td></tr>':rows.map((r,i)=>{
     const realI=D.remedir.indexOf(r);
-    return `<tr><td style="color:#6b7280;">${i+1}</td><td style="color:#f9fafb;font-weight:700;">${r.cliente||'—'}</td><td style="color:#a8ff3e;">${r.vendedora||'—'}</td><td style="color:#ff6b35;">${r.supervisor||'—'}</td><td style="color:#9ca3af;">${r.ubicacion||'—'}</td><td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td><td style="white-space:nowrap;"><button class="ops-btn-edit" onclick="editOps('remedir',${realI})">✏</button> <button class="ops-btn-del" onclick="deleteOps('remedir',${realI})">✕</button></td></tr>`;
+    const fromVentas = !!r._vtId;
+    const ventasBadge = fromVentas
+      ? `<span style="background:rgba(200,169,110,.12);color:#c8a96e;border:1px solid rgba(200,169,110,.3);border-radius:20px;padding:2px 8px;font-size:8px;font-weight:700;margin-left:4px;">VENTAS</span>`
+      : '';
+    const devolverBtn = fromVentas
+      ? `<button onclick="opsRemedirDevolver(${realI})" style="background:rgba(200,169,110,.15);color:#c8a96e;border:1px solid rgba(200,169,110,.4);border-radius:6px;padding:3px 10px;font-family:'Space Mono',monospace;font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap;margin-right:4px;" title="Marcar como remedido y devolver a Ventas">✅ Devolver a Ventas</button>`
+      : '';
+    return `<tr>
+      <td style="color:#6b7280;">${i+1}</td>
+      <td style="color:#f9fafb;font-weight:700;">${r.cliente||'—'}${ventasBadge}</td>
+      <td style="color:#a8ff3e;">${r.vendedora||r.areas||'—'}</td>
+      <td style="color:#ff6b35;">${r.supervisor||'—'}</td>
+      <td style="color:#9ca3af;">${r.ubicacion||r.ciudad||'—'}</td>
+      <td style="font-size:10px;color:#6b7280;">${r.obs||'—'}</td>
+      <td style="white-space:nowrap;">${devolverBtn}<button class="ops-btn-edit" onclick="editOps('remedir',${realI})">✏</button> <button class="ops-btn-del" onclick="deleteOps('remedir',${realI})">✕</button></td>
+    </tr>`;
   }).join('');
 }
+
+// ── Devolver expediente remedido a Ventas ──────────────
+window.opsRemedirDevolver = function(idx) {
+  const D = window.OPS_DATA;
+  const r = (D.remedir||[])[idx];
+  if(!r || !r._vtId) return;
+
+  // Pedir observaciones
+  const obs = prompt('Observaciones de la remedición para Ventas (opcional):','') || '';
+
+  // Notificar a Ventas
+  if(window.vtRecibirRemedido) {
+    window.vtRecibirRemedido(r._vtId, obs);
+  }
+
+  // Quitar de la lista remedir de Ops
+  D.remedir.splice(idx, 1);
+  if(window._fbSaveOps) window._fbSaveOps(D);
+  renderNopsRemedir();
+  nopsUpdatePills();
+  if(window.renderVtExpOps) setTimeout(window.renderVtExpOps, 100);
+  toast('📐 Expediente devuelto a Ventas como remedido');
+};
 
 // ── Render Folder ─────────────────────────────────────
 function renderNopsFolder(){
@@ -8016,9 +8682,24 @@ function renderPlanif(){
         onmouseout="this.style.background='${bg}'">`;
 
       if(tieneProyecto){
-        html += `<div style="font-family:'Space Mono',monospace;font-size:10px;font-weight:700;color:${isToday?'#ff6b35':'#00dcc8'};line-height:1.3;word-break:break-word;">${cell.proyecto}</div>`;
+        // Estado badge
+        const est = cell.estado_instalacion || 'planificado';
+        const estMap = {
+          planificado:           { label:'Planificado',       color:'rgba(0,220,200,.7)',  bg:'rgba(0,220,200,.1)'  },
+          instalacion_en_proceso:{ label:'En instalación',    color:'#ff6b35',             bg:'rgba(255,107,53,.15)'},
+          terminado:             { label:'Terminado',         color:'#a8ff3e',             bg:'rgba(168,255,62,.1)' },
+          reprogramado:          { label:'Reprogramado',      color:'#ffd700',             bg:'rgba(255,215,0,.1)'  }
+        };
+        const em = estMap[est] || estMap.planificado;
+        const fechaStr = cell.fecha_instalacion ? (() => { const [yy,mm,dd]=cell.fecha_instalacion.split('-'); return `${dd}/${mm}/${yy.slice(2)}`; })() : '';
+
+        html += `<div style="font-family:'Space Mono',monospace;font-size:10px;font-weight:700;color:${isToday?'#ff6b35':'#00dcc8'};line-height:1.3;word-break:break-word;margin-bottom:4px;">${cell.proyecto}</div>`;
+        if(fechaStr){
+          html += `<div style="font-size:9px;color:#ffd700;margin-bottom:3px;">📅 ${fechaStr}</div>`;
+        }
+        html += `<div style="display:inline-block;background:${em.bg};color:${em.color};border-radius:4px;padding:2px 7px;font-size:8px;font-weight:700;letter-spacing:.5px;margin-bottom:3px;">${em.label}</div>`;
         if(cell.comentario){
-          html += `<div style="font-size:9px;color:var(--sub);margin-top:4px;line-height:1.4;word-break:break-word;">${cell.comentario}</div>`;
+          html += `<div style="font-size:9px;color:var(--sub);margin-top:3px;line-height:1.4;word-break:break-word;">${cell.comentario}</div>`;
         }
       } else {
         html += `<div style="color:rgba(255,255,255,.1);font-size:9px;text-align:center;padding:4px 0;letter-spacing:.5px;">+ asignar</div>`;
@@ -8046,13 +8727,28 @@ function planifAbrirCelda(nombre, iso){
   const diaIdx = dates.indexOf(iso);
   const diaLabel = diaIdx>=0 ? PLANIF_DIAS_LABEL[diaIdx] : iso;
 
-  document.getElementById('planifCeldaTitle').textContent = `${nombre} · ${diaLabel} ${d}/${m}/${y.slice(2)}`;
-  document.getElementById('planifCeldaProyecto').value   = cell.proyecto   || '';
-  document.getElementById('planifCeldaComentario').value = cell.comentario || '';
+  document.getElementById('planifCeldaTitle').textContent    = `${nombre} · ${diaLabel} ${d}/${m}/${y.slice(2)}`;
+  document.getElementById('planifCeldaComentario').value     = cell.comentario         || '';
+  document.getElementById('planifCeldaFechaInst').value      = cell.fecha_instalacion  || iso;
+  document.getElementById('planifCeldaEstado').value         = cell.estado_instalacion || 'planificado';
+
+  // Poblar dropdown con clientes listos para planificar
+  const sel = document.getElementById('planifCeldaProyecto');
+  if(sel) {
+    const exps = (window.VENTAS_DATA && window.VENTAS_DATA.expedientes) || [];
+    const listos = exps.filter(e => e.status === 'logistica' && !e.planif_asignado);
+    sel.innerHTML = '<option value="">— Selecciona cliente listo —</option>' +
+      listos.map(e => `<option value="${e.cliente||''}" data-expid="${e.id||''}">${e.cliente||'Sin nombre'}${e.ciudad?' · '+e.ciudad:''}</option>`).join('');
+    // Si la celda ya tiene un proyecto asignado, añadir esa opción y seleccionarla
+    if(cell.proyecto) {
+      const exists = [...sel.options].some(o => o.value === cell.proyecto);
+      if(!exists) sel.add(new Option(cell.proyecto + ' (asignado)', cell.proyecto));
+      sel.value = cell.proyecto;
+    }
+  }
 
   const modal = document.getElementById('planifCeldaModal');
   modal.style.display='flex';
-  setTimeout(()=>document.getElementById('planifCeldaProyecto').focus(),100);
 }
 
 /* ── Guardar celda ── */
@@ -8064,13 +8760,42 @@ function planifGuardarCelda(){
   const semKey = planifSemKey(dates);
   const planif = window.OPS_DATA.planif;
 
-  if(!planif.semanas[semKey])                  planif.semanas[semKey]={};
-  if(!planif.semanas[semKey][nombre])          planif.semanas[semKey][nombre]={};
+  if(!planif.semanas[semKey])         planif.semanas[semKey]={};
+  if(!planif.semanas[semKey][nombre]) planif.semanas[semKey][nombre]={};
+
+  const sel               = document.getElementById('planifCeldaProyecto');
+  const proyecto          = sel ? sel.value.trim() : '';
+  // Obtener el expId del option seleccionado
+  const selOpt            = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex] : null;
+  const _expId            = selOpt ? (selOpt.dataset.expid || null) : null;
+  const comentario        = document.getElementById('planifCeldaComentario').value.trim();
+  const fecha_instalacion = document.getElementById('planifCeldaFechaInst').value;
+  const estado_instalacion= proyecto ? document.getElementById('planifCeldaEstado').value : 'planificado';
 
   planif.semanas[semKey][nombre][iso] = {
-    proyecto:   document.getElementById('planifCeldaProyecto').value.trim(),
-    comentario: document.getElementById('planifCeldaComentario').value.trim()
+    proyecto,
+    comentario,
+    fecha_instalacion,
+    estado_instalacion,
+    instalador: nombre,
+    _semKey: semKey,
+    _iso: iso,
+    _expId: _expId || undefined
   };
+
+  // Marcar expediente como asignado en Ventas
+  if(_expId && window.VENTAS_DATA && window.VENTAS_DATA.expedientes) {
+    const exp = window.VENTAS_DATA.expedientes.find(e => e.id === _expId);
+    if(exp) {
+      exp.planif_asignado   = true;
+      exp.fecha_instalacion = fecha_instalacion;
+      exp.instalador_planif = nombre;
+      exp.historial = exp.historial || [];
+      exp.historial.push({ accion: 'Asignado a planificación — ' + nombre + ' · ' + fecha_instalacion, fecha: new Date().toLocaleDateString('es-HN') });
+      if(window._fbSaveVentas) window._fbSaveVentas(window.VENTAS_DATA);
+      if(window.planifRenderListos) window.planifRenderListos();
+    }
+  }
 
   saveOpsData();
   planifCerrarCeldaModal();
@@ -8086,6 +8811,39 @@ function planifLimpiarCelda(){
   const dates  = planifGetWeekDates(_planifWeekOffset);
   const semKey = planifSemKey(dates);
   try{
+    const cell = ((window.OPS_DATA.planif.semanas[semKey]||{})[nombre]||{})[iso];
+    const proyectoNombre = (cell ? (cell.proyecto||'') : '').toLowerCase();
+    const expId = cell ? (cell._expId||null) : null;
+
+    // Devolver expediente a "Listos para Planificar"
+    if(cell && window.VENTAS_DATA && window.VENTAS_DATA.expedientes) {
+      let exp = expId
+        ? window.VENTAS_DATA.expedientes.find(e => e.id === expId)
+        : null;
+      if(!exp && proyectoNombre)
+        exp = window.VENTAS_DATA.expedientes.find(e => (e.cliente||'').toLowerCase() === proyectoNombre);
+      if(exp) {
+        exp.planif_asignado  = false;
+        exp.fue_reprogramado = true;
+        exp.historial = exp.historial || [];
+        exp.historial.push({ accion: 'Quitado de planificación — reprogramado (' + nombre + ' · ' + iso + ')', fecha: new Date().toLocaleDateString('es-HN') });
+        if(window._fbSaveVentas) window._fbSaveVentas(window.VENTAS_DATA);
+        setTimeout(function(){ if(window.planifRenderListos) window.planifRenderListos(); }, 300);
+      }
+    }
+
+    // Quitar de Instalaciones en Proceso (búsqueda amplia, igual que planifDevolverACola)
+    if(cell && window.OPS_DATA && window.OPS_DATA.inst) {
+      for(let i = window.OPS_DATA.inst.length - 1; i >= 0; i--) {
+        const r = window.OPS_DATA.inst[i];
+        const matchPlanif = r._planifIso === iso && r._planifSem === semKey && r.instalador === nombre;
+        const matchNombre = proyectoNombre && (r.cliente||'').toLowerCase() === proyectoNombre;
+        if(matchPlanif || matchNombre) window.OPS_DATA.inst.splice(i, 1);
+      }
+      if(window.renderNopsInst)  window.renderNopsInst();
+      if(window.nopsUpdatePills) window.nopsUpdatePills();
+    }
+
     delete window.OPS_DATA.planif.semanas[semKey][nombre][iso];
   }catch(e){}
   saveOpsData();
@@ -9273,169 +10031,191 @@ document.addEventListener('DOMContentLoaded', ()=>{ setTimeout(renderNotificacio
 // ══════════════════════════════════════════════════════
 // FIN MEJORAS GLOBALES
 // ══════════════════════════════════════════════════════
-// ══════════════════════════════════════════════════════
-// SPLASH SCREEN — PORTADA
+// ISC LOGIN SYSTEM — Usuario + Contraseña → Módulo
 // ══════════════════════════════════════════════════════
 (function(){
-  function runSplash(){
-    const splash     = document.getElementById('splashScreen');
-    const intro      = document.getElementById('splashIntro');
-    const selector   = document.getElementById('splashSelector');
-    const title      = document.getElementById('splashTitle');
-    const sub        = document.getElementById('splashSub');
-    const line       = document.getElementById('splashLine');
-    const red        = document.getElementById('splashRed');
-    const selHeader  = document.getElementById('selHeader');
-    const selGrid    = document.getElementById('selGrid');
-    const selFooter  = document.getElementById('selFooter');
-    const blks       = document.querySelectorAll('.splash-block');
 
-    if(!splash) return;
+  // ── Credenciales: { usuario, contraseña, modulo, nombre, color }
+  const USERS = [
+    { id:'ventas01',    pass:'ventas2024',  modulo:'ventas',      nombre:'Ventas',      color:'#c8a96e', icon:'👤' },
+    { id:'ventas02',    pass:'ventas0202',  modulo:'ventas',      nombre:'Ventas 2',    color:'#c8a96e', icon:'👤' },
+    { id:'ops01',       pass:'ops2024',     modulo:'operaciones', nombre:'Operaciones', color:'#ff6b35', icon:'📋' },
+    { id:'prod01',      pass:'prod2024',    modulo:'produccion',  nombre:'Producción',  color:'#00bfff', icon:'⚙️' },
+    { id:'logis01',     pass:'logis2024',   modulo:'logistica',   nombre:'Logística',   color:'#22c55e', icon:'🚚' },
+    { id:'admin',       pass:'admin2024',   modulo:'ventas',      nombre:'Admin',       color:'#a855f7', icon:'🔑' }
+  ];
 
-    // ── FASE 1: mostrar intro ──
-    setTimeout(()=>{
-      intro.style.opacity = '1';
-    }, 100);
+  // ── Animación intro → login ──
+  function runIntro() {
+    const intro = document.getElementById('iscLoginIntro');
+    const panel = document.getElementById('iscLoginPanel');
+    const line  = document.getElementById('iscIntroLine');
+    const title = document.getElementById('iscIntroTitle');
+    const bar   = document.getElementById('iscIntroBar');
+    const sub   = document.getElementById('iscIntroSub');
+    if(!intro) return;
 
-    setTimeout(()=>{
-      line.style.width = '180px';
-    }, 400);
-
-    setTimeout(()=>{
-      title.style.opacity = '1';
-      title.style.transform = 'translateY(0)';
-    }, 900);
+    setTimeout(()=>{ if(line)  line.style.width='160px'; }, 300);
+    setTimeout(()=>{ if(title){ title.style.opacity='1'; title.style.transform='translateY(0)'; }}, 800);
+    setTimeout(()=>{ if(bar)   bar.style.width='50px'; }, 1400);
+    setTimeout(()=>{ if(sub)   sub.style.opacity='1'; }, 1900);
 
     setTimeout(()=>{
-      red.style.width = '60px';
-    }, 1500);
-
-    setTimeout(()=>{
-      sub.style.opacity = '1';
-    }, 2000);
-
-    // ── FASE 2: fade intro → selector ──
-    setTimeout(()=>{
-      intro.style.opacity = '0';
+      if(intro) intro.classList.add('hide');
       setTimeout(()=>{
-        intro.style.display = 'none';
-        selector.style.display = 'flex';
-        // Animar header
-        setTimeout(()=>{
-          selHeader.style.opacity = '1';
-          selHeader.style.transform = 'translateY(0)';
-        }, 80);
-        // Animar bloques en cascada
-        blks.forEach((b, i)=>{
-          setTimeout(()=>{
-            b.style.opacity = '1';
-            b.style.transform = 'translateY(0)';
-          }, 200 + i * 150);
-        });
-        // Footer
-        setTimeout(()=>{
-          selFooter.style.opacity = '1';
-        }, 800);
+        if(intro) intro.style.display='none';
+        if(panel) {
+          panel.style.opacity='1';
+          panel.style.transform='translateY(0)';
+        }
+        setTimeout(()=>{ document.getElementById('iscUserId')?.focus(); }, 200);
       }, 800);
-    }, 5000);
+    }, 4200);
   }
 
-  // Correr splash al cargar
-  if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', runSplash);
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded', runIntro);
   } else {
-    runSplash();
+    runIntro();
   }
 
-  // ── Volver a portada ──
-  window.volverPortada = function(){
-    // Ocultar todos los módulos
-    ['moduloLogistica','moduloProduccion','moduloOperaciones'].forEach(id=>{
+  // ── Login ──
+  window.iscDoLogin = function() {
+    const userId = (document.getElementById('iscUserId')?.value||'').trim().toLowerCase();
+    const pass   = (document.getElementById('iscPassField')?.value||'').trim();
+    const errEl  = document.getElementById('iscLoginErr');
+    const userField = document.getElementById('iscUserId');
+    const passField = document.getElementById('iscPassField');
+
+    const user = USERS.find(u => u.id === userId && u.pass === pass);
+
+    if(user) {
+      errEl.classList.remove('show');
+      // Animación de salida
+      const screen = document.getElementById('iscLoginScreen');
+      const panel  = document.getElementById('iscLoginPanel');
+      if(panel){ panel.style.transition='opacity .5s ease,transform .5s ease'; panel.style.opacity='0'; panel.style.transform='translateY(-16px)'; }
+      setTimeout(()=>{
+        if(screen){ screen.style.transition='opacity .5s ease'; screen.style.opacity='0'; }
+        setTimeout(()=>{
+          if(screen) screen.style.display='none';
+          // Mostrar usuario activo
+          const bar = document.getElementById('iscActiveUser');
+          if(bar){
+            document.getElementById('iscActiveUserIcon').textContent = user.icon;
+            document.getElementById('iscActiveUserName').textContent = user.nombre;
+            document.getElementById('iscActiveUserModule').textContent = user.modulo.toUpperCase();
+            bar.className = 'visible';
+            bar.style.display='flex';
+            bar.style.borderColor='rgba('+hexToRgb(user.color)+',.3)';
+          }
+          enterDashboard(user.modulo);
+        }, 500);
+      }, 300);
+    } else {
+      errEl.classList.add('show');
+      if(userField){ userField.style.borderColor='#ef4444'; }
+      if(passField){ passField.style.borderColor='#ef4444'; passField.value=''; }
+      setTimeout(()=>{
+        errEl.classList.remove('show');
+        if(userField) userField.style.borderColor='';
+        if(passField) passField.style.borderColor='';
+        passField?.focus();
+      }, 2500);
+    }
+  };
+
+  function hexToRgb(hex){
+    const r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return r ? parseInt(r[1],16)+','+parseInt(r[2],16)+','+parseInt(r[3],16) : '200,169,110';
+  }
+
+  // ── Logout ──
+  window.iscLogout = function() {
+    const screen = document.getElementById('iscLoginScreen');
+    const panel  = document.getElementById('iscLoginPanel');
+    const bar    = document.getElementById('iscActiveUser');
+
+    ['moduloLogistica','moduloProduccion','moduloOperaciones','moduloVentas'].forEach(id=>{
       const el=document.getElementById(id); if(el) el.style.display='none';
     });
-    const splash    = document.getElementById('splashScreen');
-    const intro     = document.getElementById('splashIntro');
-    const selector  = document.getElementById('splashSelector');
-    const selHeader = document.getElementById('selHeader');
-    const selFooter = document.getElementById('selFooter');
-    const blks      = document.querySelectorAll('.splash-block');
-    if(!splash) return;
 
-    // Mostrar splash directo en selector (sin intro)
-    splash.style.opacity = '0';
-    splash.style.display = 'flex';
-    splash.style.transition = 'opacity .5s ease';
+    if(bar) bar.style.display='none';
 
-    // Ocultar intro, mostrar selector
-    if(intro)    { intro.style.display = 'none'; intro.style.opacity = '0'; }
-    if(selector) { selector.style.display = 'flex'; }
+    // Reset form
+    const userF = document.getElementById('iscUserId');
+    const passF = document.getElementById('iscPassField');
+    if(userF) userF.value='';
+    if(passF) passF.value='';
+    document.getElementById('iscLoginErr')?.classList.remove('show');
 
-    // Reset opacidades para re-animar
-    if(selHeader){ selHeader.style.opacity='0'; selHeader.style.transform='translateY(-16px)'; }
-    if(selFooter){ selFooter.style.opacity='0'; }
-    blks.forEach(b=>{ b.style.opacity='0'; b.style.transform='translateY(30px)'; });
+    // Show intro again? No — mostrar directo el panel de login
+    const intro = document.getElementById('iscLoginIntro');
+    if(intro){ intro.style.display='none'; }
 
-    // Fade in splash
+    if(screen){ screen.style.opacity='0'; screen.style.display='flex'; screen.style.transition='opacity .4s ease'; }
+    if(panel) { panel.style.opacity='0'; panel.style.transform='translateY(16px)'; panel.style.transition='none'; }
+
     setTimeout(()=>{
-      splash.style.opacity = '1';
-      // Animar elementos
-      setTimeout(()=>{ if(selHeader){ selHeader.style.opacity='1'; selHeader.style.transform='translateY(0)'; }}, 150);
-      blks.forEach((b,i)=>{ setTimeout(()=>{ b.style.opacity='1'; b.style.transform='translateY(0)'; }, 250 + i*120); });
-      setTimeout(()=>{ if(selFooter) selFooter.style.opacity='1'; }, 700);
+      if(screen) screen.style.opacity='1';
+      setTimeout(()=>{
+        if(panel){ panel.style.transition='opacity .5s ease,transform .5s ease'; panel.style.opacity='1'; panel.style.transform='translateY(0)'; }
+        setTimeout(()=>{ userF?.focus(); }, 300);
+      }, 200);
     }, 50);
   };
+
+  // ── volverPortada alias ──
+  window.volverPortada = function(){ window.iscLogout(); };
+
+  // ── enterDashboard ──
   window.enterDashboard = function(modulo){
-    const splash = document.getElementById('splashScreen');
-    if(!splash) return;
+    const ml = document.getElementById('moduloLogistica');
+    const mp = document.getElementById('moduloProduccion');
+    const mo = document.getElementById('moduloOperaciones');
+    const mv = document.getElementById('moduloVentas');
+    if(ml) ml.style.display='none';
+    if(mp) mp.style.display='none';
+    if(mo) mo.style.display='none';
+    if(mv) mv.style.display='none';
 
-    // Animación de salida
-    splash.style.transition = 'opacity .6s ease';
-    splash.style.opacity = '0';
-
-    setTimeout(()=>{
-      splash.style.display = 'none';
-      const ml = document.getElementById('moduloLogistica');
-      const mp = document.getElementById('moduloProduccion');
-      const mo = document.getElementById('moduloOperaciones');
-      // Ocultar todos
-      if(ml) ml.style.display = 'none';
-      if(mp) mp.style.display = 'none';
-      if(mo) mo.style.display = 'none';
-      // Mostrar el correcto
-      if(modulo === 'logistica' && ml){
-        ml.style.display = 'block';
-        // Activar tab overview
-        const tabOv = ml.querySelector('[onclick*="overview"]');
-        if(tabOv) tabOv.click();
-      }
-      if(modulo === 'produccion' && mp){
-        mp.style.display = 'block';
-        loadProdData();
-        // Activar tab Resumen limpiamente sin triggear otros renders
-        document.querySelectorAll('.prod-tab').forEach(s=>s.classList.remove('active'));
-        document.querySelectorAll('.ptab').forEach(b=>b.classList.remove('ptab-active'));
-        const resumen=document.getElementById('prod_resumen');
-        if(resumen) resumen.classList.add('active');
-        const tabResumen=mp.querySelector('[onclick*="prod_resumen"]');
-        if(tabResumen) tabResumen.classList.add('ptab-active');
-        renderProdResumen();
-      }
-      if(modulo === 'operaciones' && mo){
-        mo.style.display = 'block';
-        loadOpsData();
-        document.querySelectorAll('.ops-tab').forEach(s=>s.classList.remove('active'));
-        document.querySelectorAll('.otab').forEach(b=>b.classList.remove('otab-active'));
-        const oresumen=document.getElementById('ops_resumen');
-        if(oresumen) oresumen.classList.add('active');
-        const otabResumen=mo.querySelector('[onclick*="ops_resumen"]');
-        if(otabResumen) otabResumen.classList.add('otab-active');
-        renderOpsResumen();
-      }
-    }, 600);
+    if(modulo==='logistica' && ml){
+      ml.style.display='block';
+      lmShowTab('overview');
+    }
+    if(modulo==='produccion' && mp){
+      mp.style.display='block';
+      loadProdData();
+      document.querySelectorAll('.prod-tab').forEach(s=>s.classList.remove('active'));
+      document.querySelectorAll('.ptab').forEach(b=>b.classList.remove('ptab-active'));
+      const res=document.getElementById('prod_resumen'); if(res) res.classList.add('active');
+      const tb=mp.querySelector('[onclick*="prod_resumen"]'); if(tb) tb.classList.add('ptab-active');
+      renderProdResumen();
+    }
+    if(modulo==='operaciones' && mo){
+      mo.style.display='block';
+      loadOpsData();
+      document.querySelectorAll('.ops-tab').forEach(s=>s.classList.remove('active'));
+      document.querySelectorAll('.otab').forEach(b=>b.classList.remove('otab-active'));
+      const ores=document.getElementById('ops_resumen'); if(ores) ores.classList.add('active');
+      const otb=mo.querySelector('[onclick*="ops_resumen"]'); if(otb) otb.classList.add('otab-active');
+      renderOpsResumen();
+      // Asegurar que VENTAS_DATA esté disponible para Planificación y Expedientes
+      setTimeout(function(){
+        if(window.planifRenderListos)   window.planifRenderListos();
+        if(window.renderVtExpOps)       window.renderVtExpOps();
+        if(window.nopsUpdatePills)      window.nopsUpdatePills();
+      }, 400);
+    }
+    if(modulo==='ventas' && mv){
+      mv.style.display='block';
+      initVentas();
+    }
   };
+
 })();
 // ══════════════════════════════════════════════════════
-// FIN SPLASH SCREEN
+// FIN ISC LOGIN SYSTEM
 // ══════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════
@@ -9505,22 +10285,15 @@ window.lmShowTab = function(id) {
   const _orig = window.enterDashboard;
   window.enterDashboard = function(modulo){
     if(modulo !== 'logistica'){ _orig.apply(this, arguments); return; }
-    // Handle logistica ourselves
-    const splash = document.getElementById('splashScreen');
-    if(!splash) return;
-    splash.style.transition='opacity .6s ease'; splash.style.opacity='0';
-    setTimeout(()=>{
-      splash.style.display='none';
-      ['moduloLogistica','moduloProduccion','moduloOperaciones'].forEach(id=>{
-        const el=document.getElementById(id); if(el) el.style.display='none';
-      });
-      const ml = document.getElementById('moduloLogistica');
-      if(ml){
-        ml.style.display='block';
-        // Safe tab activation — target only the nav item, never a PDF button
-        lmShowTab('overview');
-      }
-    }, 600);
+    // Handle logistica with safe tab activation
+    ['moduloLogistica','moduloProduccion','moduloOperaciones','moduloVentas'].forEach(id=>{
+      const el=document.getElementById(id); if(el) el.style.display='none';
+    });
+    const ml = document.getElementById('moduloLogistica');
+    if(ml){
+      ml.style.display='block';
+      lmShowTab('overview');
+    }
   };
 })();
 // ══════════════════════════════════════════════════════
@@ -9866,10 +10639,1776 @@ window.ANALISIS_PRO = {
     'Sin validación de duplicados al guardar despachos.',
   ]
 };
-// Para ver el análisis: console.table(window.ANALISIS_PRO.mejoras)
 // ══════════════════════════════════════════════════════
+// MÓDULO VENTAS — LÓGICA COMPLETA
+// ══════════════════════════════════════════════════════
+(function(){
+
+  // ── Estado global de Ventas ──
+  window.VENTAS_DATA = {
+    expedientes: []  // { id, cliente, ciudad, tel, areas, vendedora, fecha, notas, status, historial[], fecha_creacion }
+  };
+  // status values:
+  // 'nuevo'       → creado por ventas, esperando envío a operaciones
+  // 'en_remedir'  → enviado a operaciones para remedir
+  // 'remedido'    → operaciones lo remedió, vuelve a ventas
+  // 'produccion'  → ventas lo envió a producción
+  // 'logistica'   → está en logística (herrajes)
+  // 'instalacion' → en instalación en proceso
+  // 'terminado'   → proyecto terminado
+
+  let _vtListening = false;
+
+  // ── Init ──
+  window.initVentas = function() {
+    if(!_vtListening) {
+      _vtListening = true;
+      if(window._fbStartListenVentas) {
+        window._fbStartListenVentas(function(data){
+          if(data) {
+            if(window._mergeVentasData) window._mergeVentasData(data);
+            else if(Array.isArray(data.expedientes)) window.VENTAS_DATA = data;
+            else if(Array.isArray(data)) window.VENTAS_DATA = { expedientes: data };
+          }
+          if(window.renderVtExpOps) setTimeout(window.renderVtExpOps, 80);
+          if(window.planifRenderListos) setTimeout(window.planifRenderListos, 80);
+          vtRenderAll();
+          if(typeof planifRenderListos === 'function') planifRenderListos();
+        });
+      }
+    }
+    vtRenderAll();
+    vtShowTab('expedientes');
+  };
+
+  function saveVentas() {
+    if(window._fbSaveVentas) window._fbSaveVentas(window.VENTAS_DATA);
+  }
+
+  // ── Tabs ──
+  window.vtShowTab = function(tabId) {
+    document.querySelectorAll('.vt-tab-pane').forEach(p=>p.classList.remove('active'));
+    document.querySelectorAll('.vt-ntab').forEach(b=>b.classList.remove('active'));
+    const pane = document.getElementById('vtTab_'+tabId);
+    const btn  = document.getElementById('vtTabBtn_'+tabId);
+    if(pane) pane.classList.add('active');
+    if(btn)  btn.classList.add('active');
+  };
+
+  // ── Render all tabs ──
+  function vtRenderAll() {
+    vtRenderExpedientes();
+    vtRenderRemedidos();
+    vtRenderListos();
+    vtRenderSeguimiento();
+    vtUpdateBadges();
+  }
+
+  function vtUpdateBadges() {
+    const exps = window.VENTAS_DATA.expedientes || [];
+    const remedidos = exps.filter(e=>e.status==='remedido').length;
+    const listos    = exps.filter(e=>e.status==='produccion').length;
+
+    const bRem = document.getElementById('vtBadge_remedicion');
+    const bLis = document.getElementById('vtBadge_listos');
+    if(bRem){ bRem.textContent=remedidos; bRem.style.display=remedidos>0?'flex':'none'; }
+    if(bLis){ bLis.textContent=listos; bLis.style.display=listos>0?'flex':'none'; }
+  }
+
+  // ── Render: Todos los expedientes ──
+  window.vtRenderExpedientes = function() {
+    const cont = document.getElementById('vtListaExpedientes');
+    if(!cont) return;
+    const exps = window.VENTAS_DATA.expedientes || [];
+    const q    = (document.getElementById('vtSearchExp')?.value||'').toLowerCase();
+    const filt = q ? exps.filter(e=>(e.cliente||'').toLowerCase().includes(q)) : exps;
+
+    if(!filt.length){
+      cont.innerHTML='<div style="text-align:center;padding:40px;color:#2d3f5a;font-size:11px;">No hay expedientes aún. Crea uno con "+ Nuevo Expediente"</div>';
+      return;
+    }
+
+    cont.innerHTML = filt.slice().reverse().map((exp, ri)=>{
+      const idx = exps.length - 1 - ri;
+      const statusLabel = vtStatusLabel(exp.status);
+      const statusClass = vtStatusClass(exp.status);
+      const canEnviarOps = exp.status === 'nuevo' || exp.status === 'remedido';
+      const canEnviarProd = exp.status === 'remedido';
+
+      return `<div class="vt-exp-item">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+          <div style="flex:1;">
+            <div class="exp-cliente">${exp.cliente||'Sin nombre'}
+              <span class="exp-status ${statusClass}">${statusLabel}</span>
+            </div>
+            <div class="exp-meta">${exp.ciudad||''} ${exp.vendedora ? '· '+exp.vendedora : ''} ${exp.fecha ? '· '+exp.fecha : ''}</div>
+            ${exp.areas ? `<div class="exp-meta" style="margin-top:4px;color:#6b7280;">📐 ${exp.areas}</div>` : ''}
+            ${exp.notas ? `<div class="exp-meta" style="margin-top:4px;font-style:italic;">${exp.notas}</div>` : ''}
+          </div>
+        </div>
+        <div class="exp-actions">
+          ${canEnviarOps ? `<button onclick="vtEnviarAOperaciones(${idx})" style="background:rgba(255,107,53,.12);color:#ff6b35;border:1px solid rgba(255,107,53,.3);border-radius:6px;padding:5px 12px;font-family:'Space Mono',monospace;font-size:9px;font-weight:700;cursor:pointer;">📋 Enviar a Operaciones</button>` : ''}
+          ${canEnviarProd ? `<button onclick="vtEnviarAProduccion(${idx})" style="background:rgba(0,191,255,.12);color:#00bfff;border:1px solid rgba(0,191,255,.3);border-radius:6px;padding:5px 12px;font-family:'Space Mono',monospace;font-size:9px;font-weight:700;cursor:pointer;">⚙️ Enviar a Producción</button>` : ''}
+          <button onclick="vtEliminarExpediente(${idx})" style="background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.25);border-radius:6px;padding:5px 10px;font-family:'Space Mono',monospace;font-size:9px;cursor:pointer;">✕</button>
+        </div>
+      </div>`;
+    }).join('');
+  };
+
+  // ── Render: Remedidos (vueltos de operaciones) ──
+  function vtRenderRemedidos() {
+    const cont = document.getElementById('vtListaRemedidos');
+    if(!cont) return;
+    const exps = window.VENTAS_DATA.expedientes || [];
+    const filt = exps.map((e,i)=>({...e,_idx:i})).filter(e=>e.status==='remedido');
+
+    if(!filt.length){
+      cont.innerHTML='<div style="text-align:center;padding:40px;color:#2d3f5a;font-size:11px;">Sin expedientes remedidos pendientes</div>';
+      return;
+    }
+
+    cont.innerHTML = filt.map(exp=>`
+      <div class="vt-exp-item" style="border-color:rgba(0,229,255,.2);">
+        <div class="exp-cliente">${exp.cliente||'Sin nombre'}
+          <span class="exp-status status-remedido">REMEDIDO ✓</span>
+        </div>
+        <div class="exp-meta">${exp.ciudad||''} · ${exp.areas||''}</div>
+        ${exp.obs_remedir ? `<div class="exp-meta" style="margin-top:6px;color:#00e5ff;">📐 Observaciones: ${exp.obs_remedir}</div>` : ''}
+        <div class="exp-actions">
+          <button onclick="vtEnviarAProduccion(${exp._idx})" style="background:rgba(0,191,255,.15);color:#00bfff;border:1px solid rgba(0,191,255,.4);border-radius:6px;padding:6px 14px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;">⚙️ Aprobar y Enviar a Producción →</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // ── Render: Listos (en producción) ──
+  function vtRenderListos() {
+    const cont = document.getElementById('vtListaListos');
+    if(!cont) return;
+    const exps = window.VENTAS_DATA.expedientes || [];
+    const filt = exps.map((e,i)=>({...e,_idx:i})).filter(e=>['produccion','logistica','instalacion','terminado'].includes(e.status));
+
+    if(!filt.length){
+      cont.innerHTML='<div style="text-align:center;padding:40px;color:#2d3f5a;font-size:11px;">No hay expedientes en producción aún</div>';
+      return;
+    }
+
+    cont.innerHTML = filt.map(exp=>`
+      <div class="vt-exp-item">
+        <div class="exp-cliente">${exp.cliente||'Sin nombre'}
+          <span class="exp-status ${vtStatusClass(exp.status)}">${vtStatusLabel(exp.status)}</span>
+        </div>
+        <div class="exp-meta">${exp.ciudad||''} · ${exp.vendedora||''}</div>
+        <div class="exp-meta" style="margin-top:4px;">📐 ${exp.areas||''}</div>
+        ${exp.fecha_entrega_estimada ? `<div class="exp-meta" style="color:#ffd700;margin-top:4px;">📅 Entrega estimada: ${exp.fecha_entrega_estimada}</div>` : ''}
+      </div>
+    `).join('');
+  }
+
+  // ── Render: Seguimiento global ──
+  function vtRenderSeguimiento() {
+    const cont = document.getElementById('vtListaSeguimiento');
+    if(!cont) return;
+    const exps = window.VENTAS_DATA.expedientes || [];
+
+    if(!exps.length){
+      cont.innerHTML='<div style="text-align:center;padding:40px;color:#2d3f5a;font-size:11px;">No hay proyectos en seguimiento</div>';
+      return;
+    }
+
+    const steps = [
+      {key:'nuevo',      icon:'📋', label:'Venta'},
+      {key:'en_remedir', icon:'📐', label:'Remedir'},
+      {key:'remedido',   icon:'✅', label:'Aprobado'},
+      {key:'produccion', icon:'⚙️', label:'Producción'},
+      {key:'logistica',  icon:'🚚', label:'Logística'},
+      {key:'terminado',  icon:'🏁', label:'Terminado'}
+    ];
+    const order = steps.map(s=>s.key);
+
+    cont.innerHTML = exps.slice().reverse().map(exp=>{
+      const currentStep = order.indexOf(exp.status);
+      const flowHtml = steps.map((s,i)=>{
+        const done   = i < currentStep;
+        const active = i === currentStep;
+        const circleClass = done?'done':active?'active':'';
+        const labelClass  = done?'done':active?'active':'';
+        const lineClass   = i < steps.length-1 ? (done?'done':'') : '';
+        return `<div class="vt-flow-step">
+          <div class="vt-flow-circle ${circleClass}">${s.icon}</div>
+          <div class="vt-flow-label ${labelClass}">${s.label}</div>
+        </div>${i < steps.length-1 ? `<div class="vt-flow-line ${lineClass}"></div>` : ''}`;
+      }).join('');
+
+      return `<div class="vt-exp-item">
+        <div class="exp-cliente">${exp.cliente||'Sin nombre'}
+          <span style="font-size:9px;color:#4b5563;margin-left:8px;font-weight:400;">${exp.vendedora||''}</span>
+        </div>
+        <div class="exp-meta">${exp.ciudad||''} · ${exp.areas||''}</div>
+        <div class="vt-flow-bar" style="margin-top:14px;">${flowHtml}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Helper: status label/class ──
+  function vtStatusLabel(s) {
+    const map = {
+      nuevo:'NUEVO', en_remedir:'EN REMEDIR', remedido:'REMEDIDO',
+      produccion:'EN PRODUCCIÓN', logistica:'EN LOGÍSTICA',
+      instalacion:'INSTALACIÓN', terminado:'TERMINADO'
+    };
+    return map[s]||s||'—';
+  }
+  function vtStatusClass(s) {
+    const map = {
+      nuevo:'status-pendiente', en_remedir:'status-pendiente',
+      remedido:'status-remedido', produccion:'status-produccion',
+      logistica:'status-logistica', instalacion:'status-logistica', terminado:'status-logistica'
+    };
+    return map[s]||'status-pendiente';
+  }
+
+  // ── Abrir modal nuevo expediente ──
+  window.vtAbrirNuevoExpediente = function() {
+    document.getElementById('vtExpCliente').value = '';
+    document.getElementById('vtExpCiudad').value = '';
+    document.getElementById('vtExpTel').value = '';
+    document.getElementById('vtExpAreas').value = '';
+    document.getElementById('vtExpVendedora').value = '';
+    document.getElementById('vtExpNotas').value = '';
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('vtExpFecha').value = today;
+    document.getElementById('vtModalExpediente').style.display='flex';
+    setTimeout(()=>document.getElementById('vtExpCliente').focus(), 100);
+  };
+
+  // ── Guardar expediente ──
+  window.vtGuardarExpediente = function() {
+    const cliente = document.getElementById('vtExpCliente').value.trim();
+    if(!cliente){ alert('El nombre del cliente es obligatorio'); return; }
+
+    const exp = {
+      id: Date.now(),
+      cliente,
+      ciudad:    document.getElementById('vtExpCiudad').value.trim(),
+      tel:       document.getElementById('vtExpTel').value.trim(),
+      areas:     document.getElementById('vtExpAreas').value.trim(),
+      vendedora: document.getElementById('vtExpVendedora').value.trim(),
+      fecha:     document.getElementById('vtExpFecha').value,
+      notas:     document.getElementById('vtExpNotas').value.trim(),
+      status:    'nuevo',
+      fecha_creacion: new Date().toLocaleDateString('es-HN'),
+      historial: [{ accion:'Expediente creado en Ventas', fecha: new Date().toLocaleDateString('es-HN') }]
+    };
+
+    if(!window.VENTAS_DATA.expedientes) window.VENTAS_DATA.expedientes = [];
+    window.VENTAS_DATA.expedientes.push(exp);
+    saveVentas();
+    vtRenderAll();
+    document.getElementById('vtModalExpediente').style.display='none';
+    toast('✅ Expediente creado: ' + cliente);
+  };
+
+  // ── Enviar a Operaciones (tab Remedir) ──
+  window.vtEnviarAOperaciones = function(idx) {
+    const exp = (window.VENTAS_DATA.expedientes||[])[idx];
+    if(!exp) return;
+
+    // Agregar a Operaciones en tab "remedir"
+    if(window.OPS_DATA) {
+      if(!window.OPS_DATA.remedir) window.OPS_DATA.remedir = [];
+      const yaExiste = window.OPS_DATA.remedir.some(r=>r._vtId === exp.id);
+      if(!yaExiste) {
+        window.OPS_DATA.remedir.push({
+          _vtId:    exp.id,
+          cliente:  exp.cliente,
+          ciudad:   exp.ciudad,
+          areas:    exp.areas,
+          tel:      exp.tel,
+          vendedora:exp.vendedora,
+          fecha:    exp.fecha,
+          notas:    exp.notas,
+          obs:      '',
+          estatus:  'Pendiente Remedir'
+        });
+        if(window._fbSaveOps) window._fbSaveOps(window.OPS_DATA);
+        if(window.renderNopsRemedir) window.renderNopsRemedir();
+      }
+    }
+
+    exp.status = 'en_remedir';
+    exp.historial = exp.historial||[];
+    exp.historial.push({ accion:'Enviado a Operaciones para remedir', fecha: new Date().toLocaleDateString('es-HN') });
+    saveVentas();
+    vtRenderAll();
+    toast('📋 Expediente enviado a Operaciones → Remedir');
+  };
+
+  // ── Enviar a Producción ──
+  window.vtEnviarAProduccion = function(idx) {
+    const exp = (window.VENTAS_DATA.expedientes||[])[idx];
+    if(!exp) return;
+
+    // Agregar a Producción
+    if(window.PROD_DATA) {
+      if(!window.PROD_DATA.expedientes) window.PROD_DATA.expedientes = [];
+      const yaExiste = window.PROD_DATA.expedientes.some(r=>r._vtId === exp.id);
+      if(!yaExiste) {
+        window.PROD_DATA.expedientes.push({
+          _vtId:    exp.id,
+          cliente:  exp.cliente,
+          ciudad:   exp.ciudad,
+          areas:    exp.areas ? exp.areas.split(',').map(a=>a.trim()).filter(Boolean) : [],
+          vendedora:exp.vendedora,
+          fecha_venta: exp.fecha,
+          notas:    exp.notas,
+          obs_remedir: exp.obs_remedir||'',
+          checklist:[],
+          fecha_entrega_estimada:'',
+          fecha_inicio: new Date().toLocaleDateString('es-HN'),
+          status: 'En Producción'
+        });
+        if(window._fbSaveProd) window._fbSaveProd(window.PROD_DATA);
+      }
+    }
+
+    exp.status = 'produccion';
+    exp.historial = exp.historial||[];
+    exp.historial.push({ accion:'Enviado a Producción', fecha: new Date().toLocaleDateString('es-HN') });
+    saveVentas();
+    vtRenderAll();
+    toast('⚙️ Expediente enviado a Producción');
+  };
+
+  // ── Eliminar expediente ──
+  window.vtEliminarExpediente = function(idx) {
+    const exp = (window.VENTAS_DATA.expedientes||[])[idx];
+    if(!exp) return;
+    if(!confirm('¿Eliminar el expediente de "' + exp.cliente + '"?')) return;
+    window.VENTAS_DATA.expedientes.splice(idx, 1);
+    saveVentas();
+    vtRenderAll();
+    toast('🗑 Expediente eliminado');
+  };
+
+  // ── Recibir señal de operaciones: expediente remedido ──
+  // Operaciones debe llamar: vtRecibirRemedido(vtId, observaciones)
+  window.vtRecibirRemedido = function(vtId, obs) {
+    const exps = window.VENTAS_DATA.expedientes || [];
+    const exp = exps.find(e=>e.id === vtId);
+    if(!exp) return;
+    exp.status = 'remedido';
+    exp.obs_remedir = obs || '';
+    exp.historial = exp.historial||[];
+    exp.historial.push({ accion:'Remedido por Operaciones'+( obs ? ': '+obs : ''), fecha: new Date().toLocaleDateString('es-HN') });
+    saveVentas();
+    vtRenderAll();
+    toast('📐 Expediente remedido recibido: ' + exp.cliente);
+  };
+
+  // ── Recibir señal de producción: expediente listo para logística ──
+  window.vtActualizarStatus = function(vtId, newStatus, extra) {
+    const exp = (window.VENTAS_DATA.expedientes||[]).find(e=>e.id===vtId);
+    if(!exp) return;
+    exp.status = newStatus;
+    if(extra && extra.fecha_entrega_estimada) exp.fecha_entrega_estimada = extra.fecha_entrega_estimada;
+    exp.historial = exp.historial||[];
+    exp.historial.push({ accion:'Estado actualizado a '+newStatus, fecha: new Date().toLocaleDateString('es-HN') });
+    saveVentas();
+    vtRenderAll();
+  };
+
+})();
+// ══════════════════════════════════════════════════════
+// FIN MÓDULO VENTAS
+// ══════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════
+// PLANIFICACIÓN — AGENDA PERMANENTE + checkInstallationsForToday
+// ══════════════════════════════════════════════════════
+(function(){
+
+  // ── Extraer TODOS los clientes planificados de todas las semanas ──
+  function planifGetAllClients(){
+    planifInit();
+    const semanas = window.OPS_DATA.planif.semanas || {};
+    const results = [];
+    Object.entries(semanas).forEach(([semKey, porInstalador])=>{
+      Object.entries(porInstalador).forEach(([instalador, porDia])=>{
+        Object.entries(porDia).forEach(([iso, cell])=>{
+          if(cell && cell.proyecto){
+            results.push({
+              _semKey:     semKey,
+              _iso:        iso,
+              instalador:  instalador,
+              proyecto:    cell.proyecto,
+              comentario:  cell.comentario  || '',
+              fecha_instalacion:  cell.fecha_instalacion  || iso,
+              estado_instalacion: cell.estado_instalacion || 'planificado'
+            });
+          }
+        });
+      });
+    });
+    // Ordenar por fecha_instalacion ascendente
+    results.sort((a,b)=> a.fecha_instalacion.localeCompare(b.fecha_instalacion));
+    return results;
+  }
+
+  // ── Badge de estado ──
+  function planifEstadoBadge(est){
+    const map = {
+      planificado:           { icon:'📋', label:'Planificado',     color:'#00dcc8', bg:'rgba(0,220,200,.1)',  border:'rgba(0,220,200,.3)'  },
+      instalacion_en_proceso:{ icon:'🔧', label:'En instalación',  color:'#ff6b35', bg:'rgba(255,107,53,.1)', border:'rgba(255,107,53,.3)' },
+      terminado:             { icon:'✅', label:'Terminado',       color:'#a8ff3e', bg:'rgba(168,255,62,.1)', border:'rgba(168,255,62,.3)' },
+      reprogramado:          { icon:'🔄', label:'Reprogramado',    color:'#ffd700', bg:'rgba(255,215,0,.1)',  border:'rgba(255,215,0,.3)'  }
+    };
+    const m = map[est] || map.planificado;
+    return `<span style="display:inline-flex;align-items:center;gap:4px;background:${m.bg};color:${m.color};border:1px solid ${m.border};border-radius:20px;padding:3px 10px;font-size:9px;font-weight:700;letter-spacing:.5px;white-space:nowrap;">${m.icon} ${m.label}</span>`;
+  }
+
+  // ── Render de la tabla agenda ──
+  window.planifRenderAgenda = function(){
+    const tbody = document.getElementById('planifAgendaBody');
+    if(!tbody) return;
+
+    const todayISO = new Date().toISOString().split('T')[0];
+    const q     = (document.getElementById('planifAgendaSearch')?.value||'').toLowerCase();
+    const filt  = (document.getElementById('planifAgendaFilter')?.value||'');
+
+    let clients = planifGetAllClients();
+
+    if(q)    clients = clients.filter(c=>(c.proyecto||'').toLowerCase().includes(q)||(c.instalador||'').toLowerCase().includes(q));
+    if(filt) clients = clients.filter(c=>(c.estado_instalacion||'planificado')===filt);
+
+    if(!clients.length){
+      tbody.innerHTML=`<tr><td colspan="6" style="text-align:center;padding:40px;color:#2d3f5a;font-size:11px;">No hay clientes planificados que coincidan</td></tr>`;
+      return;
+    }
+
+    const fmt = iso => { const [y,m,d]=iso.split('-'); return `${d}/${m}/${y.slice(2)}`; };
+
+    tbody.innerHTML = clients.map(c=>{
+      const est = c.estado_instalacion || 'planificado';
+      const fechaISO = c.fecha_instalacion || c._iso;
+      const esHoy    = fechaISO === todayISO;
+      const esPasado = fechaISO < todayISO;
+      const rowBorder = est==='instalacion_en_proceso' ? 'inset 3px 0 0 #ff6b35'
+                      : est==='terminado'              ? 'inset 3px 0 0 #a8ff3e'
+                      : est==='reprogramado'           ? 'inset 3px 0 0 #ffd700'
+                      : esHoy                         ? 'inset 3px 0 0 #ff6b35' : 'none';
+      const rowBg = est==='instalacion_en_proceso' ? 'rgba(255,107,53,.04)'
+                  : est==='terminado'              ? 'rgba(168,255,62,.03)'
+                  : esHoy                         ? 'rgba(255,107,53,.06)' : '';
+
+      return `<tr style="box-shadow:${rowBorder};background:${rowBg};">
+        <td style="padding:9px 12px;color:#f9fafb;font-weight:700;">
+          ${c.proyecto}
+          ${esHoy ? '<span style="margin-left:6px;background:rgba(255,107,53,.2);color:#ff6b35;border-radius:4px;padding:1px 6px;font-size:8px;font-weight:700;">● HOY</span>' : ''}
+          ${esPasado && est==='planificado' ? '<span style="margin-left:6px;background:rgba(255,215,0,.15);color:#ffd700;border-radius:4px;padding:1px 6px;font-size:8px;font-weight:700;">VENCIDO</span>' : ''}
+        </td>
+        <td style="padding:9px 12px;color:#00dcc8;font-size:10px;">👷 ${c.instalador}</td>
+        <td style="padding:9px 12px;color:${esHoy?'#ff6b35':'#ffd700'};font-weight:700;white-space:nowrap;">
+          ${fmt(fechaISO)}
+        </td>
+        <td style="padding:9px 12px;">${planifEstadoBadge(est)}</td>
+        <td style="padding:9px 12px;color:#6b7280;font-size:10px;">${c.comentario||'—'}</td>
+        <td style="padding:9px 12px;text-align:center;white-space:nowrap;">
+          <select onchange="planifCambiarEstado('${c._semKey}','${c.instalador}','${c._iso}',this.value)"
+            style="background:#060a10;border:1px solid #1e2d40;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:9px;padding:4px 8px;border-radius:6px;outline:none;cursor:pointer;margin-bottom:4px;display:block;width:100%;">
+            <option value="planificado"            ${est==='planificado'?'selected':''}>📋 Planificado</option>
+            <option value="instalacion_en_proceso" ${est==='instalacion_en_proceso'?'selected':''}>🔧 En proceso</option>
+            <option value="terminado"              ${est==='terminado'?'selected':''}>✅ Terminado</option>
+            <option value="reprogramado"           ${est==='reprogramado'?'selected':''}>🔄 Reprogramado</option>
+          </select>
+          <button onclick="planifReprogramar('${c._semKey}','${c.instalador}','${c._iso}')"
+            style="background:rgba(255,215,0,.1);color:#ffd700;border:1px solid rgba(255,215,0,.3);border-radius:6px;padding:3px 10px;font-family:'Space Mono',monospace;font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap;width:100%;margin-bottom:4px;">
+            🔄 Reprogramar
+          </button>
+          <button onclick="planifDevolverACola('${c._semKey}','${c.instalador}','${c._iso}')"
+            style="background:rgba(255,107,53,.1);color:#ff6b35;border:1px solid rgba(255,107,53,.3);border-radius:6px;padding:3px 10px;font-family:'Space Mono',monospace;font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap;width:100%;">
+            ↩ Devolver a Cola
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
+  };
+
+  // ── Cambiar estado desde la agenda ──
+  window.planifCambiarEstado = function(semKey, instalador, iso, nuevoEstado){
+    planifInit();
+    const cell = ((window.OPS_DATA.planif.semanas[semKey]||{})[instalador]||{})[iso];
+    if(!cell) return;
+
+    cell.estado_instalacion = nuevoEstado;
+    saveOpsData();
+
+    // Si pasó a instalacion_en_proceso → también enviarlo a Operaciones Inst
+    if(nuevoEstado === 'instalacion_en_proceso'){
+      _planifSyncToOpsInst(cell, instalador);
+    }
+
+    renderPlanif();
+    planifRenderAgenda();
+
+    const labels = { instalacion_en_proceso:'🔧 En instalación', terminado:'✅ Terminado', reprogramado:'🔄 Reprogramado', planificado:'📋 Planificado' };
+    toast('Estado actualizado: ' + (labels[nuevoEstado]||nuevoEstado));
+  };
+
+  // ── Reprogramar — abre modal de asignación para cambiar fecha/instalador ──
+  window.planifReprogramar = function(semKey, instalador, iso) {
+    planifInit();
+    const cell = ((window.OPS_DATA.planif.semanas[semKey]||{})[instalador]||{})[iso];
+    if(!cell) return;
+
+    // Buscar el expediente por nombre o _expId
+    const exps = (window.VENTAS_DATA && window.VENTAS_DATA.expedientes) || [];
+    let expIdx = cell._expId ? exps.findIndex(e=>e.id===cell._expId) : exps.findIndex(e=>(e.cliente||'')===cell.proyecto);
+
+    // Reutilizar modal de asignar
+    document.getElementById('planifAsignarCliente').textContent = cell.proyecto || 'Sin nombre';
+    document.getElementById('planifAsignarSub').textContent = 'Reprogramando — instalador actual: ' + instalador + ' · ' + iso;
+    document.getElementById('planifAsignarComentario').value = cell.comentario || '';
+    document.getElementById('planifAsignarFecha').value = cell.fecha_instalacion || iso;
+
+    const instSel = document.getElementById('planifAsignarInst');
+    if(instSel) {
+      const insts = window.OPS_DATA.planif.instaladores || [];
+      instSel.innerHTML = '<option value="">— Selecciona instalador —</option>' +
+        insts.map(n => `<option value="${n}" ${n===instalador?'selected':''}>${n}</option>`).join('');
+    }
+
+    // Guardar referencia de la celda original para borrarla al reprogramar
+    window._reprogramarOld = { semKey, instalador, iso };
+    window._reprogramarExpIdx = expIdx >= 0 ? expIdx : null;
+
+    document.getElementById('planifAsignarModal').style.display = 'flex';
+  };
+
+  // ── Devolver a Cola ──
+  window.planifDevolverACola = function(semKey, instalador, iso) {
+    if(!confirm('¿Devolver este cliente a la cola de "Listos para Planificar"?\n\nSe eliminará de la pizarra y quedará marcado como REPROGRAMADO.')) return;
+    planifInit();
+
+    // Capturar datos de la celda ANTES de borrarla
+    const cell = ((window.OPS_DATA.planif.semanas[semKey]||{})[instalador]||{})[iso];
+    if(!cell) return;
+
+    const proyectoNombre = (cell.proyecto || '').toLowerCase();
+    const expId          = cell._expId || null;
+
+    // ── 1. Borrar celda de la pizarra ──
+    try { delete window.OPS_DATA.planif.semanas[semKey][instalador][iso]; } catch(e){}
+
+    // ── 2. Quitar de Instalaciones en Proceso (búsqueda amplia) ──
+    if(window.OPS_DATA && window.OPS_DATA.inst) {
+      // Recorremos al revés para poder hacer splice sin saltarnos índices
+      for(let i = window.OPS_DATA.inst.length - 1; i >= 0; i--) {
+        const r = window.OPS_DATA.inst[i];
+        const matchPlanif = r._planifIso === iso && r._planifSem === semKey && r.instalador === instalador;
+        const matchNombre = proyectoNombre && (r.cliente||'').toLowerCase() === proyectoNombre;
+        if(matchPlanif || matchNombre) {
+          window.OPS_DATA.inst.splice(i, 1);
+        }
+      }
+      if(window.renderNopsInst)  window.renderNopsInst();
+      if(window.nopsUpdatePills) window.nopsUpdatePills();
+    }
+
+    saveOpsData();
+
+    // ── 3. Actualizar expediente en VENTAS_DATA ──
+    const exps = (window.VENTAS_DATA && window.VENTAS_DATA.expedientes) || [];
+    let exp = null;
+    if(expId) {
+      exp = exps.find(e => e.id === expId);
+    }
+    if(!exp && proyectoNombre) {
+      exp = exps.find(e => (e.cliente||'').toLowerCase() === proyectoNombre);
+    }
+
+    if(exp) {
+      exp.status            = 'logistica'; // ← restaurar status para que aparezca en "Listos para Planificar"
+      exp._statusOverride   = true;        // ← señal para _mergeVentasData de preservar este status
+      exp.planif_asignado   = false;
+      exp.fue_reprogramado  = true;
+      exp.fecha_instalacion = null;
+      exp.instalador_planif = null;
+      exp.historial = exp.historial || [];
+      exp.historial.push({
+        accion: 'Devuelto a cola — reprogramado (era: ' + instalador + ' · ' + iso + ')',
+        fecha: new Date().toLocaleDateString('es-HN')
+      });
+      if(window._fbSaveVentas) window._fbSaveVentas(window.VENTAS_DATA);
+    }
+
+    // ── 4. Actualizar todas las vistas ──
+    renderPlanif();
+    planifRenderAgenda();
+    // Render inmediato (datos ya actualizados en memoria)
+    if(window.planifRenderListos) planifRenderListos();
+    if(window.lmRenderExpedientes) window.lmRenderExpedientes();
+    // Re-render extra tras Firebase para absorber snapshots tardíos
+    setTimeout(function(){
+      if(window.planifRenderListos) planifRenderListos();
+    }, 600);
+    toast('↩ ' + (cell.proyecto||'Cliente') + ' devuelto a cola de planificación', '#ff6b35');
+  };
+
+  // (La lógica de reprogramación está integrada en planifAsignarGuardar del bloque LISTOS)
+  function _planifSyncToOpsInst(cell, instalador){
+    if(!window.OPS_DATA) return;
+    if(!window.OPS_DATA.inst) window.OPS_DATA.inst=[];
+    // Evitar duplicados
+    const yaExiste = window.OPS_DATA.inst.some(r=>
+      r._planifIso===cell._iso && r._planifSem===cell._semKey && r.instalador===instalador
+    );
+    if(!yaExiste){
+      window.OPS_DATA.inst.push({
+        _planifIso: cell._iso,
+        _planifSem: cell._semKey,
+        cliente:    cell.proyecto,
+        instalador: instalador,
+        ciudad:     '',
+        obs:        cell.comentario||'',
+        fecha_inst: cell.fecha_instalacion || cell._iso,
+        estatus:    'En Instalación (Planif)',
+        accion:     ''
+      });
+      if(window._fbSaveOps) window._fbSaveOps(window.OPS_DATA);
+      if(window.renderNopsInst) window.renderNopsInst();
+      if(window.nopsUpdatePills) window.nopsUpdatePills();
+    }
+  }
+
+  // ── checkInstallationsForToday() — función principal ──
+  window.checkInstallationsForToday = function(silent){
+    planifInit();
+    const todayISO = new Date().toISOString().split('T')[0];
+    const semanas  = window.OPS_DATA.planif.semanas || {};
+    let changed = 0;
+
+    Object.entries(semanas).forEach(([semKey, porInstalador])=>{
+      Object.entries(porInstalador).forEach(([instalador, porDia])=>{
+        Object.entries(porDia).forEach(([iso, cell])=>{
+          if(!cell || !cell.proyecto) return;
+          const fechaInst = cell.fecha_instalacion || iso;
+          // Si la fecha de instalación llegó y aún está como planificado → cambiar automáticamente
+          if(fechaInst <= todayISO && cell.estado_instalacion === 'planificado'){
+            cell.estado_instalacion = 'instalacion_en_proceso';
+            // Guardar referencias para lookup
+            cell._iso    = iso;
+            cell._semKey = semKey;
+            _planifSyncToOpsInst(cell, instalador);
+            changed++;
+          }
+        });
+      });
+    });
+
+    if(changed > 0){
+      saveOpsData();
+      renderPlanif();
+      planifRenderAgenda();
+      if(!silent) toast(`⚡ ${changed} instalación${changed!==1?'es':''} actualizada${changed!==1?'s':''} a "En proceso"`);
+    } else {
+      if(!silent) toast('✓ Sin instalaciones nuevas para hoy');
+    }
+    return changed;
+  };
+
+  // ── Botón "Verificar Hoy" ──
+  window.planifCheckHoy = function(){
+    checkInstallationsForToday(false);
+  };
+
+  // ── Auto-check al abrir el panel de planificación ──
+  const _origShowOpsPanel = window.showOpsPanel;
+  window.showOpsPanel = function(id, btn){
+    if(_origShowOpsPanel) _origShowOpsPanel(id, btn);
+    if(id === 'planif'){
+      setTimeout(()=>{
+        checkInstallationsForToday(true); // silencioso al abrir
+        planifRenderAgenda();
+      }, 200);
+    }
+  };
+
+  // ── Auto-check al cargar datos de Firebase ──
+  const _origLoadOpsData = window.loadOpsData;
+  if(_origLoadOpsData){
+    window.loadOpsData = function(){
+      _origLoadOpsData.apply(this, arguments);
+      setTimeout(()=>checkInstallationsForToday(true), 500);
+    };
+  }
+
+  // ── También actualizar agenda cuando se llama renderPlanif ──
+  const _origRenderPlanif = window.renderPlanif;
+  // No wrapping renderPlanif here — planifRenderAgenda is called explicitly from guardarCelda
+
+})();
+// ══════════════════════════════════════════════════════
+// FIN PLANIFICACIÓN AGENDA PERMANENTE
+// ══════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════
+// LISTOS PARA PLANIFICAR — Cola desde Producción
+// ══════════════════════════════════════════════════════
+(function(){
+
+  // Índice del expediente que se está asignando
+  var _asignarExpIdx = null;
+
+  // ── Render la lista de "Listos para Planificar" ──
+  window.planifRenderListos = function() {
+    const exps = (window.VENTAS_DATA && window.VENTAS_DATA.expedientes) || [];
+    // Mostrar solo los que están en 'logistica' y aún NO han sido asignados a la pizarra
+    const listos = exps.filter(e => e.status === 'logistica' && !e.planif_asignado);
+
+    const body  = document.getElementById('planifListosBody');
+    const count = document.getElementById('planifListosCount');
+    const wrap  = document.getElementById('planifListosWrap');
+    if(!body) return;
+
+    if(count) count.textContent = listos.length + ' pendiente' + (listos.length !== 1 ? 's' : '');
+    if(wrap)  wrap.style.borderColor = listos.length > 0 ? 'rgba(255,215,0,.5)' : 'rgba(255,215,0,.2)';
+
+    if(!listos.length) {
+      body.innerHTML = '<div style="text-align:center;padding:30px;color:#2d3f5a;font-size:11px;">No hay clientes pendientes de planificar</div>';
+      return;
+    }
+
+    body.innerHTML = listos.map(exp => {
+      const realIdx = exps.indexOf(exp);
+      return `<div style="background:#0a0e18;border:1px solid rgba(255,215,0,.2);border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#f0ece4;margin-bottom:3px;">${exp.cliente||'Sin nombre'}
+            ${exp.fue_reprogramado
+              ? '<span style="background:rgba(255,107,53,.18);color:#ff6b35;border-radius:20px;padding:1px 8px;font-size:9px;font-weight:700;margin-left:6px;border:1px solid rgba(255,107,53,.4);">↩ REPROGRAMADO</span>'
+              : '<span style="background:rgba(255,215,0,.12);color:#ffd700;border-radius:20px;padding:1px 8px;font-size:9px;font-weight:700;margin-left:6px;">LISTO PRODUCCIÓN</span>'
+            }
+          </div>
+          <div style="font-size:10px;color:#4b5563;margin-top:2px;">
+            ${exp.ciudad||''} ${exp.vendedora ? '· ' + exp.vendedora : ''}
+            ${exp.areas ? ' · 📐 ' + exp.areas : ''}
+          </div>
+          ${exp.fecha_entrega_estimada ? `<div style="font-size:10px;color:#a8ff3e;margin-top:3px;">📅 Entrega estimada: ${exp.fecha_entrega_estimada}</div>` : ''}
+        </div>
+        <button onclick="planifAbrirAsignar(${realIdx})"
+          style="background:rgba(255,215,0,.18);color:#ffd700;border:1px solid rgba(255,215,0,.5);border-radius:8px;padding:9px 16px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;letter-spacing:.5px;">
+          📅 Asignar Fecha →
+        </button>
+      </div>`;
+    }).join('');
+  };
+
+  // ── Abrir modal de asignación ──
+  window.planifAbrirAsignar = function(expIdx) {
+    _asignarExpIdx = expIdx;
+    const exp = (window.VENTAS_DATA && window.VENTAS_DATA.expedientes) ? window.VENTAS_DATA.expedientes[expIdx] : null;
+    if(!exp) return;
+
+    // Rellenar modal
+    document.getElementById('planifAsignarCliente').textContent = exp.cliente || 'Sin nombre';
+    document.getElementById('planifAsignarSub').textContent = (exp.ciudad||'') + (exp.areas ? ' · ' + exp.areas : '');
+    document.getElementById('planifAsignarComentario').value = exp.areas || '';
+    document.getElementById('planifAsignarFecha').value = new Date().toISOString().split('T')[0];
+
+    // Poblar instaladores
+    const instSel = document.getElementById('planifAsignarInst');
+    if(instSel) {
+      planifInit();
+      const insts = window.OPS_DATA.planif.instaladores || [];
+      instSel.innerHTML = '<option value="">— Selecciona instalador —</option>' +
+        insts.map(n => `<option value="${n}">${n}</option>`).join('');
+    }
+
+    document.getElementById('planifAsignarModal').style.display = 'flex';
+  };
+
+  // ── Guardar asignación (también maneja reprogramación desde Agenda) ──
+  window.planifAsignarGuardar = function() {
+    const instalador = document.getElementById('planifAsignarInst').value.trim();
+    const fecha      = document.getElementById('planifAsignarFecha').value;
+    const comentario = document.getElementById('planifAsignarComentario').value.trim();
+
+    if(!instalador) { toast('⚠ Selecciona un instalador','#ff6b35'); return; }
+    if(!fecha)      { toast('⚠ Selecciona una fecha','#ff6b35'); return; }
+
+    planifInit();
+    const planif = window.OPS_DATA.planif;
+
+    // Calcular semKey para la fecha elegida
+    const fechaDate = new Date(fecha + 'T12:00:00');
+    const day  = fechaDate.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const lunes = new Date(fechaDate);
+    lunes.setDate(lunes.getDate() + diff);
+    const semKey = lunes.toISOString().split('T')[0];
+
+    // ── CASO A: Reprogramación desde la Agenda ──
+    if(window._reprogramarOld) {
+      const old = window._reprogramarOld;
+
+      // Obtener datos de la celda anterior
+      const oldCell = ((planif.semanas[old.semKey]||{})[old.instalador]||{})[old.iso] || {};
+      const proyecto = oldCell.proyecto || document.getElementById('planifAsignarCliente').textContent || 'Sin nombre';
+      const expId    = oldCell._expId || null;
+
+      // Borrar celda anterior
+      try { delete planif.semanas[old.semKey][old.instalador][old.iso]; } catch(e){}
+
+      // Crear nueva celda
+      if(!planif.semanas[semKey])            planif.semanas[semKey] = {};
+      if(!planif.semanas[semKey][instalador]) planif.semanas[semKey][instalador] = {};
+      planif.semanas[semKey][instalador][fecha] = {
+        proyecto,
+        comentario,
+        fecha_instalacion:  fecha,
+        estado_instalacion: 'planificado',
+        instalador,
+        _semKey: semKey,
+        _iso:    fecha,
+        _expId:  expId
+      };
+      saveOpsData();
+
+      // Actualizar expediente en Ventas
+      if(window.VENTAS_DATA && window.VENTAS_DATA.expedientes) {
+        const exp = expId
+          ? window.VENTAS_DATA.expedientes.find(e => e.id === expId)
+          : (window._reprogramarExpIdx !== null ? window.VENTAS_DATA.expedientes[window._reprogramarExpIdx] : null);
+        if(exp) {
+          exp.planif_asignado    = true;
+          exp.fue_reprogramado   = true;
+          exp.fecha_instalacion  = fecha;
+          exp.instalador_planif  = instalador;
+          exp.historial = exp.historial || [];
+          exp.historial.push({ accion: 'Reprogramado — ' + instalador + ' · ' + fecha, fecha: new Date().toLocaleDateString('es-HN') });
+          if(window._fbSaveVentas) window._fbSaveVentas(window.VENTAS_DATA);
+        }
+      }
+
+      window._reprogramarOld      = null;
+      window._reprogramarExpIdx   = null;
+
+      document.getElementById('planifAsignarModal').style.display = 'none';
+      renderPlanif();
+      planifRenderAgenda();
+      planifRenderListos();
+      toast('🔄 ' + proyecto + ' reprogramado → ' + instalador + ' · ' + fecha, '#ffd700');
+      return;
+    }
+
+    // ── CASO B: Asignación nueva desde lista "Listos para Planificar" ──
+    if(_asignarExpIdx === null) return;
+
+    const exp = window.VENTAS_DATA && window.VENTAS_DATA.expedientes ? window.VENTAS_DATA.expedientes[_asignarExpIdx] : null;
+    if(!exp) return;
+
+    if(!planif.semanas[semKey])            planif.semanas[semKey] = {};
+    if(!planif.semanas[semKey][instalador]) planif.semanas[semKey][instalador] = {};
+
+    planif.semanas[semKey][instalador][fecha] = {
+      proyecto:          exp.cliente || 'Sin nombre',
+      comentario,
+      fecha_instalacion: fecha,
+      estado_instalacion:'planificado',
+      instalador,
+      _semKey: semKey,
+      _iso:    fecha,
+      _expId:  exp.id || null
+    };
+
+    saveOpsData();
+
+    exp.planif_asignado    = true;
+    exp.fecha_instalacion  = fecha;
+    exp.instalador_planif  = instalador;
+    exp.historial = exp.historial || [];
+    exp.historial.push({ accion: 'Asignado a planificación — ' + instalador + ' · ' + fecha, fecha: new Date().toLocaleDateString('es-HN') });
+    if(window._fbSaveVentas) window._fbSaveVentas(window.VENTAS_DATA);
+
+    document.getElementById('planifAsignarModal').style.display = 'none';
+    _asignarExpIdx = null;
+
+    planifRenderListos();
+    planifRenderAgenda();
+    if(typeof renderPlanif === 'function') renderPlanif();
+    toast('✅ ' + (exp.cliente||'Cliente') + ' asignado a planificación', '#ffd700');
+  };
+
+  // ── Hook: re-render listos cuando se abre planif y cuando llegan datos de Ventas ──
+  const _origShowOpsPlanif = window.showOpsPanel;
+  window.showOpsPanel = function(id, btn) {
+    if(_origShowOpsPlanif) _origShowOpsPlanif(id, btn);
+    if(id === 'planif') setTimeout(planifRenderListos, 250);
+  };
+
+  // ── Listener real de Firebase Ventas para Operaciones/Planificación ──
+  // Se registra aquí para garantizar que VENTAS_DATA esté disponible
+  // aunque el módulo de Ventas no haya sido abierto.
+  (function _initVentasListenerOps(){
+    if(!window._fbStartListenVentas) {
+      // Firebase no listo aún — reintentar en 1s
+      setTimeout(_initVentasListenerOps, 1000);
+      return;
+    }
+    window._fbStartListenVentas(function(data){
+      if(!data) return;
+      // Merge preservando flags en memoria (ej. fue_reprogramado)
+      if(window._mergeVentasData) { window._mergeVentasData(data); }
+      else {
+        const normalized = Array.isArray(data) ? { expedientes: data } : data;
+        window.VENTAS_DATA = normalized;
+      }
+      // Actualizar todas las vistas dependientes de VENTAS_DATA
+      if(window.planifRenderListos)  setTimeout(window.planifRenderListos, 60);
+      if(window.renderVtExpOps)      setTimeout(window.renderVtExpOps, 60);
+      if(window.lmRenderExpedientes) setTimeout(window.lmRenderExpedientes, 60);
+    });
+  })();
+
+})();
+// ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+// EXPEDIENTES DE VENTAS — Vista en Operaciones (opsp_folder)
+// ══════════════════════════════════════════════════════
+(function(){
+  var _vtExpOpsFilter = '';
+
+  const STATUS_LABELS = {
+    'nuevo':        { label: '🆕 Nuevo',           color: '#60a5fa', bg: 'rgba(59,130,246,.12)',  border: 'rgba(59,130,246,.3)'  },
+    'produccion':   { label: '⚙️ En Producción',   color: '#ffd700', bg: 'rgba(255,215,0,.12)',   border: 'rgba(255,215,0,.3)'   },
+    'logistica':    { label: '✅ Listo / Logística',color: '#a8ff3e', bg: 'rgba(168,255,62,.12)',  border: 'rgba(168,255,62,.3)'  },
+    'instalacion':  { label: '🔧 En Instalación',  color: '#ff6b35', bg: 'rgba(255,107,53,.12)',  border: 'rgba(255,107,53,.3)'  },
+    'terminado':    { label: '🏁 Terminado',        color: '#00e5ff', bg: 'rgba(0,229,255,.12)',   border: 'rgba(0,229,255,.3)'   },
+  };
+
+  function badge(status) {
+    const s = STATUS_LABELS[status] || { label: status || '—', color: '#6b7280', bg: 'rgba(107,114,128,.12)', border: 'rgba(107,114,128,.3)' };
+    return `<span style="background:${s.bg};color:${s.color};border:1px solid ${s.border};border-radius:20px;padding:2px 9px;font-size:9px;font-weight:700;font-family:'Space Mono',monospace;white-space:nowrap;">${s.label}</span>`;
+  }
+
+  window.vtExpOpsChip = function(btn, filter) {
+    _vtExpOpsFilter = filter;
+    document.querySelectorAll('#opsp_folder .ops-chip').forEach(b => b.classList.remove('active'));
+    if(btn) btn.classList.add('active');
+    renderVtExpOps();
+  };
+
+  window.renderVtExpOps = function() {
+    const tb   = document.getElementById('vtExpOpsBody');
+    const cnt  = document.getElementById('vtExpOpsCount');
+    if(!tb) return;
+
+    const all  = (window.VENTAS_DATA && window.VENTAS_DATA.expedientes) || [];
+    const q    = (document.getElementById('vtExpOpsSearch') || {value:''}).value.toLowerCase();
+
+    let rows = all;
+    if(_vtExpOpsFilter) rows = rows.filter(e => e.status === _vtExpOpsFilter);
+    if(q) rows = rows.filter(e => (e.cliente||'').toLowerCase().includes(q) || (e.vendedora||'').toLowerCase().includes(q));
+
+    if(cnt) cnt.textContent = rows.length + ' registro' + (rows.length !== 1 ? 's' : '');
+
+    // Badge de En Remedir en el chip
+    const remCount = all.filter(e => e.status === 'en_remedir').length;
+    const chipRem  = document.getElementById('vtExpOpsChipRem');
+    if(chipRem) chipRem.textContent = '📐 En Remedir' + (remCount > 0 ? ' (' + remCount + ')' : '');
+
+    if(!rows.length) {
+      tb.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:#2d3f5a;font-family:Space Mono,monospace;font-size:11px;">' +
+        (_vtExpOpsFilter ? 'No hay expedientes con ese estado' : 'No hay expedientes enviados por Ventas aún') +
+        '</td></tr>';
+      return;
+    }
+
+    tb.innerHTML = rows.map((exp, i) => {
+      // Encontrar el índice real en VENTAS_DATA para acciones
+      const realIdx = all.indexOf(exp);
+
+      // Botón de acción según status
+      let accionBtn = '<td style="padding:6px 10px;">—</td>';
+
+      if(exp.status === 'en_remedir') {
+        accionBtn = `<td style="padding:6px 10px;">
+          <button onclick="vtExpOpsDevolver(${realIdx})"
+            style="background:rgba(0,229,255,.15);color:#00e5ff;border:1px solid rgba(0,229,255,.4);border-radius:6px;padding:5px 11px;font-family:'Space Mono',monospace;font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap;">
+            ✅ Devolver a Ventas
+          </button>
+        </td>`;
+      } else if(exp.status === 'nuevo') {
+        accionBtn = `<td style="padding:6px 10px;">
+          <button onclick="vtExpOpsEnviarRemedir(${realIdx})"
+            style="background:rgba(255,107,53,.12);color:#ff6b35;border:1px solid rgba(255,107,53,.3);border-radius:6px;padding:5px 11px;font-family:'Space Mono',monospace;font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap;">
+            📐 Enviar a Remedir
+          </button>
+        </td>`;
+      } else {
+        accionBtn = `<td style="padding:6px 10px;color:#2d3f5a;font-size:10px;">${exp.status === 'logistica' ? '✓ Listo' : exp.status === 'instalacion' ? '🔧 Inst.' : exp.status === 'terminado' ? '🏁' : '—'}</td>`;
+      }
+
+      return `<tr>
+        <td style="color:#4b5563;">${i+1}</td>
+        <td style="color:#f9fafb;font-weight:700;">${exp.cliente||'—'}</td>
+        <td style="color:#a8ff3e;">${exp.vendedora||'—'}</td>
+        <td style="color:#00e5ff;">${exp.ciudad||'—'}</td>
+        <td style="color:#ffd700;font-size:10px;">${exp.areas||'—'}</td>
+        <td>${badge(exp.status)}</td>
+        <td style="color:#6b7280;font-size:10px;">${exp.fecha_entrega_estimada||'—'}</td>
+        ${accionBtn}
+        <td style="padding:6px 10px;text-align:center;">
+          <button onclick="vtExpOpsEliminar(${realIdx})"
+            style="background:rgba(255,62,154,.12);color:#ff3e9a;border:1px solid rgba(255,62,154,.3);border-radius:6px;padding:5px 9px;font-family:'Space Mono',monospace;font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s;"
+            onmouseover="this.style.background='rgba(255,62,154,.25)'" onmouseout="this.style.background='rgba(255,62,154,.12)'"
+            title="Eliminar expediente">✕ Eliminar</button>
+        </td>
+      </tr>`;
+    }).join('');
+  };
+
+  // ── Devolver expediente remedido a Ventas desde la tabla de Expedientes ──
+  window.vtExpOpsDevolver = function(idx) {
+    const exp = window.VENTAS_DATA && window.VENTAS_DATA.expedientes ? window.VENTAS_DATA.expedientes[idx] : null;
+    if(!exp) return;
+    const obs = prompt('Observaciones de remedición para Ventas (opcional):', '') || '';
+
+    // Notificar a Ventas (cambia status a "remedido")
+    if(window.vtRecibirRemedido) {
+      window.vtRecibirRemedido(exp.id, obs);
+    } else {
+      // Fallback directo
+      exp.status = 'remedido';
+      exp.obs_remedir = obs;
+      exp.historial = exp.historial||[];
+      exp.historial.push({ accion:'Remedido por Operaciones' + (obs ? ': '+obs : ''), fecha: new Date().toLocaleDateString('es-HN') });
+      if(window._fbSaveVentas) window._fbSaveVentas(window.VENTAS_DATA);
+    }
+
+    // Quitar de la lista remedir de OPS_DATA si existe
+    if(window.OPS_DATA && window.OPS_DATA.remedir) {
+      const nIdx = window.OPS_DATA.remedir.findIndex(r => r._vtId === exp.id);
+      if(nIdx >= 0) {
+        window.OPS_DATA.remedir.splice(nIdx, 1);
+        if(window._fbSaveOps) window._fbSaveOps(window.OPS_DATA);
+        if(window.renderNopsRemedir) window.renderNopsRemedir();
+        if(window.nopsUpdatePills)   window.nopsUpdatePills();
+      }
+    }
+
+    renderVtExpOps();
+    if(window.toast) window.toast('📐 Expediente devuelto a Ventas como remedido');
+  };
+
+  // ── Enviar expediente a Remedir desde Expedientes ──
+  window.vtExpOpsEnviarRemedir = function(idx) {
+    const exp = window.VENTAS_DATA && window.VENTAS_DATA.expedientes ? window.VENTAS_DATA.expedientes[idx] : null;
+    if(!exp) return;
+    if(!confirm('¿Enviar "' + (exp.cliente||'') + '" a Operaciones para remedir?')) return;
+    if(window.vtEnviarAOperaciones) {
+      window.vtEnviarAOperaciones(idx);
+    }
+    renderVtExpOps();
+  };
+
+  // ── Eliminar expediente desde Expedientes en Operaciones ──
+  window.vtExpOpsEliminar = function(idx) {
+    const exp = window.VENTAS_DATA && window.VENTAS_DATA.expedientes ? window.VENTAS_DATA.expedientes[idx] : null;
+    if(!exp) return;
+    if(!confirm('¿Eliminar definitivamente el expediente de "' + (exp.cliente||'Sin nombre') + '"?\n\nEsta acción no se puede deshacer.')) return;
+
+    // Quitar de planificación si estaba asignado
+    if(exp.planif_asignado && window.OPS_DATA && window.OPS_DATA.planif) {
+      const semanas = window.OPS_DATA.planif.semanas || {};
+      let changed = false;
+      Object.entries(semanas).forEach(([semKey, porIns]) => {
+        Object.entries(porIns).forEach(([ins, porDia]) => {
+          Object.entries(porDia).forEach(([iso, cell]) => {
+            if(cell && (cell._expId === exp.id || cell.proyecto === (exp.cliente||''))) {
+              try { delete semanas[semKey][ins][iso]; changed = true; } catch(e){}
+            }
+          });
+        });
+      });
+      if(changed) {
+        if(window._fbSaveOps) window._fbSaveOps(window.OPS_DATA);
+        if(window.renderPlanif) window.renderPlanif();
+        if(window.planifRenderAgenda) window.planifRenderAgenda();
+      }
+    }
+
+    // Quitar de Instalaciones en Proceso si estaba
+    if(window.OPS_DATA && window.OPS_DATA.inst) {
+      const iIdx = window.OPS_DATA.inst.findIndex(r => r._vtId === exp.id || r.cliente === (exp.cliente||''));
+      if(iIdx >= 0) {
+        window.OPS_DATA.inst.splice(iIdx, 1);
+        if(window._fbSaveOps) window._fbSaveOps(window.OPS_DATA);
+        if(window.renderNopsInst)  window.renderNopsInst();
+        if(window.nopsUpdatePills) window.nopsUpdatePills();
+      }
+    }
+
+    // Eliminar de VENTAS_DATA
+    window.VENTAS_DATA.expedientes.splice(idx, 1);
+    if(window._fbSaveVentas) window._fbSaveVentas(window.VENTAS_DATA);
+
+    renderVtExpOps();
+    if(window.planifRenderListos) window.planifRenderListos();
+    if(window.toast) window.toast('🗑 Expediente eliminado: ' + (exp.cliente||''));
+  };
+
+  // Actualizar cuando llegan datos de Ventas
+  const _origListenVentas = window._fbStartListenVentas;
+  if(_origListenVentas) {
+    // Hookear en el listener ya existente
+  }
+  // Re-render cuando se muestre el panel folder
+  const _origShowOpsPanel2 = window.showOpsPanel;
+  window.showOpsPanel = function(id, btn) {
+    if(_origShowOpsPanel2) _origShowOpsPanel2(id, btn);
+    if(id === 'folder') setTimeout(renderVtExpOps, 100);
+  };
+
+  // Actualizar cuando panel se abre (polling suave)
+  setInterval(function(){
+    if(document.getElementById('opsp_folder') &&
+       document.getElementById('opsp_folder').classList.contains('active')) {
+      renderVtExpOps();
+    }
+  }, 3000);
+
+})();
+// ══════════════════════════════════════════════════════
+// FIN EXPEDIENTES DE VENTAS EN OPERACIONES
+// ══════════════════════════════════════════════════════
+
+// FIN LISTOS PARA PLANIFICAR
+// ══════════════════════════════════════════════════════
+
+// ── Helper: merge VENTAS_DATA preservando flags en memoria ──
+// Evita race condition donde un snapshot de Firebase llega antes de confirmar
+// el save, borrando flags como fue_reprogramado que ya están en memoria.
+window._mergeVentasData = function(incoming) {
+  const normalized = Array.isArray(incoming) ? { expedientes: incoming } : incoming;
+  if(!normalized || !normalized.expedientes) { window.VENTAS_DATA = normalized; return; }
+  const prev = (window.VENTAS_DATA && window.VENTAS_DATA.expedientes) || [];
+  // Preservar flags de memoria si el snapshot de Firebase aún no los tiene
+  normalized.expedientes.forEach(function(exp) {
+    const old = prev.find(function(p){ return p.id ? p.id === exp.id : (p.cliente||'') === (exp.cliente||''); });
+    if(old) {
+      // Preservar fue_reprogramado si ya estaba en memoria
+      if(old.fue_reprogramado) exp.fue_reprogramado = true;
+      // Preservar planif_asignado en ambas direcciones (true y false) desde memoria,
+      // ya que el snapshot de Firebase puede ser un estado anterior al save más reciente.
+      if(typeof old.planif_asignado === 'boolean') exp.planif_asignado = old.planif_asignado;
+      // Preservar status si fue modificado en memoria recientemente (ej. devolver a logistica)
+      if(old._statusOverride) { exp.status = old.status; exp._statusOverride = true; }
+    }
+  });
+  window.VENTAS_DATA = normalized;
+};
+
+// ══════════════════════════════════════════════════════
+// PRODUCCIÓN — TAB EXPEDIENTES (desde Ventas)
+// ══════════════════════════════════════════════════════
+(function(){
+
+  // Render expedientes en producción
+  window.prodRenderExpedientes = function() {
+    const exps = (window.VENTAS_DATA && window.VENTAS_DATA.expedientes) || [];
+    const enProd = exps.filter(e=>e.status==='produccion');
+    const cont = document.getElementById('prodExpLista');
+    if(!cont) return;
+
+    // Badge
+    const badge = document.getElementById('prodExpBadge');
+    if(badge){ badge.textContent=enProd.length; badge.style.display=enProd.length>0?'flex':'none'; }
+
+    if(!enProd.length){
+      cont.innerHTML='<div style="text-align:center;padding:40px;color:#2d3f5a;font-size:11px;">No hay expedientes de Ventas asignados a Producción aún</div>';
+      return;
+    }
+
+    cont.innerHTML = enProd.map(exp => {
+      const idx = exps.indexOf(exp);
+      const areas = exp.areas ? exp.areas.split(',').map(a=>a.trim()).filter(Boolean) : [];
+      const checklist = exp.prod_checklist || {};
+      const checklistHtml = areas.length ? areas.map(area => {
+        const checked = checklist[area] || false;
+        return `<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;background:${checked?'rgba(168,255,62,.08)':'transparent'};border:1px solid ${checked?'rgba(168,255,62,.25)':'#1e2d40'};margin-bottom:5px;">
+          <input type="checkbox" ${checked?'checked':''} onchange="prodCheckArea(${idx},'${area.replace(/'/g,"\\'")}',this.checked)"
+            style="accent-color:#a8ff3e;width:14px;height:14px;">
+          <span style="font-size:11px;color:${checked?'#a8ff3e':'#9ca3af'};">${area}</span>
+          ${checked?'<span style="margin-left:auto;font-size:9px;color:#a8ff3e;font-weight:700;">✓ LISTO</span>':''}
+        </label>`;
+      }).join('') : '<div style="font-size:10px;color:#4b5563;">Sin áreas definidas</div>';
+
+      const allChecked = areas.length>0 && areas.every(a=>checklist[a]);
+
+      return `<div style="background:#0a0e18;border:1px solid ${allChecked?'rgba(168,255,62,.3)':'#1e2d40'};border-radius:12px;padding:16px;margin-bottom:12px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:#f0ece4;margin-bottom:3px;">${exp.cliente||'Sin nombre'}</div>
+            <div style="font-size:10px;color:#4b5563;">${exp.ciudad||''} ${exp.vendedora?'· Vendedora: '+exp.vendedora:''}</div>
+            <div style="font-size:10px;color:#6b7280;margin-top:3px;">📅 Fecha venta: ${exp.fecha||'—'}</div>
+            ${exp.notas?`<div style="font-size:10px;color:#4b5563;margin-top:3px;font-style:italic;">${exp.notas}</div>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
+            ${allChecked
+              ? `<button onclick="prodEnviarALogistica(${idx})"
+                  style="background:rgba(168,255,62,.2);color:#a8ff3e;border:1px solid rgba(168,255,62,.5);border-radius:8px;padding:8px 14px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;">
+                  🚚 Enviar a Logística →
+                </button>`
+              : `<span style="font-size:9px;color:#4b5563;text-align:right;">Completa el checklist<br>para enviar a Logística</span>`
+            }
+          </div>
+        </div>
+
+        <div style="font-size:10px;font-weight:700;color:#00bfff;letter-spacing:.8px;margin-bottom:8px;">✅ CHECKLIST DE ÁREAS</div>
+        ${checklistHtml}
+
+        <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <div style="font-size:10px;color:#4b5563;">📅 Fecha estimada entrega:</div>
+          <input type="date" value="${exp.fecha_entrega_estimada||''}"
+            onchange="prodSetFechaEntrega(${idx},this.value)"
+            style="background:#060a10;border:1px solid #1e2d40;color:#ffd700;font-family:'Space Mono',monospace;font-size:11px;padding:5px 10px;border-radius:6px;outline:none;">
+        </div>
+      </div>`;
+    }).join('');
+  };
+
+  // Check/uncheck area
+  window.prodCheckArea = function(idx, area, val) {
+    const exp = (window.VENTAS_DATA && window.VENTAS_DATA.expedientes) ? window.VENTAS_DATA.expedientes[idx] : null;
+    if(!exp) return;
+    if(!exp.prod_checklist) exp.prod_checklist = {};
+    exp.prod_checklist[area] = val;
+    if(window._fbSaveVentas) window._fbSaveVentas(window.VENTAS_DATA);
+    prodRenderExpedientes();
+  };
+
+  // Set fecha entrega estimada
+  window.prodSetFechaEntrega = function(idx, fecha) {
+    const exp = (window.VENTAS_DATA && window.VENTAS_DATA.expedientes) ? window.VENTAS_DATA.expedientes[idx] : null;
+    if(!exp) return;
+    exp.fecha_entrega_estimada = fecha;
+    if(window._fbSaveVentas) window._fbSaveVentas(window.VENTAS_DATA);
+    if(window.toast) toast('📅 Fecha estimada guardada');
+  };
+
+  // Enviar a Logística
+  window.prodEnviarALogistica = function(idx) {
+    const exp = (window.VENTAS_DATA && window.VENTAS_DATA.expedientes) ? window.VENTAS_DATA.expedientes[idx] : null;
+    if(!exp) return;
+    if(!confirm(`¿Enviar "${exp.cliente}" a Logística?\n\n• Aparecerá en Logística → Expedientes (Herrajes pendientes).\n• Aparecerá en Operaciones → Planificación → Listos para Planificar.`)) return;
+
+    // Cambiar status en Ventas → logistica
+    exp.status = 'logistica';
+    exp.planif_asignado = exp.planif_asignado || false;
+    exp.historial = exp.historial||[];
+    exp.historial.push({ accion:'Producción confirmada — Listo para Logística y Planificación', fecha: new Date().toLocaleDateString('es-HN') });
+    if(window._fbSaveVentas) window._fbSaveVentas(window.VENTAS_DATA);
+
+    // Actualizar vistas inmediatamente (antes de que llegue el snapshot de Firebase)
+    prodRenderExpedientes();
+    if(window.lmRenderExpedientes)  window.lmRenderExpedientes();
+    if(window.planifRenderListos)   window.planifRenderListos();
+    if(window.renderVtExpOps)       window.renderVtExpOps();
+
+    if(window.toast) toast('🚚 Enviado a Logística — aparece en Planificación: ' + exp.cliente);
+  };
+
+  // Hook into showProdTab to render when tab opens
+  const _origShowProdTab = window.showProdTab;
+  window.showProdTab = function(tabId, btn) {
+    if(_origShowProdTab) _origShowProdTab(tabId, btn);
+    if(tabId === 'prod_expedientes') {
+      setTimeout(prodRenderExpedientes, 100);
+    }
+  };
+
+  // Listen to Ventas changes
+  if(window._fbStartListenVentas) {
+    window._fbStartListenVentas(function(data){
+      if(data) {
+        if(window._mergeVentasData) window._mergeVentasData(data);
+        else window.VENTAS_DATA = Array.isArray(data) ? { expedientes: data } : data;
+        // Update badge
+        const exps = window.VENTAS_DATA.expedientes || [];
+        const cnt = exps.filter(e=>e.status==='produccion').length;
+        const badge = document.getElementById('prodExpBadge');
+        if(badge){ badge.textContent=cnt; badge.style.display=cnt>0?'flex':'none'; }
+        // Trigger dependent views
+        if(window.planifRenderListos)   setTimeout(window.planifRenderListos, 80);
+        if(window.renderVtExpOps)       setTimeout(window.renderVtExpOps, 80);
+        if(window.lmRenderExpedientes)  setTimeout(window.lmRenderExpedientes, 80);
+        prodRenderExpedientes();
+      }
+    });
+  }
+
+})();
+// ══════════════════════════════════════════════════════
+// FIN PRODUCCIÓN EXPEDIENTES
+// ══════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════
+// LOGÍSTICA — TAB EXPEDIENTES (desde Producción/Ventas)
+// ══════════════════════════════════════════════════════
+(function(){
+
+  // Sub-tab switcher
+  window.lmExpShowSub = function(sub, btn) {
+    document.querySelectorAll('.lm-exp-sub').forEach(p=>p.style.display='none');
+    document.querySelectorAll('.lm-exp-stab').forEach(b=>{
+      b.classList.remove('active');
+      b.style.background='transparent';
+      b.style.borderColor='rgba(255,255,255,.1)';
+      b.style.color='rgba(255,255,255,.3)';
+    });
+    const pane = document.getElementById('lmExpSub_'+sub);
+    if(pane) pane.style.display='block';
+    if(btn){
+      btn.classList.add('active');
+      const colors = { herrajes:['rgba(168,255,62,.12)','rgba(168,255,62,.3)','#a8ff3e'], instalacion:['rgba(0,229,255,.12)','rgba(0,229,255,.3)','#00e5ff'], terminados:['rgba(255,215,0,.12)','rgba(255,215,0,.3)','#ffd700'] };
+      const c = colors[sub]||colors.herrajes;
+      btn.style.background=c[0]; btn.style.borderColor=c[1]; btn.style.color=c[2];
+    }
+    lmRenderExpedientes();
+  };
+
+  // Render expedition sub-panels — Logística solo muestra herrajes pendientes
+  window.lmRenderExpedientes = function() {
+    const exps = (window.VENTAS_DATA && window.VENTAS_DATA.expedientes) || [];
+    const q = (document.getElementById('lmExpSearch')?.value||'').toLowerCase();
+    const filt = q ? exps.filter(e=>(e.cliente||'').toLowerCase().includes(q)) : exps;
+
+    // Herrajes pendientes = status 'logistica' (producción los envió acá)
+    const herrajes = filt.filter(e=>e.status==='logistica');
+
+    // ── Herrajes ──
+    const lhEl = document.getElementById('lmExpListaHerrajes');
+    if(lhEl){
+      if(!herrajes.length){
+        lhEl.innerHTML='<div style="text-align:center;padding:40px;color:#2d3f5a;font-size:11px;">No hay expedientes con herrajes pendientes</div>';
+      } else {
+        lhEl.innerHTML = herrajes.map(exp=>{
+          const idx = exps.indexOf(exp);
+          return `<div style="background:#0a0e18;border:1px solid rgba(168,255,62,.2);border-radius:10px;padding:12px 14px;margin-bottom:8px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+              <div>
+                <div style="font-size:13px;font-weight:700;color:#f0ece4;margin-bottom:3px;">${exp.cliente||'Sin nombre'}</div>
+                <div style="font-size:10px;color:#4b5563;">${exp.ciudad||''} ${exp.vendedora?'· '+exp.vendedora:''}</div>
+                <div style="font-size:10px;color:#6b7280;margin-top:4px;">📐 ${exp.areas||'Sin áreas'}</div>
+                ${exp.fecha_entrega_estimada?`<div style="font-size:10px;color:#ffd700;margin-top:3px;">📅 Entrega estimada: ${exp.fecha_entrega_estimada}</div>`:''}
+              </div>
+              <button onclick="lmExpHerrajesListos(${idx})"
+                style="background:rgba(168,255,62,.15);color:#a8ff3e;border:1px solid rgba(168,255,62,.4);border-radius:8px;padding:8px 14px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">
+                🔩 Herrajes Listos →
+              </button>
+            </div>
+          </div>`;
+        }).join('');
+      }
+    }
+
+    // Badge en nav
+    const dot = document.getElementById('lmDotExpedientes');
+    if(dot) dot.style.display = herrajes.length>0?'block':'none';
+  };
+
+  // ── Herrajes listos → pasar a Instalación ──
+  window.lmExpHerrajesListos = function(idx) {
+    if(!confirm('¿Confirmar que los herrajes están listos?\n\nEl expediente pasará a:\n• Planificación — Listo para planificar')) return;
+
+    const exp = window.VENTAS_DATA && window.VENTAS_DATA.expedientes ? window.VENTAS_DATA.expedientes[idx] : null;
+    if(!exp) return;
+
+    // Mantener status en 'logistica' para que Planificación lo recoja
+    exp.herrajes_listos = true;
+    exp.historial = exp.historial||[];
+    exp.historial.push({ accion:'Herrajes confirmados — Listo para planificar', fecha: new Date().toLocaleDateString('es-HN') });
+    if(window._fbSaveVentas) window._fbSaveVentas(window.VENTAS_DATA);
+
+    lmRenderExpedientes();
+    if(window.planifRenderListos) window.planifRenderListos();
+    if(window.renderVtExpOps)     window.renderVtExpOps();
+    if(window.toast) toast('✅ Herrajes listos — Expediente listo para planificar');
+  };
+
+  // ── Instalación terminada ──
+  window.lmExpTerminar = function(idx) {
+    if(!confirm('¿Marcar este expediente como TERMINADO?')) return;
+    const exp = window.VENTAS_DATA && window.VENTAS_DATA.expedientes ? window.VENTAS_DATA.expedientes[idx] : null;
+    if(!exp) return;
+
+    exp.status = 'terminado';
+    exp.fecha_terminado = new Date().toLocaleDateString('es-HN');
+    exp.historial = exp.historial||[];
+    exp.historial.push({ accion:'Proyecto terminado', fecha: exp.fecha_terminado });
+    if(window._fbSaveVentas) window._fbSaveVentas(window.VENTAS_DATA);
+
+    // Mover en Operaciones: de inst → term
+    if(window.OPS_DATA) {
+      const iIdx = (window.OPS_DATA.inst||[]).findIndex(r=>r._vtId===exp.id);
+      if(iIdx>=0) {
+        const rec = window.OPS_DATA.inst.splice(iIdx,1)[0];
+        if(!window.OPS_DATA.term) window.OPS_DATA.term=[];
+        window.OPS_DATA.term.push({
+          ...rec,
+          cliente:   exp.cliente,
+          ciudad:    exp.ciudad,
+          obs:       exp.areas||'',
+          fecha_term: exp.fecha_terminado,
+          accion:    'Terminado'
+        });
+        if(window._fbSaveOps) window._fbSaveOps(window.OPS_DATA);
+        if(window.renderNopsInst)       window.renderNopsInst();
+        if(window.renderNopsTerminados) window.renderNopsTerminados();
+        if(window.nopsUpdatePills)      window.nopsUpdatePills();
+      }
+    }
+
+    lmRenderExpedientes();
+    if(window.toast) toast('🏁 Proyecto terminado: ' + exp.cliente);
+  };
+
+  // Re-render on tab open
+  const _origLmShowTab = window.lmShowTab;
+  window.lmShowTab = function(id) {
+    if(_origLmShowTab) _origLmShowTab(id);
+    if(id === 'expedientes') {
+      setTimeout(lmRenderExpedientes, 100);
+    }
+  };
+
+  // Also listen to Ventas Firebase updates to refresh
+  if(window._fbStartListenVentas) {
+    window._fbStartListenVentas(function(data){
+      if(data) {
+        if(window._mergeVentasData) window._mergeVentasData(data);
+        else window.VENTAS_DATA = Array.isArray(data) ? { expedientes: data } : data;
+        lmRenderExpedientes();
+        if(window.renderVtExpOps) setTimeout(window.renderVtExpOps, 50);
+        if(window.planifRenderListos) setTimeout(window.planifRenderListos, 50);
+      }
+    });
+  }
+
+})();
+// ══════════════════════════════════════════════════════
+// FIN LOGÍSTICA EXPEDIENTES
+// ══════════════════════════════════════════════════════
+
 </script>
 
+<!-- ══════════════════════════════════════════════════════
+     MODAL: NUEVO EXPEDIENTE MANUAL (Operaciones → Expedientes)
+     ══════════════════════════════════════════════════════ -->
+<div id="opsModalExpediente" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(7px);z-index:9500;align-items:center;justify-content:center;">
+  <div style="background:#0f1923;border:1px solid rgba(0,229,255,.35);border-radius:18px;padding:28px 28px 24px;width:90%;max-width:480px;max-height:90vh;overflow-y:auto;font-family:'Space Mono',monospace;position:relative;">
+    <!-- Header -->
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;">
+      <div>
+        <div style="font-size:9px;letter-spacing:2px;color:#00e5ff;font-weight:700;margin-bottom:4px;">OPERACIONES · EXPEDIENTES</div>
+        <div style="font-size:17px;font-weight:800;color:#f9fafb;">Nuevo Expediente</div>
+        <div style="font-size:10px;color:#4b5563;margin-top:3px;">Agrega un expediente manualmente al sistema</div>
+      </div>
+      <button onclick="opsCerrarModalExpediente()" style="background:transparent;border:1px solid #1e2d40;color:#6b7280;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:16px;flex-shrink:0;">✕</button>
+    </div>
+
+    <!-- Campos -->
+    <div style="display:flex;flex-direction:column;gap:13px;">
+      <div>
+        <label style="font-size:9px;letter-spacing:1.5px;color:#4b5563;display:block;margin-bottom:5px;">CLIENTE *</label>
+        <input id="opsExpCliente" type="text" placeholder="Nombre del cliente..."
+          style="width:100%;background:#07090f;border:1px solid #1e2d40;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:12px;padding:9px 12px;border-radius:9px;outline:none;transition:border .2s;"
+          onfocus="this.style.borderColor='rgba(0,229,255,.5)'" onblur="this.style.borderColor='#1e2d40'">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label style="font-size:9px;letter-spacing:1.5px;color:#4b5563;display:block;margin-bottom:5px;">VENDEDORA</label>
+          <input id="opsExpVendedora" type="text" placeholder="Nombre vendedora..."
+            style="width:100%;background:#07090f;border:1px solid #1e2d40;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:12px;padding:9px 12px;border-radius:9px;outline:none;"
+            onfocus="this.style.borderColor='rgba(0,229,255,.5)'" onblur="this.style.borderColor='#1e2d40'">
+        </div>
+        <div>
+          <label style="font-size:9px;letter-spacing:1.5px;color:#4b5563;display:block;margin-bottom:5px;">CIUDAD</label>
+          <select id="opsExpCiudad"
+            style="width:100%;background:#07090f;border:1px solid #1e2d40;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:11px;padding:9px 10px;border-radius:9px;outline:none;cursor:pointer;">
+            <option value="">Seleccionar...</option>
+            <option value="TGU">TGU</option>
+            <option value="SPS">SPS</option>
+            <option value="CRT">CRT</option>
+            <option value="Otra">Otra</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:9px;letter-spacing:1.5px;color:#4b5563;display:block;margin-bottom:5px;">ÁREAS / DESCRIPCIÓN</label>
+        <input id="opsExpAreas" type="text" placeholder="Ej: Cocina, closet, baño principal..."
+          style="width:100%;background:#07090f;border:1px solid #1e2d40;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:12px;padding:9px 12px;border-radius:9px;outline:none;"
+          onfocus="this.style.borderColor='rgba(0,229,255,.5)'" onblur="this.style.borderColor='#1e2d40'">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label style="font-size:9px;letter-spacing:1.5px;color:#4b5563;display:block;margin-bottom:5px;">ESTADO INICIAL</label>
+          <select id="opsExpStatus"
+            style="width:100%;background:#07090f;border:1px solid #1e2d40;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:11px;padding:9px 10px;border-radius:9px;outline:none;cursor:pointer;">
+            <option value="en_remedir">📐 En Remedir</option>
+            <option value="produccion">🏭 En Producción</option>
+            <option value="logistica">🔩 Logística / Listos</option>
+            <option value="instalacion">🔧 En Instalación</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:9px;letter-spacing:1.5px;color:#4b5563;display:block;margin-bottom:5px;">FECHA ENTREGA EST.</label>
+          <input id="opsExpFechaEst" type="date"
+            style="width:100%;background:#07090f;border:1px solid #1e2d40;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:11px;padding:9px 10px;border-radius:9px;outline:none;"
+            onfocus="this.style.borderColor='rgba(0,229,255,.5)'" onblur="this.style.borderColor='#1e2d40'">
+        </div>
+      </div>
+      <div>
+        <label style="font-size:9px;letter-spacing:1.5px;color:#4b5563;display:block;margin-bottom:5px;">OBSERVACIONES</label>
+        <textarea id="opsExpObs" rows="2" placeholder="Notas adicionales..."
+          style="width:100%;background:#07090f;border:1px solid #1e2d40;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:11px;padding:9px 12px;border-radius:9px;outline:none;resize:vertical;"
+          onfocus="this.style.borderColor='rgba(0,229,255,.5)'" onblur="this.style.borderColor='#1e2d40'"></textarea>
+      </div>
+    </div>
+
+    <!-- Botones -->
+    <div style="display:flex;gap:10px;margin-top:22px;justify-content:flex-end;">
+      <button onclick="opsCerrarModalExpediente()"
+        style="background:transparent;border:1px solid #1e2d40;color:#6b7280;padding:9px 18px;border-radius:9px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;">
+        Cancelar
+      </button>
+      <button onclick="opsGuardarExpediente()"
+        style="background:linear-gradient(135deg,rgba(0,229,255,.25),rgba(168,255,62,.15));color:#00e5ff;border:1px solid rgba(0,229,255,.5);padding:9px 22px;border-radius:9px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;transition:all .2s;"
+        onmouseover="this.style.background='rgba(0,229,255,.35)'" onmouseout="this.style.background='linear-gradient(135deg,rgba(0,229,255,.25),rgba(168,255,62,.15))'">
+        ＋ Guardar Expediente
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MODAL: AGREGAR CLIENTE CONFIRMADO POR PRODUCCIÓN (Planificación)
+     ══════════════════════════════════════════════════════ -->
+<div id="opsModalClienteConfirmado" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(7px);z-index:9500;align-items:center;justify-content:center;">
+  <div style="background:#0f1923;border:1px solid rgba(255,215,0,.4);border-radius:18px;padding:28px 28px 24px;width:90%;max-width:460px;max-height:90vh;overflow-y:auto;font-family:'Space Mono',monospace;position:relative;">
+    <!-- Header -->
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;">
+      <div>
+        <div style="font-size:9px;letter-spacing:2px;color:#ffd700;font-weight:700;margin-bottom:4px;">PLANIFICACIÓN · COLA DE INSTALACIÓN</div>
+        <div style="font-size:17px;font-weight:800;color:#f9fafb;">Agregar Cliente Confirmado</div>
+        <div style="font-size:10px;color:#4b5563;margin-top:3px;">Agrega un cliente directamente a la cola de planificación</div>
+      </div>
+      <button onclick="opsCerrarModalClienteConfirmado()" style="background:transparent;border:1px solid #1e2d40;color:#6b7280;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:16px;flex-shrink:0;">✕</button>
+    </div>
+
+    <!-- Campos -->
+    <div style="display:flex;flex-direction:column;gap:13px;">
+      <div>
+        <label style="font-size:9px;letter-spacing:1.5px;color:#4b5563;display:block;margin-bottom:5px;">CLIENTE *</label>
+        <input id="opsPlanifCliente" type="text" placeholder="Nombre del cliente..."
+          style="width:100%;background:#07090f;border:1px solid #1e2d40;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:12px;padding:9px 12px;border-radius:9px;outline:none;"
+          onfocus="this.style.borderColor='rgba(255,215,0,.6)'" onblur="this.style.borderColor='#1e2d40'">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label style="font-size:9px;letter-spacing:1.5px;color:#4b5563;display:block;margin-bottom:5px;">VENDEDORA</label>
+          <input id="opsPlanifVendedora" type="text" placeholder="Vendedora..."
+            style="width:100%;background:#07090f;border:1px solid #1e2d40;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:12px;padding:9px 12px;border-radius:9px;outline:none;"
+            onfocus="this.style.borderColor='rgba(255,215,0,.6)'" onblur="this.style.borderColor='#1e2d40'">
+        </div>
+        <div>
+          <label style="font-size:9px;letter-spacing:1.5px;color:#4b5563;display:block;margin-bottom:5px;">CIUDAD</label>
+          <select id="opsPlanifCiudad"
+            style="width:100%;background:#07090f;border:1px solid #1e2d40;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:11px;padding:9px 10px;border-radius:9px;outline:none;cursor:pointer;">
+            <option value="">Seleccionar...</option>
+            <option value="TGU">TGU</option>
+            <option value="SPS">SPS</option>
+            <option value="CRT">CRT</option>
+            <option value="Otra">Otra</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:9px;letter-spacing:1.5px;color:#4b5563;display:block;margin-bottom:5px;">ÁREAS / DESCRIPCIÓN</label>
+        <input id="opsPlanifAreas" type="text" placeholder="Ej: Cocina, closet, baño..."
+          style="width:100%;background:#07090f;border:1px solid #1e2d40;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:12px;padding:9px 12px;border-radius:9px;outline:none;"
+          onfocus="this.style.borderColor='rgba(255,215,0,.6)'" onblur="this.style.borderColor='#1e2d40'">
+      </div>
+      <div>
+        <label style="font-size:9px;letter-spacing:1.5px;color:#4b5563;display:block;margin-bottom:5px;">FECHA ENTREGA ESTIMADA</label>
+        <input id="opsPlanifFechaEst" type="date"
+          style="width:100%;background:#07090f;border:1px solid #1e2d40;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:11px;padding:9px 10px;border-radius:9px;outline:none;"
+          onfocus="this.style.borderColor='rgba(255,215,0,.6)'" onblur="this.style.borderColor='#1e2d40'">
+      </div>
+      <div>
+        <label style="font-size:9px;letter-spacing:1.5px;color:#4b5563;display:block;margin-bottom:5px;">OBSERVACIONES</label>
+        <textarea id="opsPlanifObs" rows="2" placeholder="Notas o comentarios adicionales..."
+          style="width:100%;background:#07090f;border:1px solid #1e2d40;color:#e5e7eb;font-family:'Space Mono',monospace;font-size:11px;padding:9px 12px;border-radius:9px;outline:none;resize:vertical;"
+          onfocus="this.style.borderColor='rgba(255,215,0,.6)'" onblur="this.style.borderColor='#1e2d40'"></textarea>
+      </div>
+      <!-- Aviso informativo -->
+      <div style="background:rgba(255,215,0,.07);border:1px solid rgba(255,215,0,.25);border-radius:9px;padding:10px 14px;font-size:10px;color:#a08030;line-height:1.5;">
+        ⚡ Este cliente aparecerá directamente en la cola <strong style="color:#ffd700;">Listos para Planificar</strong> como si hubiera sido confirmado por Producción.
+      </div>
+    </div>
+
+    <!-- Botones -->
+    <div style="display:flex;gap:10px;margin-top:22px;justify-content:flex-end;">
+      <button onclick="opsCerrarModalClienteConfirmado()"
+        style="background:transparent;border:1px solid #1e2d40;color:#6b7280;padding:9px 18px;border-radius:9px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;">
+        Cancelar
+      </button>
+      <button onclick="opsGuardarClienteConfirmado()"
+        style="background:linear-gradient(135deg,rgba(255,215,0,.28),rgba(0,220,200,.12));color:#ffd700;border:1px solid rgba(255,215,0,.55);padding:9px 22px;border-radius:9px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:pointer;transition:all .2s;"
+        onmouseover="this.style.background='rgba(255,215,0,.38)'" onmouseout="this.style.background='linear-gradient(135deg,rgba(255,215,0,.28),rgba(0,220,200,.12))'">
+        ＋ Agregar a Cola
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     JS: LÓGICA MODALES AGREGAR DATOS MANUAL — OPERACIONES
+     ══════════════════════════════════════════════════════ -->
+<script>
+(function(){
+
+  // ── Helpers generales ──────────────────────────────────
+  function genId(prefix){ return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,7); }
+  function today(){ return new Date().toLocaleDateString('es-HN'); }
+  function showModal(id){ const m=document.getElementById(id); if(m){ m.style.display='flex'; } }
+  function hideModal(id){ const m=document.getElementById(id); if(m){ m.style.display='none'; } }
+
+  // ── Cerrar modal con clic fuera ────────────────────────
+  ['opsModalExpediente','opsModalClienteConfirmado'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.addEventListener('click', function(e){ if(e.target===el) hideModal(id); });
+  });
+
+  // ══════════════════════════════════════════════════════
+  // MODAL 1: NUEVO EXPEDIENTE MANUAL
+  // ══════════════════════════════════════════════════════
+  window.opsAbrirModalExpediente = function(){
+    // Limpiar campos
+    ['opsExpCliente','opsExpVendedora','opsExpAreas','opsExpFechaEst','opsExpObs'].forEach(function(id){
+      var el = document.getElementById(id); if(el) el.value = '';
+    });
+    var st = document.getElementById('opsExpStatus');
+    if(st) st.value = 'en_remedir';
+    var cd = document.getElementById('opsExpCiudad');
+    if(cd) cd.value = '';
+    showModal('opsModalExpediente');
+    setTimeout(function(){ var c=document.getElementById('opsExpCliente'); if(c) c.focus(); }, 100);
+  };
+
+  window.opsCerrarModalExpediente = function(){ hideModal('opsModalExpediente'); };
+
+  window.opsGuardarExpediente = function(){
+    var cliente = (document.getElementById('opsExpCliente')?.value || '').trim();
+    if(!cliente){ alert('El nombre del cliente es obligatorio.'); return; }
+
+    var status  = document.getElementById('opsExpStatus')?.value   || 'en_remedir';
+    var ciudad  = document.getElementById('opsExpCiudad')?.value   || '';
+    var vend    = (document.getElementById('opsExpVendedora')?.value || '').trim();
+    var areas   = (document.getElementById('opsExpAreas')?.value    || '').trim();
+    var fechaEst= document.getElementById('opsExpFechaEst')?.value  || '';
+    var obs     = (document.getElementById('opsExpObs')?.value      || '').trim();
+
+    var exp = {
+      id:                    genId('exp'),
+      cliente:               cliente,
+      vendedora:             vend,
+      ciudad:                ciudad,
+      areas:                 areas,
+      status:                status,
+      fecha_entrega_estimada: fechaEst,
+      obs:                   obs,
+      agregado_manual:       true,
+      herrajes_listos:       (status === 'logistica' || status === 'instalacion'),
+      historial: [{ accion: 'Expediente creado manualmente en Operaciones', fecha: today() }]
+    };
+
+    // Guardar en VENTAS_DATA
+    if(!window.VENTAS_DATA) window.VENTAS_DATA = {};
+    if(!window.VENTAS_DATA.expedientes) window.VENTAS_DATA.expedientes = [];
+    window.VENTAS_DATA.expedientes.push(exp);
+
+    if(window._fbSaveVentas) window._fbSaveVentas(window.VENTAS_DATA);
+
+    // Refrescar vistas
+    if(typeof renderVtExpOps     === 'function') renderVtExpOps();
+    if(typeof lmRenderExpedientes=== 'function') lmRenderExpedientes();
+    if(typeof planifRenderListos  === 'function') planifRenderListos();
+
+    hideModal('opsModalExpediente');
+    if(window.toast) toast('✅ Expediente "' + cliente + '" agregado');
+  };
+
+  // ══════════════════════════════════════════════════════
+  // MODAL 2: AGREGAR CLIENTE CONFIRMADO POR PRODUCCIÓN
+  // ══════════════════════════════════════════════════════
+  window.opsAbrirModalClienteConfirmado = function(){
+    ['opsPlanifCliente','opsPlanifVendedora','opsPlanifAreas','opsPlanifFechaEst','opsPlanifObs'].forEach(function(id){
+      var el = document.getElementById(id); if(el) el.value = '';
+    });
+    var cd = document.getElementById('opsPlanifCiudad');
+    if(cd) cd.value = '';
+    showModal('opsModalClienteConfirmado');
+    setTimeout(function(){ var c=document.getElementById('opsPlanifCliente'); if(c) c.focus(); }, 100);
+  };
+
+  window.opsCerrarModalClienteConfirmado = function(){ hideModal('opsModalClienteConfirmado'); };
+
+  window.opsGuardarClienteConfirmado = function(){
+    var cliente = (document.getElementById('opsPlanifCliente')?.value || '').trim();
+    if(!cliente){ alert('El nombre del cliente es obligatorio.'); return; }
+
+    var ciudad  = document.getElementById('opsPlanifCiudad')?.value    || '';
+    var vend    = (document.getElementById('opsPlanifVendedora')?.value || '').trim();
+    var areas   = (document.getElementById('opsPlanifAreas')?.value    || '').trim();
+    var fechaEst= document.getElementById('opsPlanifFechaEst')?.value  || '';
+    var obs     = (document.getElementById('opsPlanifObs')?.value      || '').trim();
+
+    // Se crea con status='logistica' y herrajes_listos=true para que
+    // apparezca directo en la cola "Listos para Planificar"
+    var exp = {
+      id:                    genId('planif'),
+      cliente:               cliente,
+      vendedora:             vend,
+      ciudad:                ciudad,
+      areas:                 areas,
+      obs:                   obs,
+      status:                'logistica',
+      herrajes_listos:       true,
+      planif_asignado:       false,
+      agregado_manual:       true,
+      fecha_entrega_estimada: fechaEst,
+      historial: [{ accion: 'Agregado manualmente como confirmado por Producción', fecha: today() }]
+    };
+
+    if(!window.VENTAS_DATA) window.VENTAS_DATA = {};
+    if(!window.VENTAS_DATA.expedientes) window.VENTAS_DATA.expedientes = [];
+    window.VENTAS_DATA.expedientes.push(exp);
+
+    if(window._fbSaveVentas) window._fbSaveVentas(window.VENTAS_DATA);
+
+    // Refrescar vistas
+    if(typeof planifRenderListos   === 'function') planifRenderListos();
+    if(typeof renderVtExpOps       === 'function') renderVtExpOps();
+    if(typeof lmRenderExpedientes  === 'function') lmRenderExpedientes();
+
+    hideModal('opsModalClienteConfirmado');
+    if(window.toast) toast('⭐ Cliente "' + cliente + '" agregado a cola de planificación');
+  };
+
+})();
+</script>
 
 <!-- ══ MENÚ CONTEXTUAL TERMINADOS ══ -->
 <div id="termContextMenu" style="display:none;position:fixed;z-index:99999;background:#0f1923;border:1px solid rgba(168,255,62,.35);border-radius:12px;padding:6px;min-width:210px;box-shadow:0 8px 30px rgba(0,0,0,.6);font-family:'Space Mono',monospace;">
