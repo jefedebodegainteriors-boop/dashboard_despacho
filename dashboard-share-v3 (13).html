@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Interiorshn · Dashboard (solo datos reales)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --brand-50:#f0fdfa; --brand-200:#99f6e4; --brand-500:#0d9488;
+    --brand-700:#0f766e; --brand-900:#134e4a;
+    --gold:#b8860b;
+  }
+  body { font-family: ui-sans-serif, system-ui, sans-serif; background:#faf8f5; color:#1c1917; }
+  .card-shadow { box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03); }
+  .scrollbar-thin::-webkit-scrollbar { width:6px; height:6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.2); border-radius:3px; }
+  /* Impresión de la vitrina del catálogo */
+  @media print {
+    body { background:#fff !important; }
+    @page { size: A4 landscape; margin: 10mm; }
+    .print\:hidden { display: none !important; }
+    .print\:block { display: block !important; }
+    .print\:bg-stone-200 { background-color: #e7e5e4 !important; }
+    .print\:text-stone-900 { color: #1c1917 !important; }
+    .print\:break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
+    .print\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+    .print\:shadow-none { box-shadow: none !important; }
+    /* Forzar colores en impresión */
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    /* Ocultar el sidebar y top bar al imprimir */
+    aside, header, nav { display: none !important; }
+    main { padding: 0 !important; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="app.min.js"></script>
+
+<!-- ==========================================================
+     FIREBASE · Live sync (bridge por eventos · no toca React)
+     ========================================================== -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, doc, onSnapshot, setDoc, serverTimestamp, collection, getDocs, deleteDoc }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
+  // Util para despachar eventos hacia React
+  const fire = (type, detail) =>
+    document.dispatchEvent(new CustomEvent(type, { detail }));
+
+  // Firebase se conecta SOLO cuando Root dispara 'fb-init' tras login.
+  // Hasta entonces, el HTML no hace llamadas a Firestore.
+  let _started = false;
+  document.addEventListener('fb-init', (ev) => {
+    if (_started) return;
+    _started = true;
+    const cfg = ev.detail;
+    fire('sync-status', { state:'snapshot', message:'Snapshot cargado · Conectando…' });
+    try {
+      const app = initializeApp(cfg);
+      const db  = getFirestore(app);
+      const KEYS = ['main','produccion','operaciones','inventario'];
+      const received = new Set();
+      KEYS.forEach(k => {
+        onSnapshot(
+          doc(db, 'dashboard', k),
+          { includeMetadataChanges: true },
+          (snap) => {
+            const fromCache = snap.metadata.fromCache;
+            const data = snap.data();
+            if (data?.payload) {
+              try {
+                const payload = JSON.parse(data.payload);
+                fire('db-update', { key:k, payload, fromCache });
+                received.add(k);
+                if (received.size === KEYS.length) {
+                  fire('sync-status', {
+                    state: fromCache ? 'cache' : 'live',
+                    message: fromCache ? 'Datos en caché' : 'En vivo · Firebase',
+                  });
+                }
+              } catch (e) {
+                console.error('[sync] JSON parse failed for', k, e);
+              }
+            }
+          },
+          (err) => {
+            console.error('[sync] onSnapshot error', k, err);
+            fire('sync-status', { state:'error', message:'Sin conexión · usando snapshot' });
+          }
+        );
+      });
+
+      // Writer expuesto a React: actualiza un doc completo.
+      // Uso: await window._fbSave('main', {desp:[...], pend:[...], bodega:[...], ...})
+      window._fbSave = async (docKey, payload) => {
+        if (!KEYS.includes(docKey)) throw new Error('docKey inválido: '+docKey);
+        try {
+          await setDoc(
+            doc(db, 'dashboard', docKey),
+            { payload: JSON.stringify(payload), updatedAt: serverTimestamp() }
+          );
+          return true;
+        } catch (e) {
+          console.error('[sync] write failed', docKey, e);
+          fire('sync-status', { state:'error', message:'Guardado falló · revisar red' });
+          throw e;
+        }
+      };
+
+      // ============================================================
+      // FIREBASE STORAGE · subir/borrar imágenes de productos
+      // ============================================================
+      const stg = getStorage(app);
+
+      // Sube una imagen base64 a Storage y devuelve {url, path}
+      window._fbUploadImage = async (base64DataUrl, productoId) => {
+        try {
+          // Convertir data URL a Blob
+          const [meta, b64] = base64DataUrl.split(',');
+          const mime = (meta.match(/:(.*?);/)||[])[1] || 'image/jpeg';
+          const ext  = mime.split('/')[1] || 'jpg';
+          const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+          const blob = new Blob([bytes], { type: mime });
+          const path = `productos/${productoId || 'sin-id'}/${Date.now()}.${ext}`;
+          const r = storageRef(stg, path);
+          await uploadBytes(r, blob);
+          const url = await getDownloadURL(r);
+          return { url, path };
+        } catch (e) {
+          console.error('[storage] upload failed', e);
+          throw e;
+        }
+      };
+
+      // Borra una imagen del Storage por su path
+      window._fbDeleteImage = async (path) => {
+        if (!path) return;
+        try { await deleteObject(storageRef(stg, path)); }
+        catch (e) { console.warn('[storage] delete failed (puede que ya no exista)', path, e.code); }
+      };
+
+      // ============================================================
+      // FIRESTORE · MOVIMIENTOS POR MES (sub-colección por bucket)
+      // dashboard/inventario/movimientos/{YYYY-MM}
+      // Cada doc agrupa los movimientos de un mes. Permite escalar
+      // sin chocar con el límite de 1 MB del doc principal.
+      // ============================================================
+      const _movsListenersByBucket = new Map(); // bucket → unsubscribe
+
+      // Escucha un bucket de movimientos. Si ya está suscrito, no duplica.
+      window._fbSubscribeMovs = (bucket) => {
+        if (_movsListenersByBucket.has(bucket)) return;
+        const ref = doc(db, 'dashboard', 'inventario', 'movimientos', bucket);
+        const unsub = onSnapshot(ref, (snap) => {
+          const data = snap.data();
+          const movs = data?.payload ? JSON.parse(data.payload) : [];
+          fire('movs-bucket-update', { bucket, movs });
+        }, (err) => {
+          console.error('[movs] subscribe error', bucket, err);
+        });
+        _movsListenersByBucket.set(bucket, unsub);
+      };
+
+      // Lista todos los buckets disponibles (lectura única, sin listener)
+      window._fbListMovBuckets = async () => {
+        try {
+          const col = collection(db, 'dashboard', 'inventario', 'movimientos');
+          const snap = await getDocs(col);
+          const buckets = [];
+          snap.forEach(d => buckets.push(d.id));
+          return buckets.sort();
+        } catch (e) {
+          console.error('[movs] listBuckets failed', e);
+          return [];
+        }
+      };
+
+      // Guarda movimientos de un bucket
+      window._fbSaveMovBucket = async (bucket, movs) => {
+        try {
+          await setDoc(
+            doc(db, 'dashboard', 'inventario', 'movimientos', bucket),
+            { payload: JSON.stringify(movs), updatedAt: serverTimestamp(), count: movs.length }
+          );
+          return true;
+        } catch (e) {
+          console.error('[movs] save failed', bucket, e);
+          throw e;
+        }
+      };
+    } catch (e) {
+      console.error('[sync] init failed', e);
+      fire('sync-status', { state:'error', message:'Firebase no disponible · snapshot' });
+    }
+  });
+</script>
+</body>
+</html>
