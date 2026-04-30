@@ -4516,22 +4516,81 @@
   // SIDEBAR + RENDER
   // ═══════════════════════════════════════════════════════════════════
   const VIEWS = [
-    { key: 'resumen',  label: 'Resumen',           icon: '📊', group: 'VISTAS',   countKey: null },
-    { key: 'semana',   label: 'Resumen Semanal',   icon: '📅', group: 'VISTAS',   countKey: null },
-    { key: 'corte',    label: 'Corte',             icon: '⚙️', group: 'GESTIÓN',  countKey: 'corte' },
-    { key: 'armado',   label: 'Armado',            icon: '🔨', group: 'GESTIÓN',  countKey: 'armado' },
-    { key: 'taller',   label: 'Clientes en taller',icon: '👷', group: 'GESTIÓN',  countKey: 'clientes_taller' },
-    { key: 'proceso',  label: 'Clientes en proceso',icon:'✅', group: 'GESTIÓN',  countKey: 'clientes' },
-    { key: 'rpt',      label: 'Reporte Producción',icon: '📋', group: 'GESTIÓN',  countKey: 'rpt' },
+    { key: 'resumen',      label: 'Resumen',           icon: '📊', group: 'VISTAS',   countKey: null },
+    { key: 'semana',       label: 'Resumen Semanal',   icon: '📅', group: 'VISTAS',   countKey: null },
+    { key: 'expedientes',  label: 'Expedientes',       icon: '📁', group: 'GESTIÓN',  countKey: '__exp__' },
+    { key: 'corte',        label: 'Corte',             icon: '⚙️', group: 'GESTIÓN',  countKey: 'corte' },
+    { key: 'armado',       label: 'Armado',            icon: '🔨', group: 'GESTIÓN',  countKey: 'armado' },
+    { key: 'taller',       label: 'Clientes en taller',icon: '👷', group: 'GESTIÓN',  countKey: 'clientes_taller' },
+    { key: 'proceso',      label: 'Clientes en proceso',icon:'✅', group: 'GESTIÓN',  countKey: 'clientes' },
+    { key: 'rpt',          label: 'Reporte Producción',icon: '📋', group: 'GESTIÓN',  countKey: 'rpt' },
   ];
+
+  // Busca automáticamente la variable global que contenga expedientes/ventas
+  // Devuelve { data: [...], sourceName: 'EXP_DATA' } o null si no encuentra nada
+  function findExpedientesData() {
+    // Patrones de nombres comunes
+    const candidatesByName = ['EXP_DATA', 'EXPEDIENTES', 'EXPEDIENTES_DATA', 'VENT_DATA',
+      'VENTAS_DATA', 'VENTAS', 'SALES_DATA', 'PEDIDOS_DATA', 'COMERCIAL_DATA', 'EXPS', 'flow'];
+    for (const name of candidatesByName) {
+      try {
+        const v = window[name];
+        if (Array.isArray(v) && v.length > 0 && v[0] && typeof v[0] === 'object') {
+          // Verificar que tenga campos típicos de expediente/venta
+          const sample = v[0];
+          if (sample.cliente || sample.client || sample.customer ||
+              sample.total !== undefined || sample.areas) {
+            return { data: v, sourceName: name };
+          }
+        }
+        // Por si está dentro de un objeto: window.EXP_DATA.expedientes
+        if (v && typeof v === 'object' && !Array.isArray(v)) {
+          for (const subKey of ['expedientes', 'ventas', 'items', 'list', 'data']) {
+            if (Array.isArray(v[subKey]) && v[subKey].length > 0) {
+              const s = v[subKey][0];
+              if (s && (s.cliente || s.client || s.customer || s.total !== undefined)) {
+                return { data: v[subKey], sourceName: `${name}.${subKey}` };
+              }
+            }
+          }
+        }
+      } catch (e) {}
+    }
+    // Búsqueda exhaustiva en window por arrays con estructura de expediente
+    try {
+      const allKeys = Object.keys(window);
+      for (const k of allKeys) {
+        if (k.startsWith('_') || k.length > 30) continue;
+        try {
+          const v = window[k];
+          if (Array.isArray(v) && v.length > 0 && v.length < 5000) {
+            const s = v[0];
+            if (s && typeof s === 'object' &&
+                (s.cliente || s.client) &&
+                (s.total !== undefined || s.areas !== undefined || s.fecha !== undefined)) {
+              return { data: v, sourceName: k };
+            }
+          }
+        } catch (e) {}
+      }
+    } catch (e) {}
+    return null;
+  }
 
   function buildSidebarHTML() {
     const D = window.PROD_DATA;
     const grouped = { 'VISTAS': [], 'GESTIÓN': [] };
     VIEWS.forEach(v => grouped[v.group].push(v));
 
+    const expFound = findExpedientesData();
+
     const renderItem = v => {
-      const count = v.countKey ? (D[v.countKey] || []).length : null;
+      let count = null;
+      if (v.countKey === '__exp__') {
+        count = expFound ? expFound.data.length : 0;
+      } else if (v.countKey) {
+        count = (D[v.countKey] || []).length;
+      }
       const active = State.activeView === v.key ? 'active' : '';
       return `<button class="pp3-sb-item ${active}" data-pp3-view="${v.key}">
         <span class="pp3-sb-icon">${v.icon}</span>
@@ -4560,7 +4619,7 @@
           <div class="pp3-sb-active-text">Producción</div>
           <div class="pp3-sb-active-sub">PRODUCCIÓN</div>
         </div>
-        <button class="pp3-sb-back" data-pp3-act="back" title="Volver">⤺</button>
+        <button class="pp3-sb-back" data-pp3-act="back" title="Cerrar sesión">⤺</button>
       </div>
       ${renderGroup('VISTAS',   grouped['VISTAS'])}
       ${renderGroup('GESTIÓN',  grouped['GESTIÓN'])}
@@ -4571,19 +4630,161 @@
     `;
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  // VIEW: EXPEDIENTES (lectura de la variable global de Ventas/Expedientes)
+  // ═══════════════════════════════════════════════════════════════════
+  function renderExpedientes(panel) {
+    const found = findExpedientesData();
+
+    if (!found) {
+      panel.innerHTML = `
+        <div class="pp3-header">
+          <div class="pp3-header-left">
+            <div class="pp3-header-bar"></div>
+            <div>
+              <h1 style="color:#7c3aed;">EXPEDIENTES</h1>
+              <div class="pp3-subtitle">FLUJO DE VENTAS · LECTURA EN VIVO</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pp3-card" style="text-align:center;padding:40px 20px;">
+          <div style="font-size:48px;margin-bottom:14px;">⏳</div>
+          <div style="font-size:16px;font-weight:700;color:#78716c;margin-bottom:8px;">Esperando datos del módulo Ventas…</div>
+          <div style="font-size:12px;color:#a8a29e;line-height:1.5;max-width:480px;margin:0 auto;">
+            El patch está buscando la variable global donde se guardan los expedientes.
+            Si los datos no aparecen tras unos segundos, abre F12 → Console y ejecuta:
+            <pre style="background:#fafaf9;padding:10px;border-radius:8px;text-align:left;margin-top:10px;font-size:11px;color:#1c1917;border:1px solid #e7e5e4;overflow-x:auto;">window.__pp3.expDebug()</pre>
+            <span style="color:#0d9488;font-weight:700;">El patch revisa automáticamente cada 500ms.</span>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const expedientes = found.data;
+    const sourceName = found.sourceName;
+
+    // Detectar campos automáticamente del primer registro
+    const sample = expedientes[0] || {};
+    const hasFecha    = sample.fecha !== undefined;
+    const hasAreas    = sample.areas !== undefined;
+    const hasTotal    = sample.total !== undefined;
+    const hasAbonado  = sample.abonado !== undefined;
+    const hasEtapa    = sample.etapa !== undefined || sample.estado !== undefined;
+    const hasSucursal = sample.sucursal !== undefined || sample.suc !== undefined;
+
+    const formatMoney = n => {
+      const num = parseFloat(n) || 0;
+      return 'L ' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+
+    const fmtAreas = (areas) => {
+      if (!areas) return '—';
+      if (Array.isArray(areas)) {
+        if (!areas.length) return '—';
+        return areas.map(a => typeof a === 'string' ? a : (a.nombre || a.area || '')).filter(Boolean).join(', ') || '—';
+      }
+      return String(areas);
+    };
+
+    const fmtFecha = (f) => {
+      if (!f) return '—';
+      const s = String(f);
+      // Si viene 2026-04-30 → 30/04/26
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+        const p = s.slice(0, 10).split('-');
+        return `${p[2]}/${p[1]}/${p[0].slice(2)}`;
+      }
+      // Si viene dd/mm/yyyy → dd/mm/yy
+      if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) {
+        return s.slice(0, 6) + s.slice(8, 10);
+      }
+      return s.slice(0, 12);
+    };
+
+    const totalGen = expedientes.reduce((s, r) => s + (parseFloat(r.total) || 0), 0);
+    const abonadoGen = expedientes.reduce((s, r) => s + (parseFloat(r.abonado) || 0), 0);
+    const porCobrar = totalGen - abonadoGen;
+
+    panel.innerHTML = `
+      <div class="pp3-header">
+        <div class="pp3-header-left">
+          <div class="pp3-header-bar"></div>
+          <div>
+            <h1 style="color:#7c3aed;">EXPEDIENTES</h1>
+            <div class="pp3-subtitle">FLUJO DE VENTAS · LECTURA EN VIVO · FUENTE: ${escapeHTML(sourceName)}</div>
+          </div>
+        </div>
+        <div class="pp3-header-right">
+          <span style="color:#7c3aed;font-size:24px;font-weight:800;">${expedientes.length}</span>
+          <span style="color:#78716c;font-size:10px;">expedientes<br>activos</span>
+        </div>
+      </div>
+
+      <div class="pp3-kpi-row">
+        <div class="pp3-kpi k5"><div class="pp3-kpi-lbl">📁 Expedientes</div><div class="pp3-kpi-val">${expedientes.length}</div><div class="pp3-kpi-sub">Total registrados</div></div>
+        ${hasTotal ? `<div class="pp3-kpi k1"><div class="pp3-kpi-lbl">💰 Total Vendido</div><div class="pp3-kpi-val" style="font-size:18px;">${formatMoney(totalGen)}</div></div>` : ''}
+        ${hasAbonado ? `<div class="pp3-kpi k2"><div class="pp3-kpi-lbl">✅ Abonado</div><div class="pp3-kpi-val" style="font-size:18px;">${formatMoney(abonadoGen)}</div></div>` : ''}
+        ${hasAbonado && hasTotal ? `<div class="pp3-kpi k3"><div class="pp3-kpi-lbl">⏳ Por Cobrar</div><div class="pp3-kpi-val" style="font-size:18px;">${formatMoney(porCobrar)}</div></div>` : ''}
+      </div>
+
+      <div class="pp3-card">
+        <div class="pp3-card-title" style="color:#7c3aed;">📁 LISTA DE EXPEDIENTES</div>
+        <div class="pp3-card-sub">${expedientes.length} expedientes · datos en vivo del módulo Ventas</div>
+        <div class="pp3-table-wrap" style="margin-top:10px;">
+          <table class="pp3-table">
+            <thead><tr>
+              <th>#</th>
+              ${hasFecha ? '<th>FECHA</th>' : ''}
+              ${hasSucursal ? '<th>SUC.</th>' : ''}
+              <th>CLIENTE</th>
+              ${hasAreas ? '<th>ÁREAS</th>' : ''}
+              ${hasTotal ? '<th style="text-align:right;">TOTAL</th>' : ''}
+              ${hasAbonado ? '<th style="text-align:right;">ABONADO</th>' : ''}
+              ${hasEtapa ? '<th>ETAPA</th>' : ''}
+            </tr></thead>
+            <tbody>
+              ${expedientes.map((r, i) => {
+                const total = parseFloat(r.total) || 0;
+                const abonado = parseFloat(r.abonado) || 0;
+                const pct = total > 0 ? Math.round((abonado / total) * 100) : 0;
+                return `<tr>
+                  <td style="color:#a8a29e;">${i + 1}</td>
+                  ${hasFecha ? `<td style="color:#7c3aed;font-weight:700;white-space:nowrap;">${escapeHTML(fmtFecha(r.fecha))}</td>` : ''}
+                  ${hasSucursal ? `<td><span class="pp3-badge pp3-badge-tgu">${escapeHTML(r.sucursal || r.suc || '—')}</span></td>` : ''}
+                  <td style="font-weight:700;">${escapeHTML(r.cliente || r.client || r.customer || '—')}</td>
+                  ${hasAreas ? `<td style="color:#78716c;font-size:11px;max-width:220px;">${escapeHTML(fmtAreas(r.areas))}</td>` : ''}
+                  ${hasTotal ? `<td style="text-align:right;font-weight:700;color:#0d9488;">${formatMoney(r.total)}</td>` : ''}
+                  ${hasAbonado ? `<td style="text-align:right;color:#b8860b;">${formatMoney(r.abonado)} <span style="font-size:9px;color:#a8a29e;">(${pct}%)</span></td>` : ''}
+                  ${hasEtapa ? `<td><span class="pp3-badge pp3-badge-proc">${escapeHTML(r.etapa || r.estado || '—')}</span></td>` : ''}
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="pp3-card-sub" style="text-align:center;padding:10px;color:#a8a29e;font-size:11px;">
+        💡 Esta vista lee datos en tiempo real del módulo Ventas. Para crear/editar expedientes, usa el módulo Ventas en el sidebar lateral.
+      </div>
+    `;
+  }
+
   function renderActiveView() {
     const sidebar = document.getElementById('pp3-sidebar');
     const panel = document.getElementById('pp3-panel');
     if (!sidebar || !panel) return;
     sidebar.innerHTML = buildSidebarHTML();
-    if (State.activeView === 'resumen')      renderResumen(panel);
-    else if (State.activeView === 'corte')   renderCorte(panel);
-    else if (State.activeView === 'armado')  renderArmado(panel);
-    else if (State.activeView === 'taller')  renderTaller(panel);
-    else if (State.activeView === 'proceso') renderProceso(panel);
-    else if (State.activeView === 'rpt')     renderRpt(panel);
-    else if (State.activeView === 'semana')  renderSemana(panel);
-    else                                     renderResumen(panel); // fallback
+    if (State.activeView === 'resumen')           renderResumen(panel);
+    else if (State.activeView === 'corte')        renderCorte(panel);
+    else if (State.activeView === 'armado')       renderArmado(panel);
+    else if (State.activeView === 'taller')       renderTaller(panel);
+    else if (State.activeView === 'proceso')      renderProceso(panel);
+    else if (State.activeView === 'rpt')          renderRpt(panel);
+    else if (State.activeView === 'semana')       renderSemana(panel);
+    else if (State.activeView === 'expedientes')  renderExpedientes(panel);
+    else                                          renderResumen(panel); // fallback
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -4761,12 +4962,14 @@
   let _lastDataSig = '';
   function dataSignature() {
     const D = window.PROD_DATA || {};
+    const exp = findExpedientesData();
     return [
       (D.corte || []).length,
       (D.armado || []).length,
       (D.clientes || []).length,
       (D.clientes_taller || []).length,
       (D.rpt || []).length,
+      exp ? (exp.sourceName + ':' + exp.data.length) : '0',
     ].join(':');
   }
   function startDataPolling() {
@@ -4860,6 +5063,24 @@
       forceView: (key) => { State.activeView = key; if (!State.moduleVisible) showHost(); else renderActiveView(); },
       renderActiveView,
       data: () => window.PROD_DATA,
+      findExpedientes: findExpedientesData,
+      expDebug: () => {
+        const found = findExpedientesData();
+        if (found) {
+          console.log('✅ Expedientes encontrados en window.' + found.sourceName);
+          console.log('   Total:', found.data.length, 'expedientes');
+          console.log('   Muestra del primero:', found.data[0]);
+          return found;
+        }
+        console.log('❌ No se encontraron expedientes en window.');
+        console.log('   Variables tipo MAYÚSCULAS_DATA disponibles:');
+        const cands = Object.keys(window).filter(k => /^[A-Z][A-Z_0-9]*$/.test(k) && k.length > 2 && k.length < 30 && typeof window[k] === 'object' && window[k] !== null);
+        cands.forEach(k => {
+          const v = window[k];
+          console.log('  ', k, '→', Array.isArray(v) ? `array[${v.length}]` : `obj{${Object.keys(v).slice(0,5).join(',')}}`);
+        });
+        return null;
+      },
       version: '3.0.0',
     });
   }
