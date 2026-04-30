@@ -3556,9 +3556,113 @@
     `;
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  // VIEW: REPORTE PRODUCCIÓN (CRUD editable — Sección D del index)
+  // ═══════════════════════════════════════════════════════════════════
+  function renderRpt(panel) {
+    const D = window.PROD_DATA;
+    const rpt = D.rpt || [];
+    // Filtros
+    const q = (State.pdSearch || '').toLowerCase();
+    const mes = State.pdMes || '';
+    const ciudadF = State.detalleCiudad || 'Todos';
+
+    const filtered = rpt.filter(r => {
+      if (q && !(r.cliente || '').toLowerCase().includes(q)
+            && !(r.area || '').toLowerCase().includes(q)
+            && !(r.operador || '').toLowerCase().includes(q)) return false;
+      if (mes) {
+        const iso = prodToISO(r.fecha);
+        if (!iso.startsWith(mes)) return false;
+      }
+      if (ciudadF !== 'Todos' && r.ciudad !== ciudadF) return false;
+      return true;
+    });
+
+    // KPIs
+    const totalLam = rpt.reduce((s, r) => s + (parseFloat(r.cantidad_lam) || 0), 0);
+    const completados = rpt.filter(r => r.estado === 'Completado').length;
+    const enProc = rpt.filter(r => r.estado === 'En Proceso').length;
+    const pend = rpt.filter(r => r.estado === 'Pendiente').length;
+
+    panel.innerHTML = `
+      <div class="pp3-header">
+        <div class="pp3-header-left">
+          <div class="pp3-header-bar"></div>
+          <div>
+            <h1 style="color:#b8860b;">REPORTE PRODUCCIÓN</h1>
+            <div class="pp3-subtitle">SECCIÓN D · CONTROL EDITABLE · FECHA · CLIENTE · ÁREA · COLOR · OPERADOR · CIUDAD</div>
+          </div>
+        </div>
+        <div class="pp3-header-right">
+          <button class="pp3-btn pp3-btn-add" data-pp3-act="add-rpt">+ Agregar</button>
+          <button class="pp3-btn pp3-btn-pdf" data-pp3-act="pdf-rpt">📄 PDF</button>
+        </div>
+      </div>
+
+      <div class="pp3-kpi-row">
+        <div class="pp3-kpi k4"><div class="pp3-kpi-lbl">Total Registros</div><div class="pp3-kpi-val">${rpt.length}</div><div class="pp3-kpi-sub">Histórico</div></div>
+        <div class="pp3-kpi k5"><div class="pp3-kpi-lbl">Total Láminas</div><div class="pp3-kpi-val">${totalLam}</div><div class="pp3-kpi-sub">Suma</div></div>
+        <div class="pp3-kpi k1"><div class="pp3-kpi-lbl">✅ Completados</div><div class="pp3-kpi-val">${completados}</div></div>
+        <div class="pp3-kpi k2"><div class="pp3-kpi-lbl">⚙️ En Proceso</div><div class="pp3-kpi-val">${enProc}</div></div>
+        <div class="pp3-kpi k3"><div class="pp3-kpi-lbl">⏳ Pendientes</div><div class="pp3-kpi-val">${pend}</div></div>
+      </div>
+
+      <div class="pp3-filter-bar">
+        <input type="text" class="pp3-input pp3-search" id="pp3-rpt-q" value="${escapeHTML(State.pdSearch)}" placeholder="🔍 Buscar cliente, área u operador...">
+        <input type="month" class="pp3-input" id="pp3-rpt-mes" value="${State.pdMes}" title="Filtrar por mes">
+        <select class="pp3-select" id="pp3-rpt-ciudad">
+          <option value="Todos">Todas las ciudades</option>
+          <option value="San Pedro Sula" ${ciudadF==='San Pedro Sula'?'selected':''}>San Pedro Sula</option>
+          <option value="Tegucigalpa" ${ciudadF==='Tegucigalpa'?'selected':''}>Tegucigalpa</option>
+          <option value="Cortés" ${ciudadF==='Cortés'?'selected':''}>Cortés</option>
+        </select>
+        <span style="color:#b8860b;font-size:11px;font-weight:700;margin-left:auto;">${filtered.length} de ${rpt.length} mostrados</span>
+      </div>
+
+      <div class="pp3-card">
+        <div class="pp3-card-title t-rpt">📋 SECCIÓN D — REPORTE DE PRODUCCIÓN</div>
+        <div class="pp3-card-sub">Fecha, Cliente, Área, Color, Operador, Ciudad, Cantidad de Láminas, Estado</div>
+        <div class="pp3-table-wrap" style="margin-top:10px;">
+          <table class="pp3-table">
+            <thead><tr>
+              <th>#</th><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>COLOR</th>
+              <th>OPERADOR</th><th>CIUDAD</th>
+              <th style="text-align:center;">CANT. LÁMINAS</th>
+              <th>MEDIDA</th><th>ESTADO</th><th>ACCIONES</th>
+            </tr></thead>
+            <tbody>
+              ${!filtered.length
+                ? '<tr><td colspan="11" class="pp3-empty">Sin registros — usa "+ Agregar"</td></tr>'
+                : filtered.map(r => {
+                    const realIdx = rpt.indexOf(r);
+                    return `<tr>
+                      <td style="color:#a8a29e;">${realIdx + 1}</td>
+                      <td style="color:#b8860b;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                      <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
+                      <td style="font-size:11px;">${escapeHTML(r.area || '—')}</td>
+                      <td style="color:#78716c;font-size:11px;">${escapeHTML(r.color || '—')}</td>
+                      <td>${escapeHTML(r.operador || '—')}</td>
+                      <td>${ciudadBadge(r.ciudad)}</td>
+                      <td style="text-align:center;color:#0d9488;font-weight:700;">${escapeHTML(r.cantidad_lam || '—')}</td>
+                      <td style="font-size:11px;">${escapeHTML(r.medida_lam || '—')}</td>
+                      <td>${estadoBadge(r.estado)}</td>
+                      <td style="white-space:nowrap;">
+                        <button class="pp3-btn pp3-btn-sm pp3-btn-edit" data-pp3-act="edit-rpt" data-pp3-idx="${realIdx}">✏ Editar</button>
+                        <button class="pp3-btn pp3-btn-sm pp3-btn-del" data-pp3-act="del-rpt" data-pp3-idx="${realIdx}">✕</button>
+                      </td>
+                    </tr>`;
+                  }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
   // Exponer las funciones para parte C
   Object.assign(window.__pp3, {
-    renderResumen, renderCorte, renderArmado, renderTaller, renderProceso,
+    renderResumen, renderCorte, renderArmado, renderTaller, renderProceso, renderRpt,
   });
 })();
 </script>
@@ -3574,10 +3678,10 @@
     saveData, listenFirebaseProduccion, getProdSemanaLS, toast, injectStyles,
     ciudadBadge, estadoBadge, estatusBadge, maqBadge, checkRowHTML,
     getEtapaState, nextEtapaState, stageMark, stageTitle, stageClass,
-    renderResumen, renderCorte, renderArmado, renderTaller, renderProceso } = PP;
+    renderResumen, renderCorte, renderArmado, renderTaller, renderProceso, renderRpt } = PP;
 
   // ═══════════════════════════════════════════════════════════════════
-  // VIEW: SEMANA ACTUAL (lun-sáb + rango)
+  // VIEW: RESUMEN SEMANAL (lun-sáb + rango personalizado, con PDF profesional)
   // ═══════════════════════════════════════════════════════════════════
   function renderSemana(panel) {
     const sem = getProdSemanaLS();
@@ -3592,14 +3696,14 @@
         <div class="pp3-header-left">
           <div class="pp3-header-bar"></div>
           <div>
-            <h1>SEMANA ACTUAL — PRODUCCIÓN</h1>
+            <h1>RESUMEN SEMANAL — PRODUCCIÓN</h1>
             <div class="pp3-subtitle">${lblText}</div>
           </div>
         </div>
         <div class="pp3-header-right">
           <span style="font-size:24px;font-weight:800;color:#0d9488;margin-right:8px;">${total}</span>
           <span style="color:#78716c;font-size:10px;">registros<br>en período</span>
-          <button class="pp3-btn pp3-btn-pdf" data-pp3-act="pdf-semana">📄 Imprimir Período</button>
+          <button class="pp3-btn pp3-btn-primary" data-pp3-act="pdf-semana" style="padding:10px 18px;">⬇️ DESCARGAR PDF</button>
         </div>
       </div>
 
@@ -3771,7 +3875,7 @@
         <div class="pp3-header-left">
           <div class="pp3-header-bar"></div>
           <div>
-            <h1 style="color:#92400e;">REPORTE PRODUCCIÓN</h1>
+            <h1 style="color:#92400e;">REPORTE SEMANAL</h1>
             <div class="pp3-subtitle">${periodoLabel}</div>
           </div>
         </div>
@@ -4047,12 +4151,52 @@
           </div>
         </div>
       </div>
+      <!-- Modal Reporte Producción (Sección D del index — CRUD editable) -->
+      <div class="pp3-overlay" id="pp3-mod-rpt">
+        <div class="pp3-modal" style="max-width:680px;">
+          <div class="pp3-modal-header">
+            <div class="pp3-modal-title" id="pp3-mr-title">📋 Nuevo Reporte de Producción</div>
+            <button class="pp3-modal-close" data-pp3-close="pp3-mod-rpt">×</button>
+          </div>
+          <div class="pp3-modal-body">
+            <div class="pp3-form-grid">
+              <div class="pp3-form-group"><label>Fecha</label><input id="pp3-mr-fecha" type="date"></div>
+              <div class="pp3-form-group"><label>Cliente</label><input id="pp3-mr-cliente" placeholder="Nombre del cliente"></div>
+              <div class="pp3-form-group"><label>Área</label><input id="pp3-mr-area" placeholder="Ej: Cocina, WIC..."></div>
+              <div class="pp3-form-group"><label>Color</label><input id="pp3-mr-color" placeholder="Ej: Roble Eternity 3/4"></div>
+              <div class="pp3-form-group"><label>Operador</label><input id="pp3-mr-operador" placeholder="Nombre del operador"></div>
+              <div class="pp3-form-group"><label>Ciudad</label>
+                <select id="pp3-mr-ciudad">
+                  <option value="San Pedro Sula">San Pedro Sula</option>
+                  <option value="Tegucigalpa">Tegucigalpa</option>
+                  <option value="Cortés">Cortés</option>
+                </select>
+              </div>
+              <div class="pp3-form-group"><label>Cantidad de Láminas</label><input id="pp3-mr-cantidad" type="number" min="0" step="0.01" placeholder="Ej: 24"></div>
+              <div class="pp3-form-group"><label>Medida de Lámina</label>
+                <select id="pp3-mr-medida">
+                  <option value="4x8">4x8</option>
+                  <option value="7x8">7x8</option>
+                  <option value="9x7">9x7</option>
+                </select>
+              </div>
+              <div class="pp3-form-group pp3-full"><label>Estado</label>
+                <select id="pp3-mr-estado">
+                  <option value="Completado">✅ Completado</option>
+                  <option value="En Proceso">⚙️ En Proceso</option>
+                  <option value="Pendiente">⏳ Pendiente</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="pp3-modal-footer">
+            <button class="pp3-btn pp3-btn-ghost" data-pp3-close="pp3-mod-rpt">Cancelar</button>
+            <button class="pp3-btn pp3-btn-primary" data-pp3-save="rpt">Guardar</button>
+          </div>
+        </div>
+      </div>
     `;
   }
-
-  // ═══════════════════════════════════════════════════════════════════
-  // ABRIR MODALES
-  // ═══════════════════════════════════════════════════════════════════
   function openModal(id) { const el = document.getElementById(id); if (el) el.classList.add('open'); }
   function closeModal(id) { const el = document.getElementById(id); if (el) el.classList.remove('open'); }
   function setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v == null ? '' : v; }
@@ -4107,6 +4251,18 @@
       _modalEstados = { corte: null, cinta: null, perforacion: null, armado: null, empaque: null };
       applyChecklistUI();
       openModal('pp3-mod-proceso');
+    } else if (type === 'rpt') {
+      document.getElementById('pp3-mr-title').textContent = '📋 Nuevo Reporte de Producción';
+      setVal('pp3-mr-fecha', today);
+      setVal('pp3-mr-cliente', '');
+      setVal('pp3-mr-area', '');
+      setVal('pp3-mr-color', '');
+      setVal('pp3-mr-operador', '');
+      setVal('pp3-mr-ciudad', 'San Pedro Sula');
+      setVal('pp3-mr-cantidad', '');
+      setVal('pp3-mr-medida', '4x8');
+      setVal('pp3-mr-estado', 'Completado');
+      openModal('pp3-mod-rpt');
     }
   }
 
@@ -4160,6 +4316,19 @@
       };
       applyChecklistUI();
       openModal('pp3-mod-proceso');
+    } else if (type === 'rpt') {
+      const r = window.PROD_DATA.rpt[idx]; if (!r) return;
+      document.getElementById('pp3-mr-title').textContent = '📋 Editar Reporte de Producción';
+      setVal('pp3-mr-fecha', prodToISO(r.fecha));
+      setVal('pp3-mr-cliente', r.cliente || '');
+      setVal('pp3-mr-area', r.area || '');
+      setVal('pp3-mr-color', r.color || '');
+      setVal('pp3-mr-operador', r.operador || '');
+      setVal('pp3-mr-ciudad', r.ciudad || 'San Pedro Sula');
+      setVal('pp3-mr-cantidad', r.cantidad_lam || '');
+      setVal('pp3-mr-medida', r.medida_lam || '4x8');
+      setVal('pp3-mr-estado', r.estado || 'Completado');
+      openModal('pp3-mod-rpt');
     }
   }
 
@@ -4248,12 +4417,38 @@
         toast('✓ Cliente agregado', 'ok');
       }
       saveData(); closeModal('pp3-mod-proceso'); renderActiveView();
+    } else if (type === 'rpt') {
+      const fecha = getVal('pp3-mr-fecha');
+      const cliente = getVal('pp3-mr-cliente').trim();
+      if (!fecha || !cliente) { toast('⚠ Ingresa fecha y cliente', 'warn'); return; }
+      const obj = {
+        fecha: prodFromISO(fecha),
+        cliente,
+        area: getVal('pp3-mr-area').trim(),
+        color: getVal('pp3-mr-color').trim(),
+        operador: getVal('pp3-mr-operador').trim(),
+        ciudad: getVal('pp3-mr-ciudad'),
+        cantidad_lam: getVal('pp3-mr-cantidad').trim(),
+        medida_lam: getVal('pp3-mr-medida'),
+        estado: getVal('pp3-mr-estado'),
+      };
+      const D = window.PROD_DATA;
+      if (!D.rpt) D.rpt = [];
+      if (State.editMode.index >= 0 && State.editMode.type === 'rpt') {
+        D.rpt[State.editMode.index] = obj;
+        toast('✓ Reporte actualizado', 'ok');
+      } else {
+        D.rpt.push(obj);
+        D.rpt.sort((a,b) => prodToISO(a.fecha).localeCompare(prodToISO(b.fecha)));
+        toast('✓ Reporte agregado', 'ok');
+      }
+      saveData(); closeModal('pp3-mod-rpt'); renderActiveView();
     }
   }
 
   function eliminar(type, idx) {
     if (!confirm('¿Eliminar este registro?')) return;
-    const map = { corte: 'corte', armado: 'armado', taller: 'clientes_taller', proceso: 'clientes' };
+    const map = { corte: 'corte', armado: 'armado', taller: 'clientes_taller', proceso: 'clientes', rpt: 'rpt' };
     const key = map[type];
     if (!window.PROD_DATA[key]) return;
     window.PROD_DATA[key].splice(idx, 1);
@@ -4335,40 +4530,44 @@
     toast('✓ PDF listo', 'ok');
   }
 
+  function pdfRpt() {
+    const D = window.PROD_DATA, r = D.rpt || [];
+    const f = new Date().toLocaleDateString('es-HN', { day: '2-digit', month: 'long', year: 'numeric' });
+    const totalLam = r.reduce((s, x) => s + (parseFloat(x.cantidad_lam) || 0), 0);
+    pdfWindow('Reporte Producción', `<h1>📋 Reporte de Producción</h1>
+      <p class="sub">${r.length} registros · ${totalLam} láminas totales · Generado: ${f}</p>
+      <table><thead><tr><th>#</th><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>COLOR</th><th>OPERADOR</th><th>CIUDAD</th><th>CANT.</th><th>MEDIDA</th><th>ESTADO</th></tr></thead>
+      <tbody>${r.map((x,i)=>`<tr><td>${i+1}</td><td>${prodDisp(x.fecha)}</td><td><strong>${escapeHTML(x.cliente||'—')}</strong></td><td>${escapeHTML(x.area||'—')}</td><td>${escapeHTML(x.color||'—')}</td><td>${escapeHTML(x.operador||'—')}</td><td>${escapeHTML(x.ciudad||'—')}</td><td style="text-align:center;font-weight:700;">${escapeHTML(x.cantidad_lam||'—')}</td><td>${escapeHTML(x.medida_lam||'—')}</td><td><strong>${escapeHTML(x.estado||'—')}</strong></td></tr>`).join('')}</tbody></table>
+      <div class="footer">Panel de Control — Producción</div>`);
+    toast('✓ PDF listo', 'ok');
+  }
+
   function pdfSemana() {
     const sem = getProdSemanaLS();
     const { corte, armado, clientes, clientes_taller, rpt = [], desde, hasta } = sem;
     if (!corte.length && !armado.length && !clientes.length && !clientes_taller.length && !rpt.length) {
       toast('Sin datos en el período', 'warn'); return;
     }
-    const f = new Date().toLocaleDateString('es-HN', { day: '2-digit', month: 'long', year: 'numeric' });
-    const titulo = sem.custom ? '🏭 Producción — Rango Personalizado' : '🏭 Producción — Semana Actual (Lun-Sáb)';
-    const mk = (e, et) => {
-      const st = getEtapaState(e, et);
-      if (st === 'done') return '<span style="color:#0d9488;font-weight:800;">X</span>';
-      if (st === 'pend') return '<span style="color:#d97706;font-weight:800;font-size:10px;background:#fef3c7;padding:1px 5px;border-radius:3px;">PEND</span>';
-      return '<span style="color:#d6d3d1;">·</span>';
-    };
-    let body = `<h1>${titulo}</h1><p class="sub">${prodDisp(desde)} → ${prodDisp(hasta)} · Generado: ${f}</p>`;
-    if (corte.length) body += `<h2 class="hc">⚙️ Corte (${corte.length})</h2><table><thead><tr><th>#</th><th>FECHA</th><th>MÁQUINA</th><th>LÁM.</th><th>OPERARIO</th><th>OBS.</th></tr></thead><tbody>${corte.map((r,i)=>`<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td>${escapeHTML(r.maquina||'')}</td><td style="text-align:center;font-weight:700;">${escapeHTML(r.laminas||'—')}</td><td>${escapeHTML(r.operario||'—')}</td><td>${escapeHTML(r.obs||'—')}</td></tr>`).join('')}</tbody></table>`;
-    if (armado.length) body += `<h2 class="ha">🔨 Armado (${armado.length})</h2><table><thead><tr><th>N°</th><th>CANT</th><th>DESCR.</th><th>ÁREA</th><th>CLIENTE</th><th>ARMADOR</th><th>FECHA</th><th>TIEMPO</th><th>ESTATUS</th></tr></thead><tbody>${armado.map((r,i)=>`<tr><td>${escapeHTML(r.nro||(i+1))}</td><td>${escapeHTML(r.cantidad||'—')}</td><td>${escapeHTML(r.descripcion||'—')}</td><td>${escapeHTML(r.area||'—')}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.armador||'—')}</td><td>${prodDisp(r.fecha)}</td><td>${escapeHTML(r.tiempo||'—')}</td><td><strong>${escapeHTML(r.estatus||'—')}</strong></td></tr>`).join('')}</tbody></table>`;
-    if (clientes_taller.length) body += `<h2 class="hcl">👷 Clientes en Taller (${clientes_taller.length})</h2><table><thead><tr><th>#</th><th>FECHA</th><th>CLIENTE</th><th>OBS.</th></tr></thead><tbody>${clientes_taller.map((r,i)=>`<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.obs||'—')}</td></tr>`).join('')}</tbody></table>`;
-    if (clientes.length) body += `<h2 class="hcl">✅ Clientes en Proceso (${clientes.length})</h2><table><thead><tr><th>#</th><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>CORTE</th><th>CINTA</th><th>PERF.</th><th>ARMADO</th><th>EMPAQUE</th><th>OBS.</th></tr></thead><tbody>${clientes.map((r,i)=>`<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.area||'—')}</td><td style="text-align:center;">${mk(r.estados,'corte')}</td><td style="text-align:center;">${mk(r.estados,'cinta')}</td><td style="text-align:center;">${mk(r.estados,'perforacion')}</td><td style="text-align:center;">${mk(r.estados,'armado')}</td><td style="text-align:center;">${mk(r.estados,'empaque')}</td><td>${escapeHTML(r.obs||'—')}</td></tr>`).join('')}</tbody></table>`;
-    if (rpt.length) body += `<h2 class="hr">📋 Reporte de Producción (${rpt.length})</h2><table><thead><tr><th>#</th><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>OPERADOR</th><th>CIUDAD</th><th>CANT.</th><th>MEDIDA</th><th>ESTADO</th></tr></thead><tbody>${rpt.map((r,i)=>`<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.area||'—')}</td><td>${escapeHTML(r.operador||'—')}</td><td>${escapeHTML(r.ciudad||'—')}</td><td style="text-align:center;font-weight:700;">${escapeHTML(r.cantidad_lam||'—')}</td><td>${escapeHTML(r.medida_lam||'—')}</td><td><strong>${escapeHTML(r.estado||'—')}</strong></td></tr>`).join('')}</tbody></table>`;
-    body += `<div class="footer">Panel de Control — Producción · ${prodDisp(desde)} → ${prodDisp(hasta)}</div>`;
-    pdfWindow('Producción Período', body);
-    toast('✓ PDF Período listo', 'ok');
+    const titulo = sem.custom ? 'Reporte de Producción — Rango' : 'Resumen Semanal de Producción';
+    const periodoLabel = `${prodDisp(desde)} → ${prodDisp(hasta)}` + (sem.custom ? ' (rango personalizado)' : ' (Lunes a Sábado)');
+    pdfReporte({
+      data: { corte, armado, clientes, clientes_taller, rpt },
+      periodoLabel,
+      titulo,
+    });
   }
 
-  function pdfReporte() {
-    const f = getFiltradoReporte();
+  function pdfReporte(opts) {
+    // Si recibe opts (data, periodoLabel, titulo), usa esos; si no, usa los filtros del estado
+    const f = (opts && opts.data) || getFiltradoReporte();
     if (!f.corte.length && !f.armado.length && !f.clientes.length && !f.clientes_taller.length && !f.rpt.length) {
       toast('Sin datos para exportar', 'warn'); return;
     }
     const fecha = new Date().toLocaleDateString('es-HN', { day: '2-digit', month: 'long', year: 'numeric' });
-    const periodo = State.repMode === 'all'
+    const periodo = (opts && opts.periodoLabel) || (State.repMode === 'all'
       ? 'Historial completo'
-      : `${State.repDesde ? prodDisp(prodFromISO(State.repDesde)) : 'inicio'} → ${State.repHasta ? prodDisp(prodFromISO(State.repHasta)) : 'hoy'}`;
+      : `${State.repDesde ? prodDisp(prodFromISO(State.repDesde)) : 'inicio'} → ${State.repHasta ? prodDisp(prodFromISO(State.repHasta)) : 'hoy'}`);
+    const tituloPdf = (opts && opts.titulo) || 'Reporte de Producción';
     const lamTotal = f.rpt.reduce((s, r) => s + (parseFloat(r.cantidad_lam) || 0), 0);
     const mk = (e, et) => {
       const st = getEtapaState(e, et);
@@ -4377,7 +4576,7 @@
       return '<span style="color:#d6d3d1;">·</span>';
     };
     const w = window.open('', '_blank');
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Reporte Producción</title>
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${tituloPdf}</title>
       <style>
         *{box-sizing:border-box;margin:0;padding:0;}
         body{font-family:'Segoe UI',Arial,sans-serif;color:#1c1917;background:#fff;}
@@ -4408,7 +4607,7 @@
       </style></head><body>
       <div class="cover">
         <div class="cover-accent"></div>
-        <h1>Reporte de Producción</h1>
+        <h1>${tituloPdf}</h1>
         <h2>Panel de Control — Módulo Producción</h2>
         <div class="cover-div"></div>
         <div class="cover-range">📅 ${periodo}</div>
@@ -4441,17 +4640,17 @@
   // ═══════════════════════════════════════════════════════════════════
   const VIEWS = [
     { key: 'resumen',  label: 'Resumen',           icon: '📊', group: 'VISTAS',   countKey: null },
-    { key: 'semana',   label: 'Semana actual',     icon: '📅', group: 'VISTAS',   countKey: null },
+    { key: 'semana',   label: 'Resumen Semanal',   icon: '📅', group: 'VISTAS',   countKey: null },
     { key: 'corte',    label: 'Corte',             icon: '⚙️', group: 'GESTIÓN',  countKey: 'corte' },
     { key: 'armado',   label: 'Armado',            icon: '🔨', group: 'GESTIÓN',  countKey: 'armado' },
     { key: 'taller',   label: 'Clientes en taller',icon: '👷', group: 'GESTIÓN',  countKey: 'clientes_taller' },
     { key: 'proceso',  label: 'Clientes en proceso',icon:'✅', group: 'GESTIÓN',  countKey: 'clientes' },
-    { key: 'reporte',  label: 'Reporte Producción',icon: '📋', group: 'REPORTES', countKey: 'rpt' },
+    { key: 'rpt',      label: 'Reporte Producción',icon: '📋', group: 'GESTIÓN',  countKey: 'rpt' },
   ];
 
   function buildSidebarHTML() {
     const D = window.PROD_DATA;
-    const grouped = { 'VISTAS': [], 'GESTIÓN': [], 'REPORTES': [] };
+    const grouped = { 'VISTAS': [], 'GESTIÓN': [] };
     VIEWS.forEach(v => grouped[v.group].push(v));
 
     const renderItem = v => {
@@ -4488,7 +4687,6 @@
       </div>
       ${renderGroup('VISTAS',   grouped['VISTAS'])}
       ${renderGroup('GESTIÓN',  grouped['GESTIÓN'])}
-      ${renderGroup('REPORTES', grouped['REPORTES'])}
       <div class="pp3-sb-foot">
         <div class="pp3-sb-foot-dot"></div>
         En vivo · Firebase
@@ -4506,8 +4704,9 @@
     else if (State.activeView === 'armado')  renderArmado(panel);
     else if (State.activeView === 'taller')  renderTaller(panel);
     else if (State.activeView === 'proceso') renderProceso(panel);
+    else if (State.activeView === 'rpt')     renderRpt(panel);
     else if (State.activeView === 'semana')  renderSemana(panel);
-    else if (State.activeView === 'reporte') renderReporte(panel);
+    else                                     renderResumen(panel); // fallback
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -4569,20 +4768,23 @@
         else if (act === 'add-armado')  abrirNuevo('armado');
         else if (act === 'add-taller')  abrirNuevo('taller');
         else if (act === 'add-proceso') abrirNuevo('proceso');
+        else if (act === 'add-rpt')     abrirNuevo('rpt');
         else if (act === 'edit-corte')   abrirEditar('corte', idx);
         else if (act === 'edit-armado')  abrirEditar('armado', idx);
         else if (act === 'edit-taller')  abrirEditar('taller', idx);
         else if (act === 'edit-proceso') abrirEditar('proceso', idx);
+        else if (act === 'edit-rpt')     abrirEditar('rpt', idx);
         else if (act === 'del-corte')    eliminar('corte', idx);
         else if (act === 'del-armado')   eliminar('armado', idx);
         else if (act === 'del-taller')   eliminar('taller', idx);
         else if (act === 'del-proceso')  eliminar('proceso', idx);
+        else if (act === 'del-rpt')      eliminar('rpt', idx);
         else if (act === 'pdf-corte')   pdfCorte();
         else if (act === 'pdf-armado')  pdfArmado();
         else if (act === 'pdf-taller')  pdfTaller();
         else if (act === 'pdf-proceso') pdfProceso();
+        else if (act === 'pdf-rpt')     pdfRpt();
         else if (act === 'pdf-semana')  pdfSemana();
-        else if (act === 'pdf-reporte') pdfReporte();
         else if (act === 'clear-sem')   { State.semDesde = ''; State.semHasta = ''; renderActiveView(); }
         else if (act === 'clear-rep')   { State.repDesde = ''; State.repHasta = ''; renderActiveView(); }
         return;
@@ -4620,9 +4822,12 @@
       if (t.id === 'pp3-sem-hasta')  { State.semHasta = t.value; renderActiveView(); }
       if (t.id === 'pp3-rep-desde')  { State.repDesde = t.value; renderActiveView(); }
       if (t.id === 'pp3-rep-hasta')  { State.repHasta = t.value; renderActiveView(); }
+      if (t.id === 'pp3-rpt-q')      { State.pdSearch = t.value; renderActiveView(); }
+      if (t.id === 'pp3-rpt-mes')    { State.pdMes = t.value; renderActiveView(); }
     });
     host.addEventListener('change', (ev) => {
-      if (ev.target.id === 'pp3-arm-est') { State.armFiltEstatus = ev.target.value; renderActiveView(); }
+      if (ev.target.id === 'pp3-arm-est')    { State.armFiltEstatus = ev.target.value; renderActiveView(); }
+      if (ev.target.id === 'pp3-rpt-ciudad') { State.detalleCiudad = ev.target.value; renderActiveView(); }
     });
   }
 
