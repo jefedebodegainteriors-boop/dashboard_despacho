@@ -44,13 +44,14 @@
 <script src="app.min.js"></script>
 
 <!-- ============================================================
-     PATCH · DESPACHO CON HERRAJES v3.2
+     PATCH · DESPACHO CON HERRAJES v3.3
      ────────────────────────────────────────────────────────────
      Fase 1: Modal Nuevo Despacho con tabla de herrajes
      Fase 2: Editar despacho con herrajes
      Fase 3: Salida automática de inventario (SALIDA_VENTA)
      Detalle: Clic en fila → ver herrajes enviados/pendientes
-     v3.2 Fix: getCurrentUser() corregida + utility de reparación
+     v3.3: Fix robusto del usuarioId (NO toca DOM) + AUTO-reparación
+           al cargar (sin acción del usuario)
      ============================================================ -->
 <script>
 /* ════════════════════════════════════════════════════════════════════════════
@@ -1400,47 +1401,73 @@
     return plan;
   }
 
+  // Cache del usuario detectado (solo se calcula una vez por sesión)
+  let _cachedUser = null;
+
+  /**
+   * Detecta el usuario actual SIN tocar el DOM.
+   *
+   * Estrategia (en orden de prioridad):
+   *  1) Ya tenemos cache → devolverlo
+   *  2) Usuario establecido manualmente via __dhPatch.setUser() → usarlo
+   *  3) Mirar `inventario.auditoria`: el último registro con usuarioId limpio
+   *     es el usuario actual (el sistema lo escribe correctamente)
+   *  4) Mirar `inventario.movimientos`: igual que auditoría
+   *  5) Default: 'logistica'
+   *
+   * NUNCA toca el DOM para evitar el bug de capturar textContent gigante.
+   */
   function getCurrentUser() {
-    // Estrategia 1: buscar el div específico del header con "X · Interiorshn"
-    // Es la forma más limpia y robusta. Estructura: <div class="text-stone-500 ...">Jorge · Interiorshn</div>
+    if (_cachedUser) return _cachedUser;
+
+    // Manualmente establecido (debug / override)
+    if (window.__dhUserOverride) {
+      _cachedUser = String(window.__dhUserOverride).slice(0, 30);
+      return _cachedUser;
+    }
+
     try {
-      const candidates = document.querySelectorAll('div.text-stone-500, div[class*="stone-500"]');
-      for (const el of candidates) {
-        const txt = (el.textContent || '').trim();
-        // Patrón estricto: "NOMBRE · Interiorshn" donde NOMBRE no tiene saltos de línea
-        // ni más de 50 caracteres. Esto evita capturar bloques enteros del DOM.
-        if (txt.length < 60 && txt.includes('· Interiorshn')) {
-          // Extraer solo el nombre (antes del " · Interiorshn")
-          const nombre = txt.split('·')[0].trim();
-          if (nombre && nombre.length < 30 && !/\n/.test(nombre)) {
-            // Devolver en lowercase y sin "·" (formato "jorge", "admin", etc.)
-            return nombre.toLowerCase();
+      const inv = getInventario();
+      if (inv) {
+        // 1. Buscar en auditoría (más reciente primero)
+        const audi = Array.isArray(inv.auditoria) ? inv.auditoria : [];
+        for (const a of audi) {
+          const u = sanitizeUsuarioId(a?.usuarioId);
+          if (u && u !== 'sistema' && u !== 'sistema_migracion_excel') {
+            _cachedUser = u;
+            return u;
+          }
+        }
+        // 2. Buscar en movimientos
+        const movs = Array.isArray(inv.movimientos) ? inv.movimientos : [];
+        for (let i = movs.length - 1; i >= 0; i--) {
+          const u = sanitizeUsuarioId(movs[i]?.usuarioId);
+          if (u && u !== 'sistema' && u !== 'sistema_migracion_excel') {
+            _cachedUser = u;
+            return u;
           }
         }
       }
-    } catch (e) { /* fallthrough */ }
+    } catch (e) {
+      warn('getCurrentUser falló', e);
+    }
 
-    // Estrategia 2: buscar el botón Logout que tiene cerca el nombre
-    // (como fallback si el patrón anterior no matchea)
-    try {
-      const sidebar = document.querySelector('aside, nav');
-      if (sidebar) {
-        // Buscar elementos cortos con patrón "X · Interiorshn"
-        const all = sidebar.querySelectorAll('div, span');
-        for (const el of all) {
-          const txt = (el.textContent || '').trim();
-          if (txt.length < 60 && /·\s*Interiorshn/i.test(txt)) {
-            const nombre = txt.split('·')[0].trim();
-            if (nombre && nombre.length < 30 && !/\n/.test(nombre)) {
-              return nombre.toLowerCase();
-            }
-          }
-        }
-      }
-    } catch (e) { /* fallthrough */ }
+    return null; // → caller usa 'logistica' como default
+  }
 
-    // Si nada funciona, devolver null y que el caller use 'logistica' como default
-    return null;
+  /**
+   * Limpia un usuarioId potencialmente corrupto.
+   * Devuelve null si está corrupto, o el valor limpio si está OK.
+   */
+  function sanitizeUsuarioId(value) {
+    if (value == null) return null;
+    const s = String(value).trim();
+    if (!s) return null;
+    if (s.length > 60) return null;            // demasiado largo → corrupto
+    if (/\n|\r/.test(s)) return null;          // contiene saltos de línea → corrupto
+    if (/\s{3,}/.test(s)) return null;         // múltiples espacios consecutivos → corrupto
+    if (/[<>{}]/.test(s)) return null;         // contiene HTML → corrupto
+    return s;
   }
 
   /** Convierte una fecha DD/MM/YY o YYYY-MM-DD a ISO (YYYY-MM-DDT00:00:00.000Z) */
@@ -2191,46 +2218,44 @@
   // INICIALIZACIÓN
   // ─────────────────────────────────────────────────────────────────────
 
-  log('Patch v3.2 (Fases 1+2+3 + Detalle + Fix usuario) activo. Inventario detectado:',
-      getHerrajesProductos().length, 'herrajes.');
-
   /**
    * UTILIDAD DE REPARACIÓN: arregla movimientos en inventario cuyo usuarioId
-   * tiene texto basura (más de 50 chars, contiene saltos de línea, etc).
-   * Los reemplaza con 'logistica'. Llamar manualmente desde consola si es
-   * necesario. Devuelve cuántos movs se arreglaron.
+   * tiene texto basura. Se ejecuta automáticamente al cargar el dashboard
+   * y también puede llamarse manualmente desde consola.
+   *
+   * @param {boolean} silencioso - si true, no muestra toast (para auto-fix)
    */
-  async function repararUsuariosDañados() {
+  async function repararUsuariosDañados(silencioso) {
     const inv = getInventario();
-    if (!inv?.movimientos) {
-      console.log('[reparar] No hay inventario o movimientos');
+    if (!inv?.movimientos && !inv?.auditoria) {
+      if (!silencioso) console.log('[reparar] No hay inventario o movimientos');
       return 0;
     }
     let count = 0;
-    const movs = inv.movimientos.map(m => {
-      const u = String(m.usuarioId || '');
-      const corrupto = u.length > 60 || /\n/.test(u) || /Despacho\s+a.*Despacho\s+a/i.test(u);
-      if (corrupto) {
+
+    const movs = (inv.movimientos || []).map(m => {
+      const limpio = sanitizeUsuarioId(m.usuarioId);
+      if (limpio === null && m.usuarioId) {
+        // El usuarioId existe pero está corrupto
         count++;
-        console.log('[reparar] Mov corrupto:', m.id, '· cantidad:', m.cantidad);
-        return { ...m, usuarioId: 'logistica', _usuarioOriginal: u.slice(0, 100) };
+        const original = String(m.usuarioId).slice(0, 200);
+        return { ...m, usuarioId: 'logistica', _usuarioOriginal: original };
       }
       return m;
     });
 
-    // También en auditoría
     const audi = (inv.auditoria || []).map(a => {
-      const u = String(a.usuarioId || '');
-      const corrupto = u.length > 60 || /\n/.test(u);
-      if (corrupto) {
+      const limpio = sanitizeUsuarioId(a.usuarioId);
+      if (limpio === null && a.usuarioId) {
         count++;
-        return { ...a, usuarioId: 'logistica', _usuarioOriginal: u.slice(0, 100) };
+        const original = String(a.usuarioId).slice(0, 200);
+        return { ...a, usuarioId: 'logistica', _usuarioOriginal: original };
       }
       return a;
     });
 
     if (count === 0) {
-      console.log('[reparar] No se encontraron movimientos con usuarioId corrupto.');
+      if (!silencioso) console.log('[reparar] No hay datos corruptos. Todo OK.');
       return 0;
     }
 
@@ -2247,32 +2272,103 @@
     if (typeof window._fbSave === 'function') {
       try {
         await window._fbSave('inventario', newInv);
-        console.log(`[reparar] ✓ ${count} entradas arregladas y guardadas en Firebase`);
+        if (!silencioso) {
+          console.log(`[reparar] ✓ ${count} entrada(s) arreglada(s) y guardada(s) en Firebase`);
+        } else {
+          log(`Auto-reparación: ${count} entrada(s) corregida(s) silenciosamente`);
+        }
       } catch (e) {
         warn('Firebase falló (datos quedan en localStorage)', e);
       }
     } else {
-      console.log(`[reparar] ✓ ${count} entradas arregladas en localStorage`);
+      if (!silencioso) console.log(`[reparar] ✓ ${count} entrada(s) arreglada(s) en localStorage`);
     }
 
-    toast(`✓ ${count} movimiento(s) reparado(s). Recarga la página para verlo.`, 'ok', 5000);
+    if (!silencioso) {
+      toast(`✓ ${count} movimiento(s) reparado(s). Recarga la página para verlo.`, 'ok', 5000);
+    }
     return count;
   }
 
-  // Exponer para debug manual
+  /**
+   * Auto-reparación con retry. Se llama al cargar y reintenta hasta que
+   * el inventario tenga datos (porque puede tardar en sincronizar Firebase).
+   */
+  function programarAutoReparacion() {
+    let intentos = 0;
+    const maxIntentos = 8;
+    const intervalo = 3000; // 3s
+
+    const tick = async () => {
+      intentos++;
+      const inv = getInventario();
+      const tieneDatos = inv && (
+        (inv.movimientos && inv.movimientos.length > 0) ||
+        (inv.auditoria && inv.auditoria.length > 0)
+      );
+
+      if (tieneDatos) {
+        try {
+          const arreglados = await repararUsuariosDañados(/*silencioso=*/true);
+          if (arreglados > 0) {
+            log(`✓ Auto-reparación completada: ${arreglados} movimiento(s) corregido(s)`);
+            // Disparar un toast suave para informar
+            setTimeout(() => {
+              toast(`✓ Se corrigieron ${arreglados} movimiento(s) con datos dañados`, 'info', 4000);
+            }, 1500);
+          }
+        } catch (e) {
+          warn('Auto-reparación falló', e);
+        }
+        return; // ya completado, no más reintentos
+      }
+
+      if (intentos < maxIntentos) {
+        setTimeout(tick, intervalo);
+      } else {
+        log('Auto-reparación abortada: inventario sin datos después de varios reintentos');
+      }
+    };
+
+    // Primer intento después de 2 segundos (para dejar que React monte y Firebase sincronice)
+    setTimeout(tick, 2000);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // LOG INICIAL + AUTO-REPARACIÓN + LISTENER + EXPOSICIÓN PÚBLICA
+  // ─────────────────────────────────────────────────────────────────────
+
+  log('Patch v3.3 (Fases 1+2+3 + Detalle + Auto-Fix usuario) activo. Inventario detectado:',
+      getHerrajesProductos().length, 'herrajes.');
+
+  // Auto-reparación al cargar: arregla movimientos dañados sin que el usuario
+  // tenga que hacer nada manualmente. Se ejecuta a los 2s y reintenta hasta 8x.
+  programarAutoReparacion();
+
+  // Si llegan datos nuevos del Firebase, resetear el cache del usuario
+  document.addEventListener('db-update', (ev) => {
+    const detail = ev.detail;
+    if (detail?.key === 'inventario' && detail?.payload) {
+      _cachedUser = null;
+    }
+  });
+
+  // Exponer para debug manual y override
   window.__dhPatch = {
     abrirModalNuevo: abrirModalNuevoDespacho,
     abrirModalEditar: abrirModalEditarDespacho,
     mostrarDetalle: mostrarDetalleHerrajes,
     marcarEntregado: marcarHerrPendEntregado,
-    repararUsuariosDañados: repararUsuariosDañados,
+    repararUsuariosDañados: () => repararUsuariosDañados(false),
+    setUser: (u) => { window.__dhUserOverride = u; _cachedUser = null; log('Usuario override:', u); },
+    getUser: getCurrentUser,
     getState: () => ({ ...State }),
     getHerrajes: getHerrajesProductos,
     getStock: getStockProducto,
     getDespachos: getDespachos,
     revertirMovs: revertirMovimientosDeDespacho,
     config: CONFIG,
-    version: '3.2.0',
+    version: '3.3.0',
   };
 })();
 
