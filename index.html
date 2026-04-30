@@ -3087,6 +3087,69 @@
     ciudadBadge, estadoBadge, estatusBadge, maqBadge, checkRowHTML, getEtapaState, stageMark, stageTitle, stageClass } = PP;
 
   // ═══════════════════════════════════════════════════════════════════
+  // HELPER: Gráfico Láminas Turno-Máquina (reutilizable)
+  // ═══════════════════════════════════════════════════════════════════
+  function drawChartTurnoMaquina(corteArr, canvasId, stateKey) {
+    if (typeof Chart === 'undefined') return;
+    const tmData = {};
+    (corteArr || []).forEach(r => {
+      const m = (r.maquina || '').toUpperCase();
+      const lam = parseFloat(r.laminas) || 0;
+      let maquina = 'OTRA', turno = '?';
+      if (m.includes('GIBBEN')) maquina = 'GIBBEN';
+      else if (m.includes('GABBIANNI') || m.includes('GABBIANI')) maquina = 'GABBIANNI';
+      else {
+        const parts = m.replace(/MAQUINA\s+/i, '').split(/\s*-\s*/);
+        maquina = (parts[0] || 'OTRA').trim();
+      }
+      const tmatch = m.match(/T([A-Z])\b/);
+      if (tmatch) turno = 'T' + tmatch[1];
+      if (!tmData[maquina]) tmData[maquina] = {};
+      tmData[maquina][turno] = (tmData[maquina][turno] || 0) + lam;
+    });
+    const maquinas = Object.keys(tmData);
+    const turnosSet = new Set();
+    maquinas.forEach(m => Object.keys(tmData[m]).forEach(t => turnosSet.add(t)));
+    const turnos = [...turnosSet].sort();
+    const palette = ['#0d9488', '#0891b2', '#b8860b', '#d97706', '#7c3aed'];
+    const datasets = turnos.map((t, i) => ({
+      label: 'Turno ' + t.replace(/^T/, ''),
+      data: maquinas.map(m => tmData[m][t] || 0),
+      backgroundColor: palette[i % palette.length],
+      borderRadius: 6, borderSkipped: false,
+    }));
+    const c = document.getElementById(canvasId);
+    if (!c) return;
+    if (State[stateKey]) { try { State[stateKey].destroy(); } catch(e){} }
+    if (!maquinas.length) {
+      // No hay datos: limpiar canvas
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0, 0, c.width, c.height);
+      ctx.fillStyle = '#a8a29e';
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Sin datos de corte en el período', c.width/2, c.height/2);
+      return;
+    }
+    State[stateKey] = new Chart(c, {
+      type: 'bar',
+      data: { labels: maquinas, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top', labels: { color: '#57534e', font: { size: 11, weight: '700' } } },
+          tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y} láminas` } },
+        },
+        scales: {
+          x: { ticks: { color: '#57534e', font: { weight: '700' } }, grid: { color: '#e7e5e4' } },
+          y: { beginAtZero: true, ticks: { color: '#57534e' }, grid: { color: '#e7e5e4' },
+               title: { display: true, text: 'Láminas', color: '#78716c', font: { size: 10 } } },
+        },
+      },
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
   // VIEW: RESUMEN
   // ═══════════════════════════════════════════════════════════════════
   function renderResumen(panel) {
@@ -3193,55 +3256,8 @@
 
   function drawChartsResumen(D) {
     if (typeof Chart === 'undefined') return;
-
-    // ── Gráfico nuevo: Láminas por máquina y turno ──
-    const tmData = {};
-    (D.corte || []).forEach(r => {
-      const m = (r.maquina || '').toUpperCase();
-      const lam = parseFloat(r.laminas) || 0;
-      let maquina = 'OTRA', turno = '?';
-      if (m.includes('GIBBEN')) maquina = 'GIBBEN';
-      else if (m.includes('GABBIANNI') || m.includes('GABBIANI')) maquina = 'GABBIANNI';
-      else {
-        const parts = m.replace(/MAQUINA\s+/i, '').split(/\s*-\s*/);
-        maquina = (parts[0] || 'OTRA').trim();
-      }
-      const tmatch = m.match(/T([A-Z])\b/);
-      if (tmatch) turno = 'T' + tmatch[1];
-      if (!tmData[maquina]) tmData[maquina] = {};
-      tmData[maquina][turno] = (tmData[maquina][turno] || 0) + lam;
-    });
-    const maquinas = Object.keys(tmData);
-    const turnosSet = new Set();
-    maquinas.forEach(m => Object.keys(tmData[m]).forEach(t => turnosSet.add(t)));
-    const turnos = [...turnosSet].sort();
-    const palette = ['#0d9488', '#0891b2', '#b8860b', '#d97706', '#7c3aed'];
-    const datasets = turnos.map((t, i) => ({
-      label: 'Turno ' + t.replace(/^T/, ''),
-      data: maquinas.map(m => tmData[m][t] || 0),
-      backgroundColor: palette[i % palette.length],
-      borderRadius: 6, borderSkipped: false,
-    }));
-    const cTM = document.getElementById('pp3-chart-tm');
-    if (cTM) {
-      if (State.chartTurnoMaquina) { try { State.chartTurnoMaquina.destroy(); } catch(e){} }
-      State.chartTurnoMaquina = new Chart(cTM, {
-        type: 'bar',
-        data: { labels: maquinas, datasets },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: {
-            legend: { position: 'top', labels: { color: '#57534e', font: { size: 11, weight: '700' } } },
-            tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y} láminas` } },
-          },
-          scales: {
-            x: { ticks: { color: '#57534e', font: { weight: '700' } }, grid: { color: '#e7e5e4' } },
-            y: { beginAtZero: true, ticks: { color: '#57534e' }, grid: { color: '#e7e5e4' },
-                 title: { display: true, text: 'Láminas', color: '#78716c', font: { size: 10 } } },
-          },
-        },
-      });
-    }
+    // Gráfico turno-máquina: usar la función reutilizable
+    drawChartTurnoMaquina(D.corte || [], 'pp3-chart-tm', 'chartTurnoMaquina');
 
     // ── Cortes por máquina (existente) ──
     const mc = {};
@@ -3663,6 +3679,7 @@
   // Exponer las funciones para parte C
   Object.assign(window.__pp3, {
     renderResumen, renderCorte, renderArmado, renderTaller, renderProceso, renderRpt,
+    drawChartTurnoMaquina,
   });
 })();
 </script>
@@ -3678,7 +3695,8 @@
     saveData, listenFirebaseProduccion, getProdSemanaLS, toast, injectStyles,
     ciudadBadge, estadoBadge, estatusBadge, maqBadge, checkRowHTML,
     getEtapaState, nextEtapaState, stageMark, stageTitle, stageClass,
-    renderResumen, renderCorte, renderArmado, renderTaller, renderProceso, renderRpt } = PP;
+    renderResumen, renderCorte, renderArmado, renderTaller, renderProceso, renderRpt,
+    drawChartTurnoMaquina } = PP;
 
   // ═══════════════════════════════════════════════════════════════════
   // VIEW: RESUMEN SEMANAL (lun-sáb + rango personalizado, con PDF profesional)
@@ -3726,6 +3744,14 @@
         <div class="pp3-kpi k3"><div class="pp3-kpi-lbl">👷 En Taller</div><div class="pp3-kpi-val">${clientes_taller.length}</div><div class="pp3-kpi-sub">en período</div></div>
         <div class="pp3-kpi k3"><div class="pp3-kpi-lbl">✅ En Proceso</div><div class="pp3-kpi-val">${clientes.length}</div><div class="pp3-kpi-sub">en período</div></div>
         <div class="pp3-kpi k4"><div class="pp3-kpi-lbl">📋 Rpt. Prod.</div><div class="pp3-kpi-val">${rpt.length}</div><div class="pp3-kpi-sub">en período</div></div>
+      </div>
+
+      <div class="pp3-card">
+        <div class="pp3-card-title">📊 LÁMINAS CORTADAS · POR MÁQUINA Y TURNO</div>
+        <div class="pp3-card-sub">Comparativo del período · ${corte.length} registros de corte</div>
+        <div style="margin-top:12px;height:280px;position:relative;">
+          <canvas id="pp3-chart-tm-sem"></canvas>
+        </div>
       </div>
 
       <div class="pp3-card">
@@ -3833,10 +3859,13 @@
         </div>
       </div>
     `;
+
+    // Dibujar el gráfico turno-máquina con los datos filtrados de la semana
+    setTimeout(() => drawChartTurnoMaquina(corte, 'pp3-chart-tm-sem', 'chartTurnoMaquinaSem'), 50);
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // VIEW: REPORTE PRODUCCIÓN
+  // HELPER: Filtrado de datos para Reporte Producción
   // ═══════════════════════════════════════════════════════════════════
   function getFiltradoReporte() {
     const D = window.PROD_DATA;
@@ -3861,162 +3890,6 @@
     };
   }
 
-  function renderReporte(panel) {
-    const f = getFiltradoReporte();
-    const desde = State.repDesde, hasta = State.repHasta;
-    const periodoLabel = State.repMode === 'all'
-      ? 'Historial completo'
-      : `${desde ? prodDisp(prodFromISO(desde)) : 'inicio'} → ${hasta ? prodDisp(prodFromISO(hasta)) : 'hoy'}`;
-    const total = f.corte.length + f.armado.length + f.clientes.length + f.clientes_taller.length + f.rpt.length;
-    const lamTotal = f.rpt.reduce((s, r) => s + (parseFloat(r.cantidad_lam) || 0), 0);
-
-    panel.innerHTML = `
-      <div class="pp3-header">
-        <div class="pp3-header-left">
-          <div class="pp3-header-bar"></div>
-          <div>
-            <h1 style="color:#92400e;">REPORTE SEMANAL</h1>
-            <div class="pp3-subtitle">${periodoLabel}</div>
-          </div>
-        </div>
-        <div class="pp3-header-right">
-          <button class="pp3-btn pp3-btn-primary" data-pp3-act="pdf-reporte" style="padding:10px 18px;">⬇️ DESCARGAR PDF</button>
-        </div>
-      </div>
-
-      <div class="pp3-filter-bar">
-        <span class="pp3-filter-label">📅 FILTRAR:</span>
-        <button class="pp3-fbtn ${State.repMode==='all'?'active':''}" data-pp3-repmode="all">📋 Todo el historial</button>
-        <button class="pp3-fbtn ${State.repMode==='range'?'active':''}" data-pp3-repmode="range">📅 Por Rango de Fechas</button>
-        <div id="pp3-rep-range" style="display:${State.repMode==='range'?'flex':'none'};align-items:center;gap:8px;flex-wrap:wrap;">
-          <span style="font-size:11px;color:#78716c;">Del</span>
-          <input type="date" class="pp3-input" id="pp3-rep-desde" value="${State.repDesde}">
-          <span style="font-size:11px;color:#78716c;">al</span>
-          <input type="date" class="pp3-input" id="pp3-rep-hasta" value="${State.repHasta}">
-          <button class="pp3-fbtn pp3-fbtn-clear" data-pp3-act="clear-rep">✕ Limpiar</button>
-        </div>
-        <span style="color:#0d9488;font-size:11px;font-weight:700;margin-left:auto;">${total} registros · ${periodoLabel}</span>
-      </div>
-
-      <div class="pp3-kpi-row">
-        <div class="pp3-kpi k1"><div class="pp3-kpi-lbl">⚙️ Cortes</div><div class="pp3-kpi-val">${f.corte.length}</div><div class="pp3-kpi-sub">Período</div></div>
-        <div class="pp3-kpi k2"><div class="pp3-kpi-lbl">🔨 Armados</div><div class="pp3-kpi-val">${f.armado.length}</div><div class="pp3-kpi-sub">Período</div></div>
-        <div class="pp3-kpi k3"><div class="pp3-kpi-lbl">👷 Taller</div><div class="pp3-kpi-val">${f.clientes_taller.length}</div><div class="pp3-kpi-sub">Período</div></div>
-        <div class="pp3-kpi k3"><div class="pp3-kpi-lbl">✅ Proceso</div><div class="pp3-kpi-val">${f.clientes.length}</div><div class="pp3-kpi-sub">Período</div></div>
-        <div class="pp3-kpi k4"><div class="pp3-kpi-lbl">📋 Rpt</div><div class="pp3-kpi-val">${f.rpt.length}</div><div class="pp3-kpi-sub">Período</div></div>
-        <div class="pp3-kpi k5"><div class="pp3-kpi-lbl">📐 Total Láminas</div><div class="pp3-kpi-val">${lamTotal}</div><div class="pp3-kpi-sub">Período</div></div>
-      </div>
-
-      <div class="pp3-card">
-        <div class="pp3-card-title">⚙️ CORTE (${f.corte.length})</div>
-        <div class="pp3-table-wrap" style="margin-top:10px;">
-          <table class="pp3-table">
-            <thead><tr><th>FECHA</th><th>MÁQUINA / TURNO</th><th style="text-align:center;">LÁMINAS</th><th>OPERARIO</th><th>OBSERVACIONES</th></tr></thead>
-            <tbody>${!f.corte.length ? '<tr><td colspan="5" class="pp3-empty">Sin registros</td></tr>' :
-              f.corte.map(r => `<tr>
-                <td style="color:#0d9488;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
-                <td>${maqBadge(r.maquina)}</td>
-                <td style="text-align:center;color:#b8860b;font-weight:700;">${escapeHTML(r.laminas || '—')}</td>
-                <td>${escapeHTML(r.operario || '—')}</td>
-                <td style="color:#78716c;font-size:11px;">${escapeHTML(r.obs || '—')}</td>
-              </tr>`).join('')}</tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="pp3-card">
-        <div class="pp3-card-title t-armado">🔨 ARMADO (${f.armado.length})</div>
-        <div class="pp3-table-wrap" style="margin-top:10px;">
-          <table class="pp3-table">
-            <thead><tr><th>N°</th><th>CANT.</th><th>DESCRIPCIÓN</th><th>MEDIDA</th><th>ÁREA</th><th>CLIENTE</th><th>COLOR</th><th>LOCAL.</th><th>ARMADOR</th><th>FECHA</th><th>TIEMPO</th><th>ESTATUS</th></tr></thead>
-            <tbody>${!f.armado.length ? '<tr><td colspan="12" class="pp3-empty">Sin registros</td></tr>' :
-              f.armado.map(r => `<tr>
-                <td style="color:#a8a29e;font-size:11px;">${escapeHTML(r.nro || '—')}</td>
-                <td style="text-align:center;">${escapeHTML(r.cantidad || '—')}</td>
-                <td style="font-size:11px;">${escapeHTML(r.descripcion || '—')}</td>
-                <td style="font-size:11px;white-space:nowrap;">${escapeHTML(r.medida || '—')}</td>
-                <td style="font-size:11px;">${escapeHTML(r.area || '—')}</td>
-                <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
-                <td style="color:#78716c;font-size:11px;">${escapeHTML(r.color || '—')}</td>
-                <td style="font-size:11px;">${escapeHTML(r.localidad || '—')}</td>
-                <td style="color:#0891b2;">${escapeHTML(r.armador || '—')}</td>
-                <td style="color:#b8860b;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
-                <td>${escapeHTML(r.tiempo || '—')}</td>
-                <td>${estatusBadge(r.estatus)}</td>
-              </tr>`).join('')}</tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="pp3-card">
-        <div class="pp3-card-title t-cliente">👷 CLIENTES EN TALLER (${f.clientes_taller.length})</div>
-        <div class="pp3-table-wrap" style="margin-top:10px;">
-          <table class="pp3-table">
-            <thead><tr><th>FECHA</th><th>CLIENTE</th><th>OBSERVACIONES</th></tr></thead>
-            <tbody>${!f.clientes_taller.length ? '<tr><td colspan="3" class="pp3-empty">Sin registros</td></tr>' :
-              f.clientes_taller.map(r => `<tr>
-                <td style="color:#d97706;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
-                <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
-                <td style="color:#78716c;font-size:11px;">${escapeHTML(r.obs || '—')}</td>
-              </tr>`).join('')}</tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="pp3-card">
-        <div class="pp3-card-title t-cliente">✅ CLIENTES EN PROCESO (${f.clientes.length})</div>
-        <div class="pp3-table-wrap" style="margin-top:10px;">
-          <table class="pp3-table">
-            <thead>
-              <tr>
-                <th rowspan="2">FECHA</th>
-                <th rowspan="2">CLIENTE</th>
-                <th rowspan="2">ÁREA</th>
-                <th colspan="5" style="text-align:center;border-bottom:1px solid #d6d3d1;">ESTADO</th>
-                <th rowspan="2">OBS.</th>
-              </tr>
-              <tr>
-                <th style="text-align:center;font-size:9px;">CORTE</th>
-                <th style="text-align:center;font-size:9px;">CINTA</th>
-                <th style="text-align:center;font-size:9px;">PERF.</th>
-                <th style="text-align:center;font-size:9px;">ARMADO</th>
-                <th style="text-align:center;font-size:9px;">EMPAQUE</th>
-              </tr>
-            </thead>
-            <tbody>${!f.clientes.length ? '<tr><td colspan="9" class="pp3-empty">Sin registros</td></tr>' :
-              f.clientes.map((r, i) => `<tr>
-                <td style="color:#d97706;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
-                <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
-                <td>${escapeHTML(r.area || '—')}</td>
-                ${checkRowHTML(r.estados, i, false)}
-                <td style="color:#78716c;font-size:11px;">${escapeHTML(r.obs || '—')}</td>
-              </tr>`).join('')}</tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="pp3-card">
-        <div class="pp3-card-title t-rpt">📋 REPORTE DE PRODUCCIÓN (${f.rpt.length})</div>
-        <div class="pp3-table-wrap" style="margin-top:10px;">
-          <table class="pp3-table">
-            <thead><tr><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>COLOR</th><th>OPERADOR</th><th>CIUDAD</th><th style="text-align:center;">CANT.</th><th>MEDIDA</th><th>ESTADO</th></tr></thead>
-            <tbody>${!f.rpt.length ? '<tr><td colspan="9" class="pp3-empty">Sin registros</td></tr>' :
-              f.rpt.map(r => `<tr>
-                <td style="color:#b8860b;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
-                <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
-                <td>${escapeHTML(r.area || '—')}</td>
-                <td style="color:#78716c;font-size:11px;">${escapeHTML(r.color || '—')}</td>
-                <td>${escapeHTML(r.operador || '—')}</td>
-                <td>${ciudadBadge(r.ciudad)}</td>
-                <td style="text-align:center;color:#0d9488;font-weight:700;">${escapeHTML(r.cantidad_lam || '—')}</td>
-                <td style="font-size:11px;">${escapeHTML(r.medida_lam || '—')}</td>
-                <td>${estadoBadge(r.estado)}</td>
-              </tr>`).join('')}</tbody>
-          </table>
-        </div>
-      </div>
-    `;
-  }
 
   // ═══════════════════════════════════════════════════════════════════
   // MODALES (HTML)
