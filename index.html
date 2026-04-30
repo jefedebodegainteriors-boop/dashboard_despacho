@@ -4564,14 +4564,6 @@
       </div>
       ${renderGroup('VISTAS',   grouped['VISTAS'])}
       ${renderGroup('GESTIÓN',  grouped['GESTIÓN'])}
-      <div class="pp3-sb-group">
-        <div class="pp3-sb-group-title">PRODUCCIÓN · ENLACES</div>
-        <button class="pp3-sb-item" data-pp3-act="goto-expedientes" title="Salir a la vista de Expedientes (flujo) del dashboard">
-          <span class="pp3-sb-icon">📁</span>
-          <span>Expedientes (flujo)</span>
-          <span style="margin-left:auto;font-size:10px;opacity:.7;">↗</span>
-        </button>
-      </div>
       <div class="pp3-sb-foot">
         <div class="pp3-sb-foot-dot"></div>
         En vivo · Firebase
@@ -4649,24 +4641,6 @@
         const act = a.getAttribute('data-pp3-act');
         const idx = parseInt(a.getAttribute('data-pp3-idx'), 10);
         if (act === 'back')           hideHost();
-        else if (act === 'goto-expedientes') {
-          // Cierra el host y navega al módulo Expedientes (flujo) del dashboard real
-          hideHost();
-          setTimeout(() => {
-            // Buscar en el sidebar de React un botón/link que diga "Expedientes"
-            const sidebarItems = [...document.querySelectorAll('button, a')];
-            const expBtn = sidebarItems.find(el => {
-              if (el.closest && el.closest('#pp3-host')) return false;
-              const txt = (el.textContent || '').trim().toLowerCase();
-              return /expedientes/i.test(txt) && txt.length < 50;
-            });
-            if (expBtn) {
-              expBtn.click();
-            } else {
-              alert('No encontré el botón "Expedientes (flujo)" en el sidebar. Búscalo manualmente en el menú lateral.');
-            }
-          }, 100);
-        }
         else if (act === 'add-corte')   abrirNuevo('corte');
         else if (act === 'add-armado')  abrirNuevo('armado');
         else if (act === 'add-taller')  abrirNuevo('taller');
