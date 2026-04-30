@@ -4529,21 +4529,30 @@
   // Busca automáticamente la variable global que contenga expedientes/ventas
   // Devuelve { data: [...], sourceName: 'EXP_DATA' } o null si no encuentra nada
   function findExpedientesData() {
-    // Patrones de nombres comunes
+    // Estrategia 1: localStorage del dashboard (interiorshn_local_state_v1.main.expedientes)
+    try {
+      const raw = localStorage.getItem('interiorshn_local_state_v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.main && Array.isArray(parsed.main.expedientes)) {
+          return { data: parsed.main.expedientes, sourceName: 'localStorage:main.expedientes' };
+        }
+      }
+    } catch (e) {}
+
+    // Estrategia 2: variables globales con nombres comunes
     const candidatesByName = ['EXP_DATA', 'EXPEDIENTES', 'EXPEDIENTES_DATA', 'VENT_DATA',
       'VENTAS_DATA', 'VENTAS', 'SALES_DATA', 'PEDIDOS_DATA', 'COMERCIAL_DATA', 'EXPS', 'flow'];
     for (const name of candidatesByName) {
       try {
         const v = window[name];
         if (Array.isArray(v) && v.length > 0 && v[0] && typeof v[0] === 'object') {
-          // Verificar que tenga campos típicos de expediente/venta
           const sample = v[0];
           if (sample.cliente || sample.client || sample.customer ||
               sample.total !== undefined || sample.areas) {
             return { data: v, sourceName: name };
           }
         }
-        // Por si está dentro de un objeto: window.EXP_DATA.expedientes
         if (v && typeof v === 'object' && !Array.isArray(v)) {
           for (const subKey of ['expedientes', 'ventas', 'items', 'list', 'data']) {
             if (Array.isArray(v[subKey]) && v[subKey].length > 0) {
@@ -4556,7 +4565,7 @@
         }
       } catch (e) {}
     }
-    // Búsqueda exhaustiva en window por arrays con estructura de expediente
+    // Búsqueda exhaustiva en window
     try {
       const allKeys = Object.keys(window);
       for (const k of allKeys) {
