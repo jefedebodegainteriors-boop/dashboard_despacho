@@ -2442,27 +2442,30 @@
 
 
 <!-- ═══════════════════════════════════════════════════════════════════════
-     PATCH · MÓDULO PRODUCCIÓN v2.0 (QUIRÚRGICO)
+     PATCH · MÓDULO PRODUCCIÓN v3.0 (REEMPLAZO COMPLETO CON SIDEBAR)
      ═══════════════════════════════════════════════════════════════════════
-     Cambios aplicados (sin tocar Corte, Armado ni Clientes en taller):
-     1. Renombrar tab "Reporte láminas" → "Reporte Producción"
-     2. En Resumen: agregar gráfico de láminas cortadas por máquina y turno
-     3. Reemplazar tab "Clientes en proceso" con tabla de checklist
-        (CORTE/CINTA/PERFORACIÓN/ARMADO/EMPAQUE con 3 estados:
-         X = COMPLETADO · P = PENDIENTE · vacío = no aplica)
-     4. Reemplazar tab "Semana actual" con lógica lunes-sábado + selector de rango
-     5. Reemplazar tab "Reporte Producción" (renombrada) con reporte completo
-        portado del index.html (4 secciones + portada PDF)
+     Estructura: sidebar lateral oscuro estilo Logística + 7 vistas en panel
+     derecho. Se monta encima del módulo Producción de React cuando se detecta.
 
-     Estrategia: deja que app.min.js renderice el módulo normalmente.
-     Cuando el usuario hace clic en una de las 4 tabs modificadas, intercepta
-     el clic y monta el contenido nuevo encima del contenedor activo.
+     Vistas:
+     · PRODUCCIÓN · VISTAS:    Resumen · Semana actual
+     · PRODUCCIÓN · GESTIÓN:   Corte · Armado · Clientes en taller · Clientes en proceso
+     · PRODUCCIÓN · REPORTES:  Reporte Producción
+
+     Datos en window.PROD_DATA:
+     · corte[]:           {fecha, maquina, laminas, operario, obs}
+     · armado[]:          {nro, cantidad, descripcion, medida, area, cliente,
+                           color, localidad, armador, fecha, tiempo, estatus}
+     · clientes_taller[]: {fecha, cliente, obs}                    (NUEVA)
+     · clientes[]:        {fecha, cliente, area, estados:{}, obs}  (con checklist)
+     · rpt[]:             {fecha, cliente, area, color, operador, ciudad,
+                           cantidad_lam, medida_lam, estado}
      ═══════════════════════════════════════════════════════════════════════ -->
 <script>
 (() => {
   'use strict';
 
-  const NS = '[Produccion-Patch v2]';
+  const NS = '[Produccion-Patch v3]';
   const log  = (...a) => console.log(NS, ...a);
   const warn = (...a) => console.warn(NS, ...a);
 
@@ -2470,20 +2473,35 @@
   // 1. ESTADO Y CONFIGURACIÓN
   // ═══════════════════════════════════════════════════════════════════
   const State = {
-    activeTab: null,           // tab interceptada actualmente activa
-    semMode: 'current',        // current | range
+    activeView: 'resumen',     // resumen | corte | armado | taller | proceso | semana | reporte
+    moduleVisible: false,
+    semMode: 'current',
     semDesde: '',
     semHasta: '',
-    repMode: 'all',            // all | range
+    repMode: 'all',
     repDesde: '',
     repHasta: '',
-    editClienteIdx: -1,        // índice editando en Clientes en proceso
-    chartTurnoMaquina: null,   // instancia Chart.js del gráfico nuevo
-    moduleVisible: false,      // si el módulo Producción está visible
+    armFiltCliente: '',
+    armFiltEstatus: '',
+    pdSearch: '',
+    pdMes: '',
+    detalleCiudad: 'Todos',
+    editMode: { type: null, index: -1 },
+    chartMaquina: null,
+    chartFecha: null,
+    chartTurnoMaquina: null,
+    inited: false,
   };
 
+  // Asegurar estructura completa con clientes_taller
   if (!window.PROD_DATA) {
-    window.PROD_DATA = { corte: [], armado: [], clientes: [], rpt: [] };
+    window.PROD_DATA = { corte: [], armado: [], clientes: [], clientes_taller: [], rpt: [] };
+  }
+  if (!Array.isArray(window.PROD_DATA.clientes_taller)) {
+    window.PROD_DATA.clientes_taller = [];
+  }
+  if (!Array.isArray(window.PROD_DATA.rpt)) {
+    window.PROD_DATA.rpt = [];
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -2501,9 +2519,7 @@
     if (typeof window._fbSave === 'function') {
       try {
         const result = window._fbSave('produccion', window.PROD_DATA);
-        if (result && typeof result.catch === 'function') {
-          result.catch(e => warn('fb save fail', e));
-        }
+        if (result && typeof result.catch === 'function') result.catch(e => warn('fb save fail', e));
       } catch (e) { warn('fb save throw', e); }
     } else if (typeof window._fbSaveProd === 'function') {
       try { window._fbSaveProd(window.PROD_DATA); } catch (e) { warn('fb saveprod fail', e); }
@@ -2516,30 +2532,32 @@
       if (key !== 'produccion' || !payload) return;
       try {
         window.PROD_DATA = {
-          corte:    Array.isArray(payload.corte)    ? payload.corte    : [],
-          armado:   Array.isArray(payload.armado)   ? payload.armado   : [],
-          clientes: Array.isArray(payload.clientes) ? payload.clientes : [],
-          rpt:      Array.isArray(payload.rpt)      ? payload.rpt      : [],
+          corte:           Array.isArray(payload.corte)           ? payload.corte           : [],
+          armado:          Array.isArray(payload.armado)          ? payload.armado          : [],
+          clientes:        Array.isArray(payload.clientes)        ? payload.clientes        : [],
+          clientes_taller: Array.isArray(payload.clientes_taller) ? payload.clientes_taller : [],
+          rpt:             Array.isArray(payload.rpt)             ? payload.rpt             : [],
         };
-        if (State.activeTab) renderActiveTab();
+        if (State.moduleVisible) renderActiveView();
       } catch (e) { warn('parse payload fail', e); }
     });
   }
 
-  // CAMBIO #4: Semana lunes-sábado (en lugar de martes-martes)
+  // CAMBIO #4: Semana lunes-sábado
   function getProdSemanaLS() {
     if (State.semMode === 'range' && State.semDesde && State.semHasta) {
       const desdeISO = State.semDesde, hastaISO = State.semHasta;
       const desde = prodFromISO(desdeISO), hasta = prodFromISO(hastaISO);
-      const fil = arr => arr.filter(r => {
+      const fil = arr => (arr || []).filter(r => {
         const iso = prodToISO(r.fecha);
         return iso >= desdeISO && iso <= hastaISO;
       });
       return {
-        corte:    fil(window.PROD_DATA.corte),
-        armado:   fil(window.PROD_DATA.armado),
-        clientes: fil(window.PROD_DATA.clientes),
-        rpt:      fil(window.PROD_DATA.rpt || []),
+        corte:           fil(window.PROD_DATA.corte),
+        armado:          fil(window.PROD_DATA.armado),
+        clientes:        fil(window.PROD_DATA.clientes),
+        clientes_taller: fil(window.PROD_DATA.clientes_taller),
+        rpt:             fil(window.PROD_DATA.rpt),
         desde, hasta, desdeISO, hastaISO, custom: true,
       };
     }
@@ -2551,306 +2569,30 @@
     const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const desdeISO = fmt(lun), hastaISO = fmt(sab);
     const desde = prodFromISO(desdeISO), hasta = prodFromISO(hastaISO);
-    const fil = arr => arr.filter(r => {
+    const fil = arr => (arr || []).filter(r => {
       const iso = prodToISO(r.fecha);
       return iso >= desdeISO && iso <= hastaISO;
     });
     return {
-      corte:    fil(window.PROD_DATA.corte),
-      armado:   fil(window.PROD_DATA.armado),
-      clientes: fil(window.PROD_DATA.clientes),
-      rpt:      fil(window.PROD_DATA.rpt || []),
+      corte:           fil(window.PROD_DATA.corte),
+      armado:          fil(window.PROD_DATA.armado),
+      clientes:        fil(window.PROD_DATA.clientes),
+      clientes_taller: fil(window.PROD_DATA.clientes_taller),
+      rpt:             fil(window.PROD_DATA.rpt),
       desde, hasta, desdeISO, hastaISO, custom: false,
     };
   }
 
   function toast(msg, tipo, ms) {
     const el = document.createElement('div');
-    el.className = 'pp2-toast ' + (tipo || 'ok');
+    el.className = 'pp3-toast ' + (tipo || 'ok');
     el.textContent = msg;
     document.body.appendChild(el);
     setTimeout(() => el.remove(), ms || 2200);
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // 3. ESTILOS (consistente con dashboard-share: teal/gold/stone)
-  // ═══════════════════════════════════════════════════════════════════
-  function injectStyles() {
-    if (document.getElementById('pp2-styles')) return;
-    const s = document.createElement('style');
-    s.id = 'pp2-styles';
-    s.textContent = `
-      /* ════ PRODUCCIÓN PATCH v2 · ESTILOS ════ */
-      .pp2-overlay {
-        font-family: ui-sans-serif, system-ui, sans-serif;
-        background: #faf8f5;
-        padding: 20px 24px;
-        color: #1c1917;
-        min-height: 400px;
-      }
-      .pp2-overlay *, .pp2-overlay *::before, .pp2-overlay *::after { box-sizing: border-box; }
-
-      /* KPIs */
-      .pp2-kpi-row {
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        gap: 12px; margin-bottom: 16px;
-      }
-      .pp2-kpi {
-        background: #ffffff; border: 1px solid #e7e5e4; border-radius: 12px;
-        padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,.03);
-        position: relative; overflow: hidden;
-      }
-      .pp2-kpi::before {
-        content: ''; position: absolute; top: 0; left: 0;
-        width: 4px; height: 100%; border-radius: 12px 0 0 12px; background: #0d9488;
-      }
-      .pp2-kpi.k1::before { background: #0d9488; }
-      .pp2-kpi.k2::before { background: #0891b2; }
-      .pp2-kpi.k3::before { background: #d97706; }
-      .pp2-kpi.k4::before { background: #b8860b; }
-      .pp2-kpi.k5::before { background: #7c3aed; }
-      .pp2-kpi-lbl {
-        color: #78716c; font-size: 10px; letter-spacing: 1.5px;
-        text-transform: uppercase; font-weight: 700; margin-bottom: 6px;
-      }
-      .pp2-kpi-val { font-size: 26px; font-weight: 800; line-height: 1; color: #1c1917; }
-      .pp2-kpi.k1 .pp2-kpi-val { color: #0d9488; }
-      .pp2-kpi.k2 .pp2-kpi-val { color: #0891b2; }
-      .pp2-kpi.k3 .pp2-kpi-val { color: #d97706; }
-      .pp2-kpi.k4 .pp2-kpi-val { color: #b8860b; }
-      .pp2-kpi.k5 .pp2-kpi-val { color: #7c3aed; }
-      .pp2-kpi-sub { color: #a8a29e; font-size: 10px; margin-top: 4px; }
-
-      /* Cards */
-      .pp2-card {
-        background: #ffffff; border: 1px solid #e7e5e4; border-radius: 12px;
-        padding: 16px 18px; margin-bottom: 14px;
-        box-shadow: 0 1px 2px rgba(0,0,0,.03);
-      }
-      .pp2-card-header {
-        display: flex; align-items: center; justify-content: space-between;
-        margin-bottom: 12px; gap: 10px; flex-wrap: wrap;
-      }
-      .pp2-card-title {
-        color: #134e4a; font-size: 12px; font-weight: 800;
-        letter-spacing: 1px; text-transform: uppercase;
-      }
-      .pp2-card-title.t-cliente { color: #d97706; }
-      .pp2-card-title.t-armado { color: #0891b2; }
-      .pp2-card-title.t-rpt { color: #b8860b; }
-      .pp2-card-sub { color: #78716c; font-size: 10px; margin-top: 2px; }
-
-      /* Tablas */
-      .pp2-table-wrap {
-        overflow-x: auto; border: 1px solid #e7e5e4; border-radius: 10px; background: #ffffff;
-      }
-      .pp2-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-      .pp2-table thead th {
-        background: #f5f5f4; padding: 10px 12px; text-align: left;
-        font-size: 10px; letter-spacing: 1px; color: #57534e; font-weight: 700;
-        border-bottom: 1px solid #e7e5e4; text-transform: uppercase; white-space: nowrap;
-      }
-      .pp2-table tbody td {
-        padding: 9px 12px; border-bottom: 1px solid #f5f5f4;
-        color: #1c1917; vertical-align: middle;
-      }
-      .pp2-table tbody tr:last-child td { border-bottom: 0; }
-      .pp2-table tbody tr:hover { background: #fafaf9; }
-      .pp2-table .pp2-empty {
-        text-align: center; padding: 28px; color: #a8a29e;
-        font-size: 12px; font-style: italic;
-      }
-
-      /* Botones */
-      .pp2-btn {
-        padding: 8px 14px; font-size: 12px; font-weight: 700;
-        border-radius: 8px; cursor: pointer; border: 1px solid transparent;
-        transition: background .15s, border-color .15s; font-family: inherit;
-        white-space: nowrap;
-      }
-      .pp2-btn-primary { background: #0d9488; color: #fff; }
-      .pp2-btn-primary:hover { background: #0f766e; }
-      .pp2-btn-ghost { background: #fff; color: #57534e; border-color: #d6d3d1; }
-      .pp2-btn-ghost:hover { background: #f5f5f4; }
-      .pp2-btn-add { background: #ccfbf1; color: #0f766e; border-color: #5eead4; }
-      .pp2-btn-add:hover { background: #99f6e4; }
-      .pp2-btn-pdf { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
-      .pp2-btn-pdf:hover { background: #fde68a; }
-      .pp2-btn-sm { padding: 5px 10px; font-size: 11px; }
-      .pp2-btn-edit { background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; }
-      .pp2-btn-edit:hover { background: #bae6fd; }
-      .pp2-btn-del { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
-      .pp2-btn-del:hover { background: #fecaca; }
-
-      /* Filtros */
-      .pp2-filter-bar {
-        background: #ffffff; border: 1px solid #e7e5e4; border-radius: 12px;
-        padding: 12px 16px; margin-bottom: 14px;
-        display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
-      }
-      .pp2-filter-label {
-        color: #b8860b; font-size: 10px; letter-spacing: 1.5px;
-        text-transform: uppercase; font-weight: 700;
-      }
-      .pp2-fbtn {
-        padding: 6px 12px; font-size: 11px; font-weight: 700;
-        border-radius: 7px; cursor: pointer; background: #fafaf9;
-        color: #78716c; border: 1px solid #e7e5e4; font-family: inherit; transition: all .15s;
-      }
-      .pp2-fbtn:hover { background: #f5f5f4; color: #44403c; }
-      .pp2-fbtn.active { background: #0d9488; color: #fff; border-color: #0d9488; }
-      .pp2-fbtn-clear { padding: 5px 10px; font-size: 10px; }
-      .pp2-input, .pp2-select {
-        background: #fff; border: 1px solid #d6d3d1; color: #1c1917;
-        padding: 7px 11px; border-radius: 8px; font-size: 12px;
-        outline: none; font-family: inherit;
-      }
-      .pp2-input:focus, .pp2-select:focus { border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,.15); }
-
-      /* Badges */
-      .pp2-badge {
-        display: inline-block; padding: 2px 8px; border-radius: 14px;
-        font-size: 10px; font-weight: 700; letter-spacing: .3px;
-      }
-      .pp2-badge-ok    { background: #ccfbf1; color: #115e59; border: 1px solid #5eead4; }
-      .pp2-badge-proc  { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
-      .pp2-badge-pend  { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
-      .pp2-badge-stop  { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
-      .pp2-badge-sps   { background: #f3e8ff; color: #6b21a8; border: 1px solid #d8b4fe; }
-      .pp2-badge-tgu   { background: #cffafe; color: #155e75; border: 1px solid #67e8f9; }
-      .pp2-badge-crt   { background: #fef3c7; color: #854d0e; border: 1px solid #fde68a; }
-      .pp2-badge-maq   { background: #ccfbf1; color: #115e59; border: 1px solid #5eead4; }
-
-      /* CHECKLIST DE 3 ESTADOS (CORTE/CINTA/PERFORACIÓN/ARMADO/EMPAQUE) */
-      .pp2-stage-cell {
-        display: inline-flex; align-items: center; justify-content: center;
-        width: 32px; height: 28px; border-radius: 6px;
-        font-size: 11px; font-weight: 800; letter-spacing: .5px;
-        background: #fafaf9; color: #d6d3d1; border: 1px solid #e7e5e4;
-        cursor: pointer; transition: all .15s; user-select: none;
-      }
-      .pp2-stage-cell:hover { background: #f5f5f4; border-color: #d6d3d1; }
-      .pp2-stage-cell.s-done {
-        background: #0d9488; color: #fff; border-color: #0f766e;
-        box-shadow: 0 0 0 2px rgba(13,148,136,.15);
-      }
-      .pp2-stage-cell.s-pend {
-        background: #fef3c7; color: #92400e; border-color: #fcd34d;
-        box-shadow: 0 0 0 2px rgba(217,119,6,.12);
-      }
-      .pp2-stage-cell.readonly { cursor: default; }
-      .pp2-stage-cell.readonly:hover { background: inherit; }
-
-      .pp2-checklist-modal {
-        display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 6px;
-      }
-      .pp2-check-cell {
-        background: #fafaf9; border: 1px solid #e7e5e4; border-radius: 8px;
-        padding: 10px 8px; text-align: center; cursor: pointer; transition: all .15s;
-      }
-      .pp2-check-cell:hover { background: #f5f5f4; border-color: #d6d3d1; }
-      .pp2-check-cell.s-done {
-        background: #ccfbf1; border-color: #14b8a6;
-        box-shadow: 0 0 0 2px rgba(13,148,136,.15);
-      }
-      .pp2-check-cell.s-pend {
-        background: #fef3c7; border-color: #d97706;
-        box-shadow: 0 0 0 2px rgba(217,119,6,.15);
-      }
-      .pp2-check-cell-lbl {
-        font-size: 9px; font-weight: 700; color: #78716c;
-        letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px;
-      }
-      .pp2-check-cell.s-done .pp2-check-cell-lbl { color: #0f766e; }
-      .pp2-check-cell.s-pend .pp2-check-cell-lbl { color: #92400e; }
-      .pp2-check-cell-mark {
-        font-size: 18px; font-weight: 800; color: #d6d3d1; line-height: 1.1;
-      }
-      .pp2-check-cell-status {
-        font-size: 9px; color: #a8a29e; margin-top: 2px; letter-spacing: .5px;
-      }
-      .pp2-check-cell.s-done .pp2-check-cell-mark { color: #0d9488; }
-      .pp2-check-cell.s-done .pp2-check-cell-status { color: #0f766e; font-weight: 700; }
-      .pp2-check-cell.s-pend .pp2-check-cell-mark { font-size: 14px; color: #d97706; }
-      .pp2-check-cell.s-pend .pp2-check-cell-status { color: #92400e; font-weight: 700; }
-
-      /* Modal */
-      .pp2-modal-overlay {
-        position: fixed; inset: 0; z-index: 9000;
-        background: rgba(0,0,0,.45); display: none;
-        align-items: flex-start; justify-content: center;
-        padding: 24px 16px; overflow-y: auto;
-      }
-      .pp2-modal-overlay.open { display: flex; animation: pp2-fade .15s ease-out; }
-      @keyframes pp2-fade { from { opacity: 0 } to { opacity: 1 } }
-      .pp2-modal {
-        background: #fff; border-radius: 14px;
-        box-shadow: 0 20px 60px rgba(0,0,0,.25), 0 4px 16px rgba(0,0,0,.1);
-        max-width: 700px; width: 100%; margin: auto;
-        display: flex; flex-direction: column; max-height: calc(100vh - 48px); overflow: hidden;
-      }
-      .pp2-modal-header {
-        padding: 16px 22px; border-bottom: 1px solid #e7e5e4;
-        display: flex; align-items: center; justify-content: space-between;
-      }
-      .pp2-modal-title { font-weight: 800; color: #134e4a; font-size: 15px; }
-      .pp2-modal-close {
-        background: none; border: 0; font-size: 24px; line-height: 1;
-        color: #a8a29e; cursor: pointer; padding: 4px 8px;
-      }
-      .pp2-modal-close:hover { color: #44403c; }
-      .pp2-modal-body { padding: 18px 22px; overflow-y: auto; flex: 1; }
-      .pp2-modal-footer {
-        padding: 14px 22px; border-top: 1px solid #e7e5e4;
-        display: flex; align-items: center; justify-content: flex-end;
-        gap: 8px; flex-wrap: wrap; background: #fafaf9;
-      }
-      .pp2-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-      .pp2-form-grid .pp2-full { grid-column: 1 / -1; }
-      .pp2-form-group label {
-        display: block; font-size: 10px; font-weight: 700;
-        letter-spacing: 1.5px; color: #78716c; margin-bottom: 5px; text-transform: uppercase;
-      }
-      .pp2-form-group input, .pp2-form-group select, .pp2-form-group textarea {
-        width: 100%; padding: 8px 10px; font-size: 13px; color: #1c1917;
-        background: #fff; border: 1px solid #d6d3d1; border-radius: 8px;
-        outline: none; font-family: inherit;
-      }
-      .pp2-form-group textarea { min-height: 70px; resize: vertical; }
-      .pp2-form-group input:focus, .pp2-form-group select:focus, .pp2-form-group textarea:focus {
-        border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,.15);
-      }
-
-      /* Toast */
-      .pp2-toast {
-        position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-        background: #1c1917; color: #fff; padding: 10px 18px; border-radius: 10px;
-        font-size: 13px; z-index: 9999;
-        box-shadow: 0 10px 30px rgba(0,0,0,.3);
-        animation: pp2-toast-in .2s ease-out;
-      }
-      @keyframes pp2-toast-in {
-        from { opacity: 0; transform: translate(-50%, 10px); }
-        to   { opacity: 1; transform: translate(-50%, 0); }
-      }
-      .pp2-toast.error { background: #991b1b; }
-      .pp2-toast.warn  { background: #92400e; }
-      .pp2-toast.ok    { background: #065f46; }
-
-      /* Indicador del patch arriba a la derecha */
-      .pp2-tag {
-        position: fixed; bottom: 8px; right: 8px;
-        background: rgba(15, 118, 110, 0.85); color: #fff;
-        font-size: 9px; padding: 3px 8px; border-radius: 6px;
-        font-family: ui-monospace, monospace; letter-spacing: .5px;
-        z-index: 9999; pointer-events: none; opacity: .7;
-      }
-    `;
-    document.head.appendChild(s);
-  }
-
-  // ═══════════════════════════════════════════════════════════════════
-  // 4. HELPERS DE RENDER (badges, stages)
+  // 3. CHECKLIST: 3 ESTADOS POR ETAPA
   // ═══════════════════════════════════════════════════════════════════
   const ETAPAS = ['corte', 'cinta', 'perforacion', 'armado', 'empaque'];
   const ETAPA_LABELS = {
@@ -2858,7 +2600,6 @@
     armado: 'ARMADO', empaque: 'EMPAQUE',
   };
 
-  // 3 estados: 'done' (X verde), 'pend' (P amarillo), null/'' (vacío)
   function getEtapaState(estados, etapa) {
     if (!estados) return null;
     const v = estados[etapa];
@@ -2867,178 +2608,917 @@
     return null;
   }
   function nextEtapaState(curr) {
-    // ciclo: vacío → done → pend → vacío
     if (!curr) return 'done';
     if (curr === 'done') return 'pend';
     return null;
   }
-  function stageMark(state) {
-    if (state === 'done') return 'X';
-    if (state === 'pend') return 'P';
-    return '';
-  }
-  function stageTitle(state) {
-    if (state === 'done') return 'COMPLETADO';
-    if (state === 'pend') return 'PENDIENTE';
-    return 'No marcado';
-  }
-  function stageClass(state) {
-    if (state === 'done') return 's-done';
-    if (state === 'pend') return 's-pend';
-    return '';
+  function stageMark(s) { return s === 'done' ? 'X' : s === 'pend' ? 'P' : ''; }
+  function stageTitle(s){ return s === 'done' ? 'COMPLETADO' : s === 'pend' ? 'PENDIENTE' : 'No marcado'; }
+  function stageClass(s){ return s === 'done' ? 's-done' : s === 'pend' ? 's-pend' : ''; }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 4. ESTILOS — Sidebar Logística + Panel
+  // ═══════════════════════════════════════════════════════════════════
+  function injectStyles() {
+    if (document.getElementById('pp3-styles')) return;
+    const s = document.createElement('style');
+    s.id = 'pp3-styles';
+    s.textContent = `
+      /* ════ PRODUCCIÓN PATCH v3 ════ */
+      #pp3-host {
+        position: fixed; inset: 0; z-index: 50;
+        background: #faf8f5;
+        display: none;
+        font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+        color: #1c1917;
+      }
+      #pp3-host.open { display: flex; }
+      #pp3-host *, #pp3-host *::before, #pp3-host *::after { box-sizing: border-box; }
+
+      /* ───── SIDEBAR ───── */
+      #pp3-sidebar {
+        width: 240px; min-width: 240px;
+        background: #14342f;
+        color: #d6e6e2;
+        display: flex; flex-direction: column;
+        border-right: 1px solid #0a201d;
+        overflow-y: auto;
+      }
+
+      .pp3-sb-brand {
+        padding: 16px 18px;
+        display: flex; align-items: center; gap: 12px;
+        border-bottom: 1px solid rgba(255,255,255,.06);
+      }
+      .pp3-sb-brand-logo {
+        width: 38px; height: 38px; border-radius: 10px;
+        background: #0d9488;
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; font-weight: 800; font-size: 16px;
+      }
+      .pp3-sb-brand-text-1 { color: #f5f5f4; font-weight: 800; font-size: 14px; line-height: 1.1; }
+      .pp3-sb-brand-text-2 { color: #99a8a4; font-size: 10px; margin-top: 2px; letter-spacing: .3px; }
+
+      .pp3-sb-active {
+        padding: 14px 18px 12px;
+        display: flex; align-items: center; justify-content: space-between;
+        border-bottom: 1px solid rgba(255,255,255,.06);
+      }
+      .pp3-sb-active-text {
+        font-size: 14px; color: #f5f5f4; font-weight: 700; line-height: 1.1;
+      }
+      .pp3-sb-active-sub {
+        font-size: 10px; color: #99a8a4; letter-spacing: 1.5px;
+        text-transform: uppercase; margin-top: 3px; font-weight: 700;
+      }
+      .pp3-sb-back {
+        width: 30px; height: 30px; border-radius: 6px;
+        background: transparent; border: 0; color: #99a8a4;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; font-size: 16px;
+      }
+      .pp3-sb-back:hover { background: rgba(255,255,255,.06); color: #fff; }
+
+      .pp3-sb-group { padding: 18px 14px 4px; }
+      .pp3-sb-group-title {
+        font-size: 9.5px; color: #6f8782; letter-spacing: 2px;
+        text-transform: uppercase; padding: 0 4px 8px;
+        font-weight: 700;
+      }
+      .pp3-sb-item {
+        display: flex; align-items: center; gap: 10px;
+        padding: 9px 12px; border-radius: 8px;
+        font-size: 13px; color: #d6e6e2; cursor: pointer;
+        margin-bottom: 2px; transition: background .15s, color .15s;
+        border: 0; background: transparent; width: 100%; text-align: left;
+        font-family: inherit; font-weight: 500;
+      }
+      .pp3-sb-item:hover { background: rgba(255,255,255,.06); color: #fff; }
+      .pp3-sb-item.active {
+        background: #0d9488; color: #fff; font-weight: 700;
+      }
+      .pp3-sb-icon {
+        width: 18px; display: inline-flex; justify-content: center;
+        font-size: 14px; line-height: 1;
+      }
+      .pp3-sb-count {
+        margin-left: auto; font-size: 10px; opacity: .7;
+        background: rgba(0,0,0,.2); padding: 1px 7px; border-radius: 8px;
+        font-weight: 700;
+      }
+      .pp3-sb-item.active .pp3-sb-count {
+        background: rgba(255,255,255,.18); opacity: 1;
+      }
+
+      .pp3-sb-foot {
+        margin-top: auto; padding: 14px 18px;
+        border-top: 1px solid rgba(255,255,255,.06);
+        font-size: 11px; color: #99a8a4;
+        display: flex; align-items: center; gap: 6px;
+      }
+      .pp3-sb-foot-dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: #10b981;
+        box-shadow: 0 0 6px rgba(16,185,129,.6);
+      }
+
+      /* ───── PANEL DERECHO ───── */
+      #pp3-panel {
+        flex: 1; overflow-y: auto;
+        background: #faf8f5;
+        padding: 22px 28px 40px;
+      }
+
+      /* Header */
+      .pp3-header {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 20px; padding-bottom: 14px;
+        border-bottom: 1px solid #e7e5e4;
+      }
+      .pp3-header-left { display: flex; align-items: center; gap: 14px; }
+      .pp3-header-bar {
+        width: 4px; height: 38px; border-radius: 4px;
+        background: linear-gradient(180deg, #0d9488, #134e4a);
+      }
+      .pp3-header h1 {
+        margin: 0; font-size: 20px; font-weight: 800; color: #134e4a;
+        letter-spacing: -.02em;
+      }
+      .pp3-header .pp3-subtitle {
+        margin-top: 2px; font-size: 10px; color: #78716c;
+        letter-spacing: 1.5px; text-transform: uppercase; font-weight: 600;
+      }
+      .pp3-header-right { display: flex; gap: 8px; align-items: center; }
+
+      /* KPIs */
+      .pp3-kpi-row {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px; margin-bottom: 16px;
+      }
+      .pp3-kpi {
+        background: #ffffff; border: 1px solid #e7e5e4; border-radius: 12px;
+        padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,.03);
+        position: relative; overflow: hidden;
+      }
+      .pp3-kpi::before {
+        content: ''; position: absolute; top: 0; left: 0;
+        width: 4px; height: 100%; border-radius: 12px 0 0 12px; background: #0d9488;
+      }
+      .pp3-kpi.k1::before { background: #0d9488; }
+      .pp3-kpi.k2::before { background: #0891b2; }
+      .pp3-kpi.k3::before { background: #d97706; }
+      .pp3-kpi.k4::before { background: #b8860b; }
+      .pp3-kpi.k5::before { background: #7c3aed; }
+      .pp3-kpi-lbl { color: #78716c; font-size: 10px; letter-spacing: 1.5px;
+        text-transform: uppercase; font-weight: 700; margin-bottom: 6px; }
+      .pp3-kpi-val { font-size: 26px; font-weight: 800; line-height: 1; color: #1c1917; }
+      .pp3-kpi.k1 .pp3-kpi-val { color: #0d9488; }
+      .pp3-kpi.k2 .pp3-kpi-val { color: #0891b2; }
+      .pp3-kpi.k3 .pp3-kpi-val { color: #d97706; }
+      .pp3-kpi.k4 .pp3-kpi-val { color: #b8860b; }
+      .pp3-kpi.k5 .pp3-kpi-val { color: #7c3aed; }
+      .pp3-kpi-sub { color: #a8a29e; font-size: 10px; margin-top: 4px; }
+
+      /* Cards */
+      .pp3-card {
+        background: #ffffff; border: 1px solid #e7e5e4; border-radius: 12px;
+        padding: 16px 18px; margin-bottom: 14px;
+        box-shadow: 0 1px 2px rgba(0,0,0,.03);
+      }
+      .pp3-card-header {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 12px; gap: 10px; flex-wrap: wrap;
+      }
+      .pp3-card-title { color: #134e4a; font-size: 12px; font-weight: 800;
+        letter-spacing: 1px; text-transform: uppercase; }
+      .pp3-card-title.t-armado { color: #0891b2; }
+      .pp3-card-title.t-cliente { color: #d97706; }
+      .pp3-card-title.t-rpt { color: #b8860b; }
+      .pp3-card-sub { color: #78716c; font-size: 10px; margin-top: 2px; }
+
+      .pp3-charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+      @media (max-width: 1100px) { .pp3-charts-grid { grid-template-columns: 1fr; } }
+
+      /* Tablas */
+      .pp3-table-wrap {
+        overflow-x: auto; border: 1px solid #e7e5e4; border-radius: 10px; background: #ffffff;
+      }
+      .pp3-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      .pp3-table thead th {
+        background: #f5f5f4; padding: 10px 12px; text-align: left;
+        font-size: 10px; letter-spacing: 1px; color: #57534e; font-weight: 700;
+        border-bottom: 1px solid #e7e5e4; text-transform: uppercase; white-space: nowrap;
+      }
+      .pp3-table tbody td {
+        padding: 9px 12px; border-bottom: 1px solid #f5f5f4;
+        color: #1c1917; vertical-align: middle;
+      }
+      .pp3-table tbody tr:last-child td { border-bottom: 0; }
+      .pp3-table tbody tr:hover { background: #fafaf9; }
+      .pp3-table .pp3-empty {
+        text-align: center; padding: 28px; color: #a8a29e;
+        font-size: 12px; font-style: italic;
+      }
+
+      /* Botones */
+      .pp3-btn {
+        padding: 8px 14px; font-size: 12px; font-weight: 700;
+        border-radius: 8px; cursor: pointer; border: 1px solid transparent;
+        transition: background .15s, border-color .15s; font-family: inherit;
+        white-space: nowrap;
+      }
+      .pp3-btn-primary { background: #0d9488; color: #fff; }
+      .pp3-btn-primary:hover { background: #0f766e; }
+      .pp3-btn-ghost { background: #fff; color: #57534e; border-color: #d6d3d1; }
+      .pp3-btn-ghost:hover { background: #f5f5f4; }
+      .pp3-btn-add { background: #ccfbf1; color: #0f766e; border-color: #5eead4; }
+      .pp3-btn-add:hover { background: #99f6e4; }
+      .pp3-btn-pdf { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+      .pp3-btn-pdf:hover { background: #fde68a; }
+      .pp3-btn-sm { padding: 5px 10px; font-size: 11px; }
+      .pp3-btn-edit { background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; }
+      .pp3-btn-edit:hover { background: #bae6fd; }
+      .pp3-btn-del { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+      .pp3-btn-del:hover { background: #fecaca; }
+
+      /* Filtros */
+      .pp3-filter-bar {
+        background: #ffffff; border: 1px solid #e7e5e4; border-radius: 12px;
+        padding: 12px 16px; margin-bottom: 14px;
+        display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      }
+      .pp3-filter-label { color: #b8860b; font-size: 10px; letter-spacing: 1.5px;
+        text-transform: uppercase; font-weight: 700; }
+      .pp3-fbtn {
+        padding: 6px 12px; font-size: 11px; font-weight: 700;
+        border-radius: 7px; cursor: pointer; background: #fafaf9;
+        color: #78716c; border: 1px solid #e7e5e4; font-family: inherit; transition: all .15s;
+      }
+      .pp3-fbtn:hover { background: #f5f5f4; color: #44403c; }
+      .pp3-fbtn.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+      .pp3-fbtn-clear { padding: 5px 10px; font-size: 10px; }
+      .pp3-input, .pp3-select {
+        background: #fff; border: 1px solid #d6d3d1; color: #1c1917;
+        padding: 7px 11px; border-radius: 8px; font-size: 12px;
+        outline: none; font-family: inherit;
+      }
+      .pp3-input:focus, .pp3-select:focus { border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,.15); }
+      .pp3-search { width: 240px; }
+
+      /* Badges */
+      .pp3-badge {
+        display: inline-block; padding: 2px 8px; border-radius: 14px;
+        font-size: 10px; font-weight: 700; letter-spacing: .3px;
+      }
+      .pp3-badge-ok    { background: #ccfbf1; color: #115e59; border: 1px solid #5eead4; }
+      .pp3-badge-proc  { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+      .pp3-badge-pend  { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+      .pp3-badge-stop  { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+      .pp3-badge-sps   { background: #f3e8ff; color: #6b21a8; border: 1px solid #d8b4fe; }
+      .pp3-badge-tgu   { background: #cffafe; color: #155e75; border: 1px solid #67e8f9; }
+      .pp3-badge-crt   { background: #fef3c7; color: #854d0e; border: 1px solid #fde68a; }
+      .pp3-badge-maq   { background: #ccfbf1; color: #115e59; border: 1px solid #5eead4; }
+
+      /* Stage cells (3 estados) */
+      .pp3-stage-cell {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 32px; height: 28px; border-radius: 6px;
+        font-size: 11px; font-weight: 800; letter-spacing: .5px;
+        background: #fafaf9; color: #d6d3d1; border: 1px solid #e7e5e4;
+        cursor: pointer; transition: all .15s; user-select: none;
+      }
+      .pp3-stage-cell:hover { background: #f5f5f4; border-color: #d6d3d1; }
+      .pp3-stage-cell.s-done {
+        background: #0d9488; color: #fff; border-color: #0f766e;
+        box-shadow: 0 0 0 2px rgba(13,148,136,.15);
+      }
+      .pp3-stage-cell.s-pend {
+        background: #fef3c7; color: #92400e; border-color: #fcd34d;
+        box-shadow: 0 0 0 2px rgba(217,119,6,.12);
+      }
+      .pp3-stage-cell.readonly { cursor: default; }
+      .pp3-stage-cell.readonly:hover { background: #fafaf9; }
+      .pp3-stage-cell.readonly.s-done:hover { background: #0d9488; }
+      .pp3-stage-cell.readonly.s-pend:hover { background: #fef3c7; }
+
+      .pp3-checklist-modal {
+        display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 6px;
+      }
+      .pp3-check-cell {
+        background: #fafaf9; border: 1px solid #e7e5e4; border-radius: 8px;
+        padding: 10px 8px; text-align: center; cursor: pointer; transition: all .15s;
+      }
+      .pp3-check-cell:hover { background: #f5f5f4; border-color: #d6d3d1; }
+      .pp3-check-cell.s-done {
+        background: #ccfbf1; border-color: #14b8a6;
+        box-shadow: 0 0 0 2px rgba(13,148,136,.15);
+      }
+      .pp3-check-cell.s-pend {
+        background: #fef3c7; border-color: #d97706;
+        box-shadow: 0 0 0 2px rgba(217,119,6,.15);
+      }
+      .pp3-check-cell-lbl {
+        font-size: 9px; font-weight: 700; color: #78716c;
+        letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px;
+      }
+      .pp3-check-cell.s-done .pp3-check-cell-lbl { color: #0f766e; }
+      .pp3-check-cell.s-pend .pp3-check-cell-lbl { color: #92400e; }
+      .pp3-check-cell-mark { font-size: 18px; font-weight: 800; color: #d6d3d1; line-height: 1.1; }
+      .pp3-check-cell-status { font-size: 9px; color: #a8a29e; margin-top: 2px; letter-spacing: .5px; }
+      .pp3-check-cell.s-done .pp3-check-cell-mark { color: #0d9488; }
+      .pp3-check-cell.s-done .pp3-check-cell-status { color: #0f766e; font-weight: 700; }
+      .pp3-check-cell.s-pend .pp3-check-cell-mark { font-size: 14px; color: #d97706; }
+      .pp3-check-cell.s-pend .pp3-check-cell-status { color: #92400e; font-weight: 700; }
+
+      /* Modal */
+      .pp3-overlay {
+        position: fixed; inset: 0; z-index: 9000;
+        background: rgba(0,0,0,.45); display: none;
+        align-items: flex-start; justify-content: center;
+        padding: 24px 16px; overflow-y: auto;
+      }
+      .pp3-overlay.open { display: flex; animation: pp3-fade .15s ease-out; }
+      @keyframes pp3-fade { from { opacity: 0 } to { opacity: 1 } }
+      .pp3-modal {
+        background: #fff; border-radius: 14px;
+        box-shadow: 0 20px 60px rgba(0,0,0,.25), 0 4px 16px rgba(0,0,0,.1);
+        max-width: 700px; width: 100%; margin: auto;
+        display: flex; flex-direction: column; max-height: calc(100vh - 48px); overflow: hidden;
+      }
+      .pp3-modal-header {
+        padding: 16px 22px; border-bottom: 1px solid #e7e5e4;
+        display: flex; align-items: center; justify-content: space-between;
+      }
+      .pp3-modal-title { font-weight: 800; color: #134e4a; font-size: 15px; }
+      .pp3-modal-close {
+        background: none; border: 0; font-size: 24px; line-height: 1;
+        color: #a8a29e; cursor: pointer; padding: 4px 8px;
+      }
+      .pp3-modal-close:hover { color: #44403c; }
+      .pp3-modal-body { padding: 18px 22px; overflow-y: auto; flex: 1; }
+      .pp3-modal-footer {
+        padding: 14px 22px; border-top: 1px solid #e7e5e4;
+        display: flex; align-items: center; justify-content: flex-end;
+        gap: 8px; flex-wrap: wrap; background: #fafaf9;
+      }
+      .pp3-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .pp3-form-grid .pp3-full { grid-column: 1 / -1; }
+      .pp3-form-group label {
+        display: block; font-size: 10px; font-weight: 700;
+        letter-spacing: 1.5px; color: #78716c; margin-bottom: 5px; text-transform: uppercase;
+      }
+      .pp3-form-group input, .pp3-form-group select, .pp3-form-group textarea {
+        width: 100%; padding: 8px 10px; font-size: 13px; color: #1c1917;
+        background: #fff; border: 1px solid #d6d3d1; border-radius: 8px;
+        outline: none; font-family: inherit;
+      }
+      .pp3-form-group textarea { min-height: 70px; resize: vertical; }
+      .pp3-form-group input:focus, .pp3-form-group select:focus, .pp3-form-group textarea:focus {
+        border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,.15);
+      }
+
+      /* Toast */
+      .pp3-toast {
+        position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+        background: #1c1917; color: #fff; padding: 10px 18px; border-radius: 10px;
+        font-size: 13px; z-index: 9999;
+        box-shadow: 0 10px 30px rgba(0,0,0,.3);
+        animation: pp3-toast-in .2s ease-out;
+      }
+      @keyframes pp3-toast-in {
+        from { opacity: 0; transform: translate(-50%, 10px); }
+        to   { opacity: 1; transform: translate(-50%, 0); }
+      }
+      .pp3-toast.error { background: #991b1b; }
+      .pp3-toast.warn  { background: #92400e; }
+      .pp3-toast.ok    { background: #065f46; }
+
+      /* Láminas grid */
+      .pp3-lam-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+      .pp3-lam-cell { background: #fafaf9; border: 1px solid #e7e5e4; border-radius: 10px;
+        padding: 14px; text-align: center; }
+      .pp3-lam-cell.l1 { border-color: #5eead4; background: #f0fdfa; }
+      .pp3-lam-cell.l2 { border-color: #93c5fd; background: #eff6ff; }
+      .pp3-lam-cell.l3 { border-color: #fcd34d; background: #fffbeb; }
+      .pp3-lam-num { font-size: 22px; font-weight: 800; color: #1c1917; }
+      .pp3-lam-cell.l1 .pp3-lam-num { color: #0d9488; }
+      .pp3-lam-cell.l2 .pp3-lam-num { color: #1e40af; }
+      .pp3-lam-cell.l3 .pp3-lam-num { color: #b8860b; }
+      .pp3-lam-lbl { font-size: 10px; color: #78716c; margin-top: 4px; font-weight: 700; letter-spacing: 1px; }
+      .pp3-lam-total { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e7e5e4;
+        display: flex; justify-content: space-between; align-items: center; }
+      .pp3-lam-total-lbl { color: #78716c; font-size: 10px; letter-spacing: 1px; font-weight: 700; }
+      .pp3-lam-total-num { color: #1c1917; font-size: 16px; font-weight: 800; }
+
+      /* Armadores */
+      .pp3-arm-list { display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; }
+      .pp3-arm-item { display: flex; align-items: center; gap: 10px; }
+      .pp3-arm-name { font-size: 11px; color: #1c1917; font-weight: 600;
+        min-width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .pp3-arm-bar { flex: 1; background: #f5f5f4; border-radius: 4px; height: 6px; overflow: hidden; }
+      .pp3-arm-fill { height: 100%; background: #0d9488; border-radius: 4px; transition: width .4s; }
+      .pp3-arm-num { color: #0f766e; font-size: 11px; font-weight: 800; min-width: 24px; text-align: right; }
+
+      /* Indicador */
+      .pp3-tag {
+        position: fixed; bottom: 8px; right: 8px;
+        background: rgba(15, 118, 110, 0.85); color: #fff;
+        font-size: 9px; padding: 3px 8px; border-radius: 6px;
+        font-family: ui-monospace, monospace; letter-spacing: .5px;
+        z-index: 9999; pointer-events: none; opacity: .7;
+      }
+
+      /* Body lock cuando el host está abierto */
+      body.pp3-locked { overflow: hidden !important; }
+    `;
+    document.head.appendChild(s);
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  // 5. HELPERS DE RENDER
+  // ═══════════════════════════════════════════════════════════════════
   function ciudadBadge(ciudad) {
-    const map = { 'San Pedro Sula': 'pp2-badge-sps', 'Tegucigalpa': 'pp2-badge-tgu', 'Cortés': 'pp2-badge-crt' };
-    return `<span class="pp2-badge ${map[ciudad] || 'pp2-badge-sps'}">${escapeHTML(ciudad || '—')}</span>`;
+    const map = { 'San Pedro Sula': 'pp3-badge-sps', 'Tegucigalpa': 'pp3-badge-tgu', 'Cortés': 'pp3-badge-crt' };
+    return `<span class="pp3-badge ${map[ciudad] || 'pp3-badge-sps'}">${escapeHTML(ciudad || '—')}</span>`;
   }
   function estadoBadge(estado) {
-    const cls = estado === 'Completado' ? 'pp2-badge-ok' : estado === 'Pendiente' ? 'pp2-badge-stop' : 'pp2-badge-proc';
-    return `<span class="pp2-badge ${cls}">${escapeHTML(estado || '—')}</span>`;
+    const cls = estado === 'Completado' ? 'pp3-badge-ok' : estado === 'Pendiente' ? 'pp3-badge-stop' : 'pp3-badge-proc';
+    return `<span class="pp3-badge ${cls}">${escapeHTML(estado || '—')}</span>`;
   }
   function estatusBadge(estatus) {
-    const cls = estatus === 'TERMINADO' ? 'pp2-badge-ok' : estatus === 'PENDIENTE' ? 'pp2-badge-stop' : 'pp2-badge-proc';
-    return `<span class="pp2-badge ${cls}">${escapeHTML(estatus || '—')}</span>`;
+    const cls = estatus === 'TERMINADO' ? 'pp3-badge-ok' : estatus === 'PENDIENTE' ? 'pp3-badge-stop' : 'pp3-badge-proc';
+    return `<span class="pp3-badge ${cls}">${escapeHTML(estatus || '—')}</span>`;
   }
-  function maqBadge(m) {
-    return `<span class="pp2-badge pp2-badge-maq">${escapeHTML(m || '—')}</span>`;
+  function maqBadge(m) { return `<span class="pp3-badge pp3-badge-maq">${escapeHTML(m || '—')}</span>`; }
+
+  function checkRowHTML(estados, idx, editable) {
+    return ETAPAS.map(et => {
+      const st = getEtapaState(estados, et);
+      const cls = stageClass(st);
+      const ro = editable ? '' : 'readonly';
+      const tg = editable ? `data-pp3-toggle="${idx}" data-pp3-etapa="${et}"` : '';
+      return `<td style="text-align:center;">
+        <div class="pp3-stage-cell ${cls} ${ro}" ${tg} title="${ETAPA_LABELS[et]}: ${stageTitle(st)}${editable ? ' (clic para cambiar)' : ''}">${stageMark(st) || '·'}</div>
+      </td>`;
+    }).join('');
   }
 
-  function setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+  // === Exponer parcialmente para que las partes B y C puedan usarlo ===
+  window.__pp3 = window.__pp3 || {};
+  Object.assign(window.__pp3, {
+    State, ETAPAS, ETAPA_LABELS,
+    prodToISO, prodFromISO, prodDisp, todayISO, escapeHTML,
+    saveData, listenFirebaseProduccion, getProdSemanaLS, toast,
+    getEtapaState, nextEtapaState, stageMark, stageTitle, stageClass,
+    injectStyles,
+    ciudadBadge, estadoBadge, estatusBadge, maqBadge, checkRowHTML,
+  });
+})();
+</script>
+
+
+<script>
+(() => {
+  'use strict';
+  const PP = window.__pp3;
+  if (!PP) { console.error('[Produccion-Patch v3] Falta parte A'); return; }
+  const { State, ETAPAS, ETAPA_LABELS,
+    prodToISO, prodFromISO, prodDisp, escapeHTML,
+    ciudadBadge, estatusBadge, maqBadge, checkRowHTML, getEtapaState, stageMark, stageTitle, stageClass } = PP;
 
   // ═══════════════════════════════════════════════════════════════════
-  // 5. DETECCIÓN DEL MÓDULO Y SUS TABS
+  // VIEW: RESUMEN
   // ═══════════════════════════════════════════════════════════════════
+  function renderResumen(panel) {
+    const D = window.PROD_DATA;
+    const sem = PP.getProdSemanaLS();
+    const semTotal = sem.corte.length + sem.armado.length + sem.clientes.length + sem.clientes_taller.length + sem.rpt.length;
 
-  // Encuentra el header "PRODUCCIÓN" del módulo (visible)
-  function findProduccionHeader() {
-    const headers = document.querySelectorAll('h1, h2, h3');
-    for (const h of headers) {
-      if (h.closest && h.closest('[id^="pp2-"]')) continue;
-      const txt = (h.textContent || '').trim().toUpperCase();
-      if (txt === 'PRODUCCIÓN' || txt === 'PRODUCCION') {
-        const r = h.getBoundingClientRect();
-        if (r.width > 0 && r.height > 0) return h;
+    // Láminas por tamaño
+    const lamPor = { '4x8': 0, '7x8': 0, '9x7': 0 };
+    let lamTotal = 0;
+    (D.rpt || []).forEach(r => {
+      const cant = parseFloat(r.cantidad_lam) || 0;
+      const med = r.medida_lam || '';
+      if (lamPor[med] !== undefined) lamPor[med] += cant;
+      lamTotal += cant;
+    });
+
+    // Armadores
+    const arm = {};
+    (D.armado || []).forEach(r => {
+      const a = (r.armador || '').trim();
+      if (a) arm[a] = (arm[a] || 0) + 1;
+    });
+    const armEntries = Object.entries(arm).sort((a,b) => b[1]-a[1]);
+    const armMax = armEntries.length ? armEntries[0][1] : 1;
+
+    panel.innerHTML = `
+      <div class="pp3-header">
+        <div class="pp3-header-left">
+          <div class="pp3-header-bar"></div>
+          <div>
+            <h1>RESUMEN — PRODUCCIÓN</h1>
+            <div class="pp3-subtitle">VISTA GENERAL · CORTE · ARMADO · CLIENTES</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pp3-kpi-row">
+        <div class="pp3-kpi k1"><div class="pp3-kpi-lbl">⚙️ Cortes Totales</div><div class="pp3-kpi-val">${(D.corte||[]).length}</div><div class="pp3-kpi-sub">Registros históricos</div></div>
+        <div class="pp3-kpi k2"><div class="pp3-kpi-lbl">🔨 Armados Totales</div><div class="pp3-kpi-val">${(D.armado||[]).length}</div><div class="pp3-kpi-sub">Registros históricos</div></div>
+        <div class="pp3-kpi k3"><div class="pp3-kpi-lbl">👷 Clientes Proceso</div><div class="pp3-kpi-val">${(D.clientes||[]).length}</div><div class="pp3-kpi-sub">Con etapas</div></div>
+        <div class="pp3-kpi k4"><div class="pp3-kpi-lbl">📅 Esta Semana</div><div class="pp3-kpi-val">${semTotal}</div><div class="pp3-kpi-sub">Lunes a sábado</div></div>
+      </div>
+
+      <div class="pp3-charts-grid">
+        <div class="pp3-card">
+          <div class="pp3-card-title">📐 LÁMINAS CORTADAS POR TAMAÑO</div>
+          <div class="pp3-lam-grid" style="margin-top:12px;">
+            <div class="pp3-lam-cell l1"><div class="pp3-lam-num">${lamPor['4x8']}</div><div class="pp3-lam-lbl">4×8</div></div>
+            <div class="pp3-lam-cell l2"><div class="pp3-lam-num">${lamPor['7x8']}</div><div class="pp3-lam-lbl">7×8</div></div>
+            <div class="pp3-lam-cell l3"><div class="pp3-lam-num">${lamPor['9x7']}</div><div class="pp3-lam-lbl">9×7</div></div>
+          </div>
+          <div class="pp3-lam-total">
+            <span class="pp3-lam-total-lbl">TOTAL LÁMINAS</span>
+            <span class="pp3-lam-total-num">${lamTotal}</span>
+          </div>
+        </div>
+
+        <div class="pp3-card">
+          <div class="pp3-card-title t-armado">🔨 OPERARIOS DE ARMADO</div>
+          <div class="pp3-arm-list" style="margin-top:12px;">
+            ${!armEntries.length
+              ? '<div style="color:#a8a29e;font-size:11px;text-align:center;padding:20px 0;">Sin registros de armado</div>'
+              : armEntries.map(([nombre, count]) => {
+                  const pct = armMax > 0 ? Math.round((count / armMax) * 100) : 0;
+                  return `<div class="pp3-arm-item">
+                    <span class="pp3-arm-name">${escapeHTML(nombre)}</span>
+                    <div class="pp3-arm-bar"><div class="pp3-arm-fill" style="width:${pct}%;"></div></div>
+                    <span class="pp3-arm-num">${count}</span>
+                  </div>`;
+                }).join('')}
+          </div>
+          <div class="pp3-lam-total">
+            <span class="pp3-lam-total-lbl">TOTAL ARMADORES</span>
+            <span class="pp3-lam-total-num">${armEntries.length}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CAMBIO #2: GRÁFICO NUEVO -->
+      <div class="pp3-card" style="margin-bottom:14px;">
+        <div class="pp3-card-title">📊 LÁMINAS CORTADAS · POR MÁQUINA Y TURNO</div>
+        <div class="pp3-card-sub">Comparativo agrupado · suma de láminas registradas en Corte</div>
+        <div style="margin-top:12px;height:280px;position:relative;">
+          <canvas id="pp3-chart-tm"></canvas>
+        </div>
+      </div>
+
+      <div class="pp3-charts-grid">
+        <div class="pp3-card">
+          <div class="pp3-card-title">⚙️ CORTES POR MÁQUINA</div>
+          <div style="margin-top:12px;height:240px;position:relative;"><canvas id="pp3-chart-maq"></canvas></div>
+        </div>
+        <div class="pp3-card">
+          <div class="pp3-card-title">📈 REGISTROS POR FECHA</div>
+          <div style="margin-top:12px;height:240px;position:relative;"><canvas id="pp3-chart-fecha"></canvas></div>
+        </div>
+      </div>
+    `;
+
+    // Charts
+    setTimeout(() => drawChartsResumen(D), 50);
+  }
+
+  function drawChartsResumen(D) {
+    if (typeof Chart === 'undefined') return;
+
+    // ── Gráfico nuevo: Láminas por máquina y turno ──
+    const tmData = {};
+    (D.corte || []).forEach(r => {
+      const m = (r.maquina || '').toUpperCase();
+      const lam = parseFloat(r.laminas) || 0;
+      let maquina = 'OTRA', turno = '?';
+      if (m.includes('GIBBEN')) maquina = 'GIBBEN';
+      else if (m.includes('GABBIANNI') || m.includes('GABBIANI')) maquina = 'GABBIANNI';
+      else {
+        const parts = m.replace(/MAQUINA\s+/i, '').split(/\s*-\s*/);
+        maquina = (parts[0] || 'OTRA').trim();
       }
+      const tmatch = m.match(/T([A-Z])\b/);
+      if (tmatch) turno = 'T' + tmatch[1];
+      if (!tmData[maquina]) tmData[maquina] = {};
+      tmData[maquina][turno] = (tmData[maquina][turno] || 0) + lam;
+    });
+    const maquinas = Object.keys(tmData);
+    const turnosSet = new Set();
+    maquinas.forEach(m => Object.keys(tmData[m]).forEach(t => turnosSet.add(t)));
+    const turnos = [...turnosSet].sort();
+    const palette = ['#0d9488', '#0891b2', '#b8860b', '#d97706', '#7c3aed'];
+    const datasets = turnos.map((t, i) => ({
+      label: 'Turno ' + t.replace(/^T/, ''),
+      data: maquinas.map(m => tmData[m][t] || 0),
+      backgroundColor: palette[i % palette.length],
+      borderRadius: 6, borderSkipped: false,
+    }));
+    const cTM = document.getElementById('pp3-chart-tm');
+    if (cTM) {
+      if (State.chartTurnoMaquina) { try { State.chartTurnoMaquina.destroy(); } catch(e){} }
+      State.chartTurnoMaquina = new Chart(cTM, {
+        type: 'bar',
+        data: { labels: maquinas, datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'top', labels: { color: '#57534e', font: { size: 11, weight: '700' } } },
+            tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y} láminas` } },
+          },
+          scales: {
+            x: { ticks: { color: '#57534e', font: { weight: '700' } }, grid: { color: '#e7e5e4' } },
+            y: { beginAtZero: true, ticks: { color: '#57534e' }, grid: { color: '#e7e5e4' },
+                 title: { display: true, text: 'Láminas', color: '#78716c', font: { size: 10 } } },
+          },
+        },
+      });
     }
-    return null;
-  }
 
-  // Encuentra los botones de tabs del módulo Producción
-  // (basado en imagen 1: "Resumen", "Corte (33)", "Armado (38)", "Clientes en taller (13)",
-  //  "Clientes en proceso (13)", "Semana actual", "Reporte láminas (8)")
-  function findProduccionTabs() {
-    const header = findProduccionHeader();
-    if (!header) return null;
-    // Buscar el contenedor común del módulo (subir hasta padre que contenga las tabs)
-    let container = header.parentElement;
-    let depth = 0;
-    while (container && depth < 8) {
-      // Cualquier elemento que tenga al menos 2 hijos texto que sean nombres de tabs
-      const candidates = container.querySelectorAll('button, a, [role="tab"], div, span');
-      const tabs = {};
-      for (const el of candidates) {
-        if (el.closest('[id^="pp2-"]')) continue;
-        const txt = (el.textContent || '').trim();
-        if (!txt) continue;
-        // Match exacto o con (N) al final
-        const stripped = txt.replace(/\s*\(\d+\)\s*$/, '').trim();
-        const lower = stripped.toLowerCase();
-        // Solo elementos clickables visibles
-        const r = el.getBoundingClientRect();
-        if (r.width === 0 || r.height === 0) continue;
-        // Solo elementos pequeños (no contenedores grandes)
-        if (r.height > 80) continue;
-        if (lower === 'resumen' && !tabs.resumen) tabs.resumen = el;
-        else if (lower === 'corte' && !tabs.corte) tabs.corte = el;
-        else if (lower === 'armado' && !tabs.armado) tabs.armado = el;
-        else if (lower === 'clientes en taller' && !tabs.taller) tabs.taller = el;
-        else if (lower === 'clientes en proceso' && !tabs.proceso) tabs.proceso = el;
-        else if (lower === 'semana actual' && !tabs.semana) tabs.semana = el;
-        else if ((lower === 'reporte láminas' || lower === 'reporte laminas' || lower === 'reporte producción' || lower === 'reporte produccion') && !tabs.reporte) tabs.reporte = el;
-      }
-      if (tabs.resumen && tabs.corte && tabs.armado) {
-        return { container, tabs };
-      }
-      container = container.parentElement;
-      depth++;
+    // ── Cortes por máquina (existente) ──
+    const mc = {};
+    (D.corte || []).forEach(r => { mc[r.maquina] = (mc[r.maquina] || 0) + 1; });
+    const cM = document.getElementById('pp3-chart-maq');
+    if (cM) {
+      if (State.chartMaquina) { try { State.chartMaquina.destroy(); } catch(e){} }
+      State.chartMaquina = new Chart(cM, {
+        type: 'bar',
+        data: { labels: Object.keys(mc), datasets: [{ data: Object.values(mc),
+          backgroundColor: palette, borderRadius: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { x: { ticks: { color: '#57534e', font: { size: 10 } }, grid: { color: '#e7e5e4' } },
+                    y: { beginAtZero: true, ticks: { color: '#57534e' }, grid: { color: '#e7e5e4' } } } },
+      });
     }
-    return null;
-  }
 
-  // Encuentra el panel donde React renderiza el contenido de la tab activa.
-  // Estrategia: el contenedor que viene DESPUÉS del bloque de tabs y es hermano cercano.
-  function findContentPanel(tabsInfo) {
-    if (!tabsInfo || !tabsInfo.container) return null;
-    // El contenido suele estar como hermano siguiente del contenedor de tabs
-    // Buscamos el primer hijo grande (>100px alto) después de las tabs
-    const tabsContainer = tabsInfo.tabs.resumen.closest('div');
-    if (!tabsContainer) return tabsInfo.container;
-    let sibling = tabsContainer.nextElementSibling;
-    while (sibling) {
-      const r = sibling.getBoundingClientRect();
-      if (r.height > 80) return sibling;
-      sibling = sibling.nextElementSibling;
-    }
-    // Fallback: el contenedor padre
-    return tabsInfo.container;
-  }
-
-  // ═══════════════════════════════════════════════════════════════════
-  // 6. RENOMBRAR TAB "Reporte láminas" → "Reporte Producción"
-  // ═══════════════════════════════════════════════════════════════════
-  // Requisito: encontrar el botón con texto "Reporte láminas" o variantes y cambiar el texto
-  // sin romper React. Usamos un MutationObserver localizado para mantener el rename.
-  function renombrarTabReporte(tabsInfo) {
-    if (!tabsInfo || !tabsInfo.tabs.reporte) return;
-    const el = tabsInfo.tabs.reporte;
-    // Buscar el nodo de texto exacto que contiene "Reporte láminas"
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
-    let node;
-    while ((node = walker.nextNode())) {
-      const txt = (node.nodeValue || '').trim();
-      if (/^Reporte\s+l[áa]minas\b/i.test(txt)) {
-        const newTxt = node.nodeValue.replace(/Reporte\s+l[áa]minas/i, 'Reporte Producción');
-        if (node.nodeValue !== newTxt) {
-          node.nodeValue = newTxt;
-        }
-      }
+    // ── Registros por fecha (existente) ──
+    const fc = {};
+    [...(D.corte||[]), ...(D.armado||[]), ...(D.clientes||[]), ...(D.clientes_taller||[])].forEach(r => {
+      if (r.fecha) fc[r.fecha] = (fc[r.fecha] || 0) + 1;
+    });
+    const fs = Object.entries(fc).sort((a,b) => prodToISO(a[0]).localeCompare(prodToISO(b[0])));
+    const cF = document.getElementById('pp3-chart-fecha');
+    if (cF) {
+      if (State.chartFecha) { try { State.chartFecha.destroy(); } catch(e){} }
+      State.chartFecha = new Chart(cF, {
+        type: 'line',
+        data: { labels: fs.map(e => prodDisp(e[0])), datasets: [{ data: fs.map(e => e[1]),
+          borderColor: '#0d9488', backgroundColor: 'rgba(13,148,136,.1)',
+          pointBackgroundColor: '#0d9488', pointRadius: 4, tension: .3, fill: true }] },
+        options: { responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { x: { ticks: { color: '#57534e', font: { size: 9 }, maxRotation: 45 }, grid: { color: '#e7e5e4' } },
+                    y: { beginAtZero: true, ticks: { color: '#57534e' }, grid: { color: '#e7e5e4' } } } },
+      });
     }
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // 7. RENDER: TAB CLIENTES EN PROCESO (CHECKLIST 3 ESTADOS)
+  // VIEW: CORTE
   // ═══════════════════════════════════════════════════════════════════
-  function renderClientesEnProceso(host) {
+  function renderCorte(panel) {
+    const D = window.PROD_DATA;
+    const corte = D.corte || [];
+    panel.innerHTML = `
+      <div class="pp3-header">
+        <div class="pp3-header-left">
+          <div class="pp3-header-bar"></div>
+          <div>
+            <h1>CORTE — REPORTE POR MÁQUINA</h1>
+            <div class="pp3-subtitle">SECCIÓN A · CORTE POR MÁQUINA Y TURNO</div>
+          </div>
+        </div>
+        <div class="pp3-header-right">
+          <button class="pp3-btn pp3-btn-add" data-pp3-act="add-corte">+ Agregar</button>
+          <button class="pp3-btn pp3-btn-pdf" data-pp3-act="pdf-corte">📄 PDF</button>
+        </div>
+      </div>
+
+      <div class="pp3-kpi-row">
+        <div class="pp3-kpi k1"><div class="pp3-kpi-lbl">Total Registros</div><div class="pp3-kpi-val">${corte.length}</div><div class="pp3-kpi-sub">Histórico</div></div>
+        <div class="pp3-kpi k4"><div class="pp3-kpi-lbl">Total Láminas</div><div class="pp3-kpi-val">${corte.reduce((s,r)=>s+(parseFloat(r.laminas)||0),0)}</div><div class="pp3-kpi-sub">Suma de cortes</div></div>
+      </div>
+
+      <div class="pp3-card">
+        <div class="pp3-card-title">⚙️ REPORTE DE CORTE POR MÁQUINA</div>
+        <div class="pp3-card-sub">${corte.length} registros</div>
+        <div class="pp3-table-wrap" style="margin-top:10px;">
+          <table class="pp3-table">
+            <thead><tr>
+              <th>#</th><th>FECHA</th><th>MÁQUINA / TURNO</th>
+              <th style="text-align:center;">LÁMINAS</th>
+              <th>OPERARIO</th><th>OBSERVACIONES</th><th>ACCIONES</th>
+            </tr></thead>
+            <tbody>
+              ${!corte.length
+                ? '<tr><td colspan="7" class="pp3-empty">Sin registros — usa "+ Agregar"</td></tr>'
+                : corte.map((r, i) => `<tr>
+                    <td style="color:#a8a29e;">${i + 1}</td>
+                    <td style="color:#0d9488;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                    <td>${maqBadge(r.maquina)}</td>
+                    <td style="text-align:center;color:#b8860b;font-weight:700;">${escapeHTML(r.laminas || '—')}</td>
+                    <td>${escapeHTML(r.operario || '—')}</td>
+                    <td style="color:#78716c;font-size:11px;max-width:200px;">${escapeHTML(r.obs || '—')}</td>
+                    <td style="white-space:nowrap;">
+                      <button class="pp3-btn pp3-btn-sm pp3-btn-edit" data-pp3-act="edit-corte" data-pp3-idx="${i}">✏ Editar</button>
+                      <button class="pp3-btn pp3-btn-sm pp3-btn-del" data-pp3-act="del-corte" data-pp3-idx="${i}">✕</button>
+                    </td>
+                  </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // VIEW: ARMADO
+  // ═══════════════════════════════════════════════════════════════════
+  function renderArmado(panel) {
+    const D = window.PROD_DATA;
+    const all = D.armado || [];
+    const q = State.armFiltCliente.toLowerCase();
+    const est = State.armFiltEstatus;
+    const filtered = all.filter(r => {
+      if (est && r.estatus !== est) return false;
+      if (q && !(r.cliente || '').toLowerCase().includes(q) && !(r.armador || '').toLowerCase().includes(q)) return false;
+      return true;
+    });
+
+    panel.innerHTML = `
+      <div class="pp3-header">
+        <div class="pp3-header-left">
+          <div class="pp3-header-bar"></div>
+          <div>
+            <h1 style="color:#0e7490;">ARMADO — MUEBLES ESPECIALES</h1>
+            <div class="pp3-subtitle">SECCIÓN B · CONTROL DE ARMADO</div>
+          </div>
+        </div>
+        <div class="pp3-header-right">
+          <button class="pp3-btn pp3-btn-add" data-pp3-act="add-armado">+ Agregar</button>
+          <button class="pp3-btn pp3-btn-pdf" data-pp3-act="pdf-armado">📄 PDF</button>
+        </div>
+      </div>
+
+      <div class="pp3-kpi-row">
+        <div class="pp3-kpi k2"><div class="pp3-kpi-lbl">Total Armados</div><div class="pp3-kpi-val">${all.length}</div><div class="pp3-kpi-sub">Histórico</div></div>
+        <div class="pp3-kpi k1"><div class="pp3-kpi-lbl">✅ Terminados</div><div class="pp3-kpi-val">${all.filter(r=>r.estatus==='TERMINADO').length}</div></div>
+        <div class="pp3-kpi k3"><div class="pp3-kpi-lbl">⚙️ En Proceso</div><div class="pp3-kpi-val">${all.filter(r=>r.estatus==='EN PROCESO').length}</div></div>
+        <div class="pp3-kpi k4"><div class="pp3-kpi-lbl">⏳ Pendientes</div><div class="pp3-kpi-val">${all.filter(r=>r.estatus==='PENDIENTE').length}</div></div>
+      </div>
+
+      <div class="pp3-filter-bar">
+        <input type="text" class="pp3-input pp3-search" id="pp3-arm-q" value="${escapeHTML(State.armFiltCliente)}" placeholder="🔍 Buscar cliente o armador...">
+        <select class="pp3-select" id="pp3-arm-est">
+          <option value="">Todos los estatus</option>
+          <option value="TERMINADO" ${State.armFiltEstatus==='TERMINADO'?'selected':''}>✅ Terminado</option>
+          <option value="EN PROCESO" ${State.armFiltEstatus==='EN PROCESO'?'selected':''}>⚙️ En Proceso</option>
+          <option value="PENDIENTE" ${State.armFiltEstatus==='PENDIENTE'?'selected':''}>⏳ Pendiente</option>
+        </select>
+        <span style="color:#0d9488;font-size:11px;font-weight:700;margin-left:auto;">${filtered.length} de ${all.length} mostrados</span>
+      </div>
+
+      <div class="pp3-card">
+        <div class="pp3-card-title t-armado">🔨 MUEBLES ESPECIALES</div>
+        <div class="pp3-table-wrap" style="margin-top:10px;">
+          <table class="pp3-table">
+            <thead><tr>
+              <th>N°</th><th>CANT.</th><th>DESCRIPCIÓN</th><th>MEDIDA</th>
+              <th>ÁREA</th><th>CLIENTE</th><th>COLOR</th><th>LOCALIDAD</th>
+              <th>ARMADOR</th><th>FECHA</th><th>TIEMPO</th><th>ESTATUS</th><th>ACCIONES</th>
+            </tr></thead>
+            <tbody>
+              ${!filtered.length
+                ? '<tr><td colspan="13" class="pp3-empty">Sin resultados</td></tr>'
+                : filtered.map(r => {
+                    const realIdx = all.indexOf(r);
+                    return `<tr>
+                      <td style="color:#a8a29e;font-size:11px;">${escapeHTML(r.nro || (realIdx + 1))}</td>
+                      <td style="text-align:center;">${escapeHTML(r.cantidad || '—')}</td>
+                      <td style="font-size:11px;">${escapeHTML(r.descripcion || '—')}</td>
+                      <td style="font-size:11px;white-space:nowrap;">${escapeHTML(r.medida || '—')}</td>
+                      <td style="font-size:11px;">${escapeHTML(r.area || '—')}</td>
+                      <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
+                      <td style="color:#78716c;font-size:11px;">${escapeHTML(r.color || '—')}</td>
+                      <td style="font-size:11px;">${escapeHTML(r.localidad || '—')}</td>
+                      <td style="color:#0891b2;">${escapeHTML(r.armador || '—')}</td>
+                      <td style="color:#b8860b;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                      <td>${escapeHTML(r.tiempo || '—')}</td>
+                      <td>${estatusBadge(r.estatus)}</td>
+                      <td style="white-space:nowrap;">
+                        <button class="pp3-btn pp3-btn-sm pp3-btn-edit" data-pp3-act="edit-armado" data-pp3-idx="${realIdx}">✏</button>
+                        <button class="pp3-btn pp3-btn-sm pp3-btn-del" data-pp3-act="del-armado" data-pp3-idx="${realIdx}">✕</button>
+                      </td>
+                    </tr>`;
+                  }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // VIEW: CLIENTES EN TALLER (estructura simple del index)
+  // ═══════════════════════════════════════════════════════════════════
+  function renderTaller(panel) {
+    const D = window.PROD_DATA;
+    const taller = D.clientes_taller || [];
+    panel.innerHTML = `
+      <div class="pp3-header">
+        <div class="pp3-header-left">
+          <div class="pp3-header-bar"></div>
+          <div>
+            <h1 style="color:#92400e;">CLIENTES EN TALLER</h1>
+            <div class="pp3-subtitle">CLIENTES CUYOS PROYECTOS ESTÁN EN EL TALLER</div>
+          </div>
+        </div>
+        <div class="pp3-header-right">
+          <button class="pp3-btn pp3-btn-add" data-pp3-act="add-taller">+ Agregar</button>
+          <button class="pp3-btn pp3-btn-pdf" data-pp3-act="pdf-taller">📄 PDF</button>
+        </div>
+      </div>
+
+      <div class="pp3-kpi-row">
+        <div class="pp3-kpi k3"><div class="pp3-kpi-lbl">Clientes en Taller</div><div class="pp3-kpi-val">${taller.length}</div><div class="pp3-kpi-sub">Total registrados</div></div>
+      </div>
+
+      <div class="pp3-card">
+        <div class="pp3-card-title t-cliente">👷 CLIENTES EN TALLER</div>
+        <div class="pp3-table-wrap" style="margin-top:10px;">
+          <table class="pp3-table">
+            <thead><tr>
+              <th>#</th><th>FECHA</th><th>CLIENTE</th><th>OBSERVACIONES</th><th>ACCIONES</th>
+            </tr></thead>
+            <tbody>
+              ${!taller.length
+                ? '<tr><td colspan="5" class="pp3-empty">Sin registros — usa "+ Agregar"</td></tr>'
+                : taller.map((r, i) => `<tr>
+                    <td style="color:#a8a29e;">${i + 1}</td>
+                    <td style="color:#d97706;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                    <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
+                    <td style="color:#78716c;font-size:11px;">${escapeHTML(r.obs || '—')}</td>
+                    <td style="white-space:nowrap;">
+                      <button class="pp3-btn pp3-btn-sm pp3-btn-edit" data-pp3-act="edit-taller" data-pp3-idx="${i}">✏ Editar</button>
+                      <button class="pp3-btn pp3-btn-sm pp3-btn-del" data-pp3-act="del-taller" data-pp3-idx="${i}">✕</button>
+                    </td>
+                  </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // VIEW: CLIENTES EN PROCESO (con checklist 3 estados — la del Word)
+  // ═══════════════════════════════════════════════════════════════════
+  function renderProceso(panel) {
     const D = window.PROD_DATA;
     const clientes = D.clientes || [];
-
-    host.innerHTML = `
-      <div class="pp2-overlay">
-        <div class="pp2-card-header" style="margin-bottom:14px;">
+    panel.innerHTML = `
+      <div class="pp3-header">
+        <div class="pp3-header-left">
+          <div class="pp3-header-bar"></div>
           <div>
-            <div class="pp2-card-title t-cliente">👷 CLIENTES EN PROCESO</div>
-            <div class="pp2-card-sub">Avance por etapas · CORTE · CINTA · PERFORACIÓN · ARMADO · EMPAQUE</div>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <span style="color:#78716c;font-size:11px;">${clientes.length} registros</span>
-            <button class="pp2-btn pp2-btn-add" data-pp2-action="add-cliente">+ Agregar</button>
-            <button class="pp2-btn pp2-btn-pdf" data-pp2-action="pdf-cliente">📄 PDF</button>
+            <h1 style="color:#d97706;">CLIENTES EN PROCESO</h1>
+            <div class="pp3-subtitle">AVANCE POR ETAPAS · CORTE · CINTA · PERFORACIÓN · ARMADO · EMPAQUE</div>
           </div>
         </div>
-
-        <div class="pp2-card-sub" style="margin-bottom:10px;padding:10px 14px;background:#fef3c7;border-radius:8px;border:1px solid #fcd34d;color:#854d0e;font-size:11px;line-height:1.5;">
-          <strong style="color:#713f12;">Cómo marcar las etapas:</strong>
-          haz clic en cualquier celda de etapa para alternar entre los 3 estados:
-          <span class="pp2-stage-cell s-done" style="display:inline-flex;width:24px;height:20px;font-size:10px;vertical-align:middle;margin:0 2px;">X</span> COMPLETADO →
-          <span class="pp2-stage-cell s-pend" style="display:inline-flex;width:24px;height:20px;font-size:10px;vertical-align:middle;margin:0 2px;">P</span> PENDIENTE →
-          <span class="pp2-stage-cell" style="display:inline-flex;width:24px;height:20px;font-size:10px;vertical-align:middle;margin:0 2px;">·</span> sin marcar
+        <div class="pp3-header-right">
+          <button class="pp3-btn pp3-btn-add" data-pp3-act="add-proceso">+ Agregar</button>
+          <button class="pp3-btn pp3-btn-pdf" data-pp3-act="pdf-proceso">📄 PDF</button>
         </div>
+      </div>
 
-        <div class="pp2-table-wrap">
-          <table class="pp2-table">
+      <div class="pp3-kpi-row">
+        <div class="pp3-kpi k3"><div class="pp3-kpi-lbl">Total Clientes</div><div class="pp3-kpi-val">${clientes.length}</div><div class="pp3-kpi-sub">En proceso</div></div>
+      </div>
+
+      <div style="padding:10px 14px;background:#fef3c7;border-radius:8px;border:1px solid #fcd34d;color:#854d0e;font-size:11px;line-height:1.5;margin-bottom:14px;">
+        <strong style="color:#713f12;">Cómo marcar las etapas:</strong>
+        haz clic en cualquier celda para alternar entre los 3 estados:
+        <span class="pp3-stage-cell s-done" style="display:inline-flex;width:24px;height:20px;font-size:10px;vertical-align:middle;margin:0 2px;">X</span> COMPLETADO →
+        <span class="pp3-stage-cell s-pend" style="display:inline-flex;width:24px;height:20px;font-size:10px;vertical-align:middle;margin:0 2px;">P</span> PENDIENTE →
+        <span class="pp3-stage-cell" style="display:inline-flex;width:24px;height:20px;font-size:10px;vertical-align:middle;margin:0 2px;">·</span> sin marcar
+      </div>
+
+      <div class="pp3-card">
+        <div class="pp3-card-title t-cliente">👷 CLIENTES EN PROCESO</div>
+        <div class="pp3-table-wrap" style="margin-top:10px;">
+          <table class="pp3-table">
             <thead>
               <tr>
+                <th rowspan="2">#</th>
                 <th rowspan="2">FECHA</th>
                 <th rowspan="2">CLIENTE</th>
                 <th rowspan="2">ÁREA</th>
@@ -3054,23 +3534,19 @@
                 <th style="text-align:center;font-size:9px;">EMPAQUE</th>
               </tr>
             </thead>
-            <tbody id="pp2-cp-body">
+            <tbody>
               ${!clientes.length
-                ? '<tr><td colspan="10" class="pp2-empty">Sin registros — usa "+ Agregar" para crear el primero</td></tr>'
+                ? '<tr><td colspan="11" class="pp3-empty">Sin registros — usa "+ Agregar"</td></tr>'
                 : clientes.map((r, i) => `<tr>
+                    <td style="color:#a8a29e;">${i + 1}</td>
                     <td style="color:#d97706;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
                     <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
                     <td>${escapeHTML(r.area || '—')}</td>
-                    ${ETAPAS.map(et => {
-                      const st = getEtapaState(r.estados, et);
-                      return `<td style="text-align:center;">
-                        <div class="pp2-stage-cell ${stageClass(st)}" data-pp2-toggle="${i}" data-pp2-etapa="${et}" title="${ETAPA_LABELS[et]}: ${stageTitle(st)} (clic para cambiar)">${stageMark(st) || '·'}</div>
-                      </td>`;
-                    }).join('')}
+                    ${checkRowHTML(r.estados, i, true)}
                     <td style="color:#78716c;font-size:11px;max-width:200px;">${escapeHTML(r.obs || '—')}</td>
                     <td style="white-space:nowrap;">
-                      <button class="pp2-btn pp2-btn-sm pp2-btn-edit" data-pp2-action="edit-cliente" data-pp2-idx="${i}">✏ Editar</button>
-                      <button class="pp2-btn pp2-btn-sm pp2-btn-del" data-pp2-action="del-cliente" data-pp2-idx="${i}">✕</button>
+                      <button class="pp3-btn pp3-btn-sm pp3-btn-edit" data-pp3-act="edit-proceso" data-pp3-idx="${i}">✏ Editar</button>
+                      <button class="pp3-btn pp3-btn-sm pp3-btn-del" data-pp3-act="del-proceso" data-pp3-idx="${i}">✕</button>
                     </td>
                   </tr>`).join('')}
             </tbody>
@@ -3080,663 +3556,828 @@
     `;
   }
 
+  // Exponer las funciones para parte C
+  Object.assign(window.__pp3, {
+    renderResumen, renderCorte, renderArmado, renderTaller, renderProceso,
+  });
+})();
+</script>
+
+
+<script>
+(() => {
+  'use strict';
+  const PP = window.__pp3;
+  if (!PP || !PP.renderResumen) { console.error('[Produccion-Patch v3] Falta parte B'); return; }
+  const { State, ETAPAS, ETAPA_LABELS,
+    prodToISO, prodFromISO, prodDisp, todayISO, escapeHTML,
+    saveData, listenFirebaseProduccion, getProdSemanaLS, toast, injectStyles,
+    ciudadBadge, estadoBadge, estatusBadge, maqBadge, checkRowHTML,
+    getEtapaState, nextEtapaState, stageMark, stageTitle, stageClass,
+    renderResumen, renderCorte, renderArmado, renderTaller, renderProceso } = PP;
+
   // ═══════════════════════════════════════════════════════════════════
-  // 8. RENDER: TAB SEMANA ACTUAL (Lun-Sáb + selector rango)
+  // VIEW: SEMANA ACTUAL (lun-sáb + rango)
   // ═══════════════════════════════════════════════════════════════════
-  function renderSemana(host) {
+  function renderSemana(panel) {
     const sem = getProdSemanaLS();
-    const corte = sem.corte, armado = sem.armado, clientes = sem.clientes, rpt = sem.rpt || [];
+    const { corte, armado, clientes, clientes_taller, rpt = [] } = sem;
     const lblText = sem.custom
       ? `${prodDisp(sem.desde)} → ${prodDisp(sem.hasta)} (rango personalizado)`
       : `${prodDisp(sem.desde)} → ${prodDisp(sem.hasta)} (lunes a sábado · semana en curso)`;
-    const total = corte.length + armado.length + clientes.length + rpt.length;
+    const total = corte.length + armado.length + clientes.length + clientes_taller.length + rpt.length;
 
-    host.innerHTML = `
-      <div class="pp2-overlay">
-        <div class="pp2-card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+    panel.innerHTML = `
+      <div class="pp3-header">
+        <div class="pp3-header-left">
+          <div class="pp3-header-bar"></div>
           <div>
-            <div class="pp2-card-title">📅 PRODUCCIÓN — SEMANA / RANGO</div>
-            <div class="pp2-card-sub">${lblText}</div>
-          </div>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-            <span style="font-size:24px;font-weight:800;color:#0d9488;">${total}</span>
-            <span style="color:#78716c;font-size:10px;">registros<br>en período</span>
-            <button class="pp2-btn pp2-btn-pdf" data-pp2-action="pdf-semana">📄 Imprimir Período</button>
+            <h1>SEMANA ACTUAL — PRODUCCIÓN</h1>
+            <div class="pp3-subtitle">${lblText}</div>
           </div>
         </div>
-
-        <div class="pp2-filter-bar">
-          <span class="pp2-filter-label">📅 MODO:</span>
-          <button class="pp2-fbtn ${State.semMode==='current'?'active':''}" data-pp2-semmode="current">📋 Semana Actual (Lun-Sáb)</button>
-          <button class="pp2-fbtn ${State.semMode==='range'?'active':''}" data-pp2-semmode="range">🗓️ Rango Personalizado</button>
-          <div id="pp2-sem-range-panel" style="display:${State.semMode==='range'?'flex':'none'};align-items:center;gap:8px;flex-wrap:wrap;">
-            <span style="font-size:11px;color:#78716c;">Del</span>
-            <input type="date" class="pp2-input" id="pp2-sem-desde" value="${State.semDesde}">
-            <span style="font-size:11px;color:#78716c;">al</span>
-            <input type="date" class="pp2-input" id="pp2-sem-hasta" value="${State.semHasta}">
-            <button class="pp2-fbtn pp2-fbtn-clear" data-pp2-action="clear-sem">✕ Limpiar</button>
-          </div>
+        <div class="pp3-header-right">
+          <span style="font-size:24px;font-weight:800;color:#0d9488;margin-right:8px;">${total}</span>
+          <span style="color:#78716c;font-size:10px;">registros<br>en período</span>
+          <button class="pp3-btn pp3-btn-pdf" data-pp3-act="pdf-semana">📄 Imprimir Período</button>
         </div>
+      </div>
 
-        <div class="pp2-kpi-row">
-          <div class="pp2-kpi k1"><div class="pp2-kpi-lbl">⚙️ Cortes</div><div class="pp2-kpi-val">${corte.length}</div><div class="pp2-kpi-sub">en período</div></div>
-          <div class="pp2-kpi k2"><div class="pp2-kpi-lbl">🔨 Armados</div><div class="pp2-kpi-val">${armado.length}</div><div class="pp2-kpi-sub">en período</div></div>
-          <div class="pp2-kpi k3"><div class="pp2-kpi-lbl">👷 Clientes</div><div class="pp2-kpi-val">${clientes.length}</div><div class="pp2-kpi-sub">en período</div></div>
-          <div class="pp2-kpi k4"><div class="pp2-kpi-lbl">📋 Rpt. Prod.</div><div class="pp2-kpi-val">${rpt.length}</div><div class="pp2-kpi-sub">en período</div></div>
+      <div class="pp3-filter-bar">
+        <span class="pp3-filter-label">📅 MODO:</span>
+        <button class="pp3-fbtn ${State.semMode==='current'?'active':''}" data-pp3-semmode="current">📋 Semana Actual (Lun-Sáb)</button>
+        <button class="pp3-fbtn ${State.semMode==='range'?'active':''}" data-pp3-semmode="range">🗓️ Rango Personalizado</button>
+        <div id="pp3-sem-range" style="display:${State.semMode==='range'?'flex':'none'};align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:11px;color:#78716c;">Del</span>
+          <input type="date" class="pp3-input" id="pp3-sem-desde" value="${State.semDesde}">
+          <span style="font-size:11px;color:#78716c;">al</span>
+          <input type="date" class="pp3-input" id="pp3-sem-hasta" value="${State.semHasta}">
+          <button class="pp3-fbtn pp3-fbtn-clear" data-pp3-act="clear-sem">✕ Limpiar</button>
         </div>
+      </div>
 
-        <div class="pp2-card">
-          <div class="pp2-card-title">⚙️ CORTE</div>
-          <div class="pp2-table-wrap" style="margin-top:10px;">
-            <table class="pp2-table">
-              <thead><tr><th>FECHA</th><th>MÁQUINA</th><th style="text-align:center;">LÁMINAS</th><th>OPERARIO</th><th>OBSERVACIONES</th></tr></thead>
-              <tbody>${!corte.length ? '<tr><td colspan="5" class="pp2-empty">Sin registros en período</td></tr>' :
-                corte.map(r => `<tr>
-                  <td style="color:#0d9488;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
-                  <td>${maqBadge(r.maquina)}</td>
-                  <td style="text-align:center;color:#b8860b;font-weight:700;">${escapeHTML(r.laminas || '—')}</td>
-                  <td>${escapeHTML(r.operario || '—')}</td>
-                  <td style="color:#78716c;font-size:11px;">${escapeHTML(r.obs || '—')}</td>
-                </tr>`).join('')}</tbody>
-            </table>
-          </div>
+      <div class="pp3-kpi-row">
+        <div class="pp3-kpi k1"><div class="pp3-kpi-lbl">⚙️ Cortes</div><div class="pp3-kpi-val">${corte.length}</div><div class="pp3-kpi-sub">en período</div></div>
+        <div class="pp3-kpi k2"><div class="pp3-kpi-lbl">🔨 Armados</div><div class="pp3-kpi-val">${armado.length}</div><div class="pp3-kpi-sub">en período</div></div>
+        <div class="pp3-kpi k3"><div class="pp3-kpi-lbl">👷 En Taller</div><div class="pp3-kpi-val">${clientes_taller.length}</div><div class="pp3-kpi-sub">en período</div></div>
+        <div class="pp3-kpi k3"><div class="pp3-kpi-lbl">✅ En Proceso</div><div class="pp3-kpi-val">${clientes.length}</div><div class="pp3-kpi-sub">en período</div></div>
+        <div class="pp3-kpi k4"><div class="pp3-kpi-lbl">📋 Rpt. Prod.</div><div class="pp3-kpi-val">${rpt.length}</div><div class="pp3-kpi-sub">en período</div></div>
+      </div>
+
+      <div class="pp3-card">
+        <div class="pp3-card-title">⚙️ CORTE (${corte.length})</div>
+        <div class="pp3-table-wrap" style="margin-top:10px;">
+          <table class="pp3-table">
+            <thead><tr><th>FECHA</th><th>MÁQUINA</th><th style="text-align:center;">LÁMINAS</th><th>OPERARIO</th><th>OBSERVACIONES</th></tr></thead>
+            <tbody>${!corte.length ? '<tr><td colspan="5" class="pp3-empty">Sin registros en período</td></tr>' :
+              corte.map(r => `<tr>
+                <td style="color:#0d9488;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                <td>${maqBadge(r.maquina)}</td>
+                <td style="text-align:center;color:#b8860b;font-weight:700;">${escapeHTML(r.laminas || '—')}</td>
+                <td>${escapeHTML(r.operario || '—')}</td>
+                <td style="color:#78716c;font-size:11px;">${escapeHTML(r.obs || '—')}</td>
+              </tr>`).join('')}</tbody>
+          </table>
         </div>
+      </div>
 
-        <div class="pp2-card">
-          <div class="pp2-card-title t-armado">🔨 ARMADO</div>
-          <div class="pp2-table-wrap" style="margin-top:10px;">
-            <table class="pp2-table">
-              <thead><tr><th>N°</th><th>CANT.</th><th>DESCRIPCIÓN</th><th>ÁREA</th><th>CLIENTE</th><th>ARMADOR</th><th>FECHA</th><th>TIEMPO</th><th>ESTATUS</th></tr></thead>
-              <tbody>${!armado.length ? '<tr><td colspan="9" class="pp2-empty">Sin registros en período</td></tr>' :
-                armado.map(r => `<tr>
-                  <td style="color:#a8a29e;font-size:11px;">${escapeHTML(r.nro || '—')}</td>
-                  <td style="text-align:center;">${escapeHTML(r.cantidad || '—')}</td>
-                  <td style="font-size:11px;">${escapeHTML(r.descripcion || '—')}</td>
-                  <td style="font-size:11px;">${escapeHTML(r.area || '—')}</td>
-                  <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
-                  <td style="color:#0891b2;">${escapeHTML(r.armador || '—')}</td>
-                  <td style="color:#b8860b;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
-                  <td>${escapeHTML(r.tiempo || '—')}</td>
-                  <td>${estatusBadge(r.estatus)}</td>
-                </tr>`).join('')}</tbody>
-            </table>
-          </div>
+      <div class="pp3-card">
+        <div class="pp3-card-title t-armado">🔨 ARMADO (${armado.length})</div>
+        <div class="pp3-table-wrap" style="margin-top:10px;">
+          <table class="pp3-table">
+            <thead><tr><th>N°</th><th>CANT.</th><th>DESCRIPCIÓN</th><th>ÁREA</th><th>CLIENTE</th><th>ARMADOR</th><th>FECHA</th><th>TIEMPO</th><th>ESTATUS</th></tr></thead>
+            <tbody>${!armado.length ? '<tr><td colspan="9" class="pp3-empty">Sin registros en período</td></tr>' :
+              armado.map(r => `<tr>
+                <td style="color:#a8a29e;font-size:11px;">${escapeHTML(r.nro || '—')}</td>
+                <td style="text-align:center;">${escapeHTML(r.cantidad || '—')}</td>
+                <td style="font-size:11px;">${escapeHTML(r.descripcion || '—')}</td>
+                <td style="font-size:11px;">${escapeHTML(r.area || '—')}</td>
+                <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
+                <td style="color:#0891b2;">${escapeHTML(r.armador || '—')}</td>
+                <td style="color:#b8860b;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                <td>${escapeHTML(r.tiempo || '—')}</td>
+                <td>${estatusBadge(r.estatus)}</td>
+              </tr>`).join('')}</tbody>
+          </table>
         </div>
+      </div>
 
-        <div class="pp2-card">
-          <div class="pp2-card-title t-cliente">👷 CLIENTES EN PROCESO</div>
-          <div class="pp2-table-wrap" style="margin-top:10px;">
-            <table class="pp2-table">
-              <thead>
-                <tr>
-                  <th rowspan="2">FECHA</th>
-                  <th rowspan="2">CLIENTE</th>
-                  <th rowspan="2">ÁREA</th>
-                  <th colspan="5" style="text-align:center;border-bottom:1px solid #d6d3d1;">ESTADO</th>
-                  <th rowspan="2">OBS.</th>
-                </tr>
-                <tr>
-                  <th style="text-align:center;font-size:9px;">CORTE</th>
-                  <th style="text-align:center;font-size:9px;">CINTA</th>
-                  <th style="text-align:center;font-size:9px;">PERF.</th>
-                  <th style="text-align:center;font-size:9px;">ARMADO</th>
-                  <th style="text-align:center;font-size:9px;">EMPAQUE</th>
-                </tr>
-              </thead>
-              <tbody>${!clientes.length ? '<tr><td colspan="9" class="pp2-empty">Sin registros en período</td></tr>' :
-                clientes.map(r => `<tr>
-                  <td style="color:#d97706;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
-                  <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
-                  <td>${escapeHTML(r.area || '—')}</td>
-                  ${ETAPAS.map(et => {
-                    const st = getEtapaState(r.estados, et);
-                    return `<td style="text-align:center;"><div class="pp2-stage-cell ${stageClass(st)} readonly" title="${ETAPA_LABELS[et]}: ${stageTitle(st)}">${stageMark(st) || '·'}</div></td>`;
-                  }).join('')}
-                  <td style="color:#78716c;font-size:11px;">${escapeHTML(r.obs || '—')}</td>
-                </tr>`).join('')}</tbody>
-            </table>
-          </div>
+      <div class="pp3-card">
+        <div class="pp3-card-title t-cliente">👷 CLIENTES EN TALLER (${clientes_taller.length})</div>
+        <div class="pp3-table-wrap" style="margin-top:10px;">
+          <table class="pp3-table">
+            <thead><tr><th>FECHA</th><th>CLIENTE</th><th>OBSERVACIONES</th></tr></thead>
+            <tbody>${!clientes_taller.length ? '<tr><td colspan="3" class="pp3-empty">Sin registros en período</td></tr>' :
+              clientes_taller.map(r => `<tr>
+                <td style="color:#d97706;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
+                <td style="color:#78716c;font-size:11px;">${escapeHTML(r.obs || '—')}</td>
+              </tr>`).join('')}</tbody>
+          </table>
         </div>
+      </div>
 
-        <div class="pp2-card">
-          <div class="pp2-card-title t-rpt">📋 REPORTE DE PRODUCCIÓN</div>
-          <div class="pp2-table-wrap" style="margin-top:10px;">
-            <table class="pp2-table">
-              <thead><tr><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>OPERADOR</th><th>CIUDAD</th><th style="text-align:center;">CANT.</th><th>MEDIDA</th><th>ESTADO</th></tr></thead>
-              <tbody>${!rpt.length ? '<tr><td colspan="8" class="pp2-empty">Sin registros en período</td></tr>' :
-                rpt.map(r => `<tr>
-                  <td style="color:#b8860b;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
-                  <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
-                  <td>${escapeHTML(r.area || '—')}</td>
-                  <td>${escapeHTML(r.operador || '—')}</td>
-                  <td>${ciudadBadge(r.ciudad)}</td>
-                  <td style="text-align:center;color:#0d9488;font-weight:700;">${escapeHTML(r.cantidad_lam || '—')}</td>
-                  <td style="font-size:11px;">${escapeHTML(r.medida_lam || '—')}</td>
-                  <td>${estadoBadge(r.estado)}</td>
-                </tr>`).join('')}</tbody>
-            </table>
-          </div>
+      <div class="pp3-card">
+        <div class="pp3-card-title t-cliente">✅ CLIENTES EN PROCESO (${clientes.length})</div>
+        <div class="pp3-table-wrap" style="margin-top:10px;">
+          <table class="pp3-table">
+            <thead>
+              <tr>
+                <th rowspan="2">FECHA</th>
+                <th rowspan="2">CLIENTE</th>
+                <th rowspan="2">ÁREA</th>
+                <th colspan="5" style="text-align:center;border-bottom:1px solid #d6d3d1;">ESTADO</th>
+                <th rowspan="2">OBS.</th>
+              </tr>
+              <tr>
+                <th style="text-align:center;font-size:9px;">CORTE</th>
+                <th style="text-align:center;font-size:9px;">CINTA</th>
+                <th style="text-align:center;font-size:9px;">PERF.</th>
+                <th style="text-align:center;font-size:9px;">ARMADO</th>
+                <th style="text-align:center;font-size:9px;">EMPAQUE</th>
+              </tr>
+            </thead>
+            <tbody>${!clientes.length ? '<tr><td colspan="9" class="pp3-empty">Sin registros en período</td></tr>' :
+              clientes.map((r, i) => `<tr>
+                <td style="color:#d97706;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
+                <td>${escapeHTML(r.area || '—')}</td>
+                ${checkRowHTML(r.estados, i, false)}
+                <td style="color:#78716c;font-size:11px;">${escapeHTML(r.obs || '—')}</td>
+              </tr>`).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="pp3-card">
+        <div class="pp3-card-title t-rpt">📋 REPORTE DE PRODUCCIÓN (${rpt.length})</div>
+        <div class="pp3-table-wrap" style="margin-top:10px;">
+          <table class="pp3-table">
+            <thead><tr><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>OPERADOR</th><th>CIUDAD</th><th style="text-align:center;">CANT.</th><th>MEDIDA</th><th>ESTADO</th></tr></thead>
+            <tbody>${!rpt.length ? '<tr><td colspan="8" class="pp3-empty">Sin registros en período</td></tr>' :
+              rpt.map(r => `<tr>
+                <td style="color:#b8860b;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
+                <td>${escapeHTML(r.area || '—')}</td>
+                <td>${escapeHTML(r.operador || '—')}</td>
+                <td>${ciudadBadge(r.ciudad)}</td>
+                <td style="text-align:center;color:#0d9488;font-weight:700;">${escapeHTML(r.cantidad_lam || '—')}</td>
+                <td style="font-size:11px;">${escapeHTML(r.medida_lam || '—')}</td>
+                <td>${estadoBadge(r.estado)}</td>
+              </tr>`).join('')}</tbody>
+          </table>
         </div>
       </div>
     `;
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // 9. RENDER: TAB REPORTE PRODUCCIÓN (renombrada de "Reporte láminas")
+  // VIEW: REPORTE PRODUCCIÓN
   // ═══════════════════════════════════════════════════════════════════
   function getFiltradoReporte() {
     const D = window.PROD_DATA;
     if (State.repMode === 'all') {
-      return { corte: D.corte, armado: D.armado, clientes: D.clientes, rpt: D.rpt || [] };
+      return {
+        corte: D.corte || [], armado: D.armado || [],
+        clientes: D.clientes || [], clientes_taller: D.clientes_taller || [],
+        rpt: D.rpt || [],
+      };
     }
     const desde = State.repDesde, hasta = State.repHasta;
-    const fil = arr => arr.filter(r => {
+    const fil = arr => (arr || []).filter(r => {
       const iso = prodToISO(r.fecha);
       if (desde && iso < desde) return false;
       if (hasta && iso > hasta) return false;
       return true;
     });
-    return { corte: fil(D.corte), armado: fil(D.armado), clientes: fil(D.clientes), rpt: fil(D.rpt || []) };
+    return {
+      corte: fil(D.corte), armado: fil(D.armado),
+      clientes: fil(D.clientes), clientes_taller: fil(D.clientes_taller),
+      rpt: fil(D.rpt),
+    };
   }
 
-  function renderReporte(host) {
-    const { corte, armado, clientes, rpt } = getFiltradoReporte();
+  function renderReporte(panel) {
+    const f = getFiltradoReporte();
     const desde = State.repDesde, hasta = State.repHasta;
     const periodoLabel = State.repMode === 'all'
       ? 'Historial completo'
       : `${desde ? prodDisp(prodFromISO(desde)) : 'inicio'} → ${hasta ? prodDisp(prodFromISO(hasta)) : 'hoy'}`;
-    const total = corte.length + armado.length + clientes.length + rpt.length;
-    const lamTotal = rpt.reduce((s, r) => s + (parseFloat(r.cantidad_lam) || 0), 0);
+    const total = f.corte.length + f.armado.length + f.clientes.length + f.clientes_taller.length + f.rpt.length;
+    const lamTotal = f.rpt.reduce((s, r) => s + (parseFloat(r.cantidad_lam) || 0), 0);
 
-    host.innerHTML = `
-      <div class="pp2-overlay">
-        <div class="pp2-card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+    panel.innerHTML = `
+      <div class="pp3-header">
+        <div class="pp3-header-left">
+          <div class="pp3-header-bar"></div>
           <div>
-            <div class="pp2-card-title" style="font-size:18px;">📑 REPORTE DE PRODUCCIÓN</div>
-            <div class="pp2-card-sub">${periodoLabel}</div>
-          </div>
-          <button class="pp2-btn pp2-btn-primary" data-pp2-action="pdf-reporte" style="padding:10px 18px;">⬇️ DESCARGAR PDF</button>
-        </div>
-
-        <div class="pp2-filter-bar">
-          <span class="pp2-filter-label">📅 FILTRAR:</span>
-          <button class="pp2-fbtn ${State.repMode==='all'?'active':''}" data-pp2-repmode="all">📋 Todo el historial</button>
-          <button class="pp2-fbtn ${State.repMode==='range'?'active':''}" data-pp2-repmode="range">📅 Por Rango de Fechas</button>
-          <div id="pp2-rep-range" style="display:${State.repMode==='range'?'flex':'none'};align-items:center;gap:8px;flex-wrap:wrap;">
-            <span style="font-size:11px;color:#78716c;">Del</span>
-            <input type="date" class="pp2-input" id="pp2-rep-desde" value="${State.repDesde}">
-            <span style="font-size:11px;color:#78716c;">al</span>
-            <input type="date" class="pp2-input" id="pp2-rep-hasta" value="${State.repHasta}">
-            <button class="pp2-fbtn pp2-fbtn-clear" data-pp2-action="clear-rep">✕ Limpiar</button>
-          </div>
-          <span style="color:#0d9488;font-size:11px;font-weight:700;margin-left:auto;">${total} registros · ${periodoLabel}</span>
-        </div>
-
-        <div class="pp2-kpi-row">
-          <div class="pp2-kpi k1"><div class="pp2-kpi-lbl">⚙️ Cortes</div><div class="pp2-kpi-val">${corte.length}</div><div class="pp2-kpi-sub">Período</div></div>
-          <div class="pp2-kpi k2"><div class="pp2-kpi-lbl">🔨 Armados</div><div class="pp2-kpi-val">${armado.length}</div><div class="pp2-kpi-sub">Período</div></div>
-          <div class="pp2-kpi k3"><div class="pp2-kpi-lbl">👷 Clientes</div><div class="pp2-kpi-val">${clientes.length}</div><div class="pp2-kpi-sub">Período</div></div>
-          <div class="pp2-kpi k4"><div class="pp2-kpi-lbl">📋 Rpt. Prod.</div><div class="pp2-kpi-val">${rpt.length}</div><div class="pp2-kpi-sub">Período</div></div>
-          <div class="pp2-kpi k5"><div class="pp2-kpi-lbl">📐 Total Láminas</div><div class="pp2-kpi-val">${lamTotal}</div><div class="pp2-kpi-sub">Período</div></div>
-        </div>
-
-        <div class="pp2-card">
-          <div class="pp2-card-title">⚙️ REPORTE DE CORTE POR MÁQUINA <span style="color:#78716c;font-size:10px;font-weight:400;">(${corte.length})</span></div>
-          <div class="pp2-table-wrap" style="margin-top:10px;">
-            <table class="pp2-table">
-              <thead><tr><th>FECHA</th><th>MÁQUINA / TURNO</th><th style="text-align:center;">LÁMINAS</th><th>OPERARIO</th><th>OBSERVACIONES</th></tr></thead>
-              <tbody>${!corte.length ? '<tr><td colspan="5" class="pp2-empty">Sin registros</td></tr>' :
-                corte.map(r => `<tr>
-                  <td style="color:#0d9488;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
-                  <td>${maqBadge(r.maquina)}</td>
-                  <td style="text-align:center;color:#b8860b;font-weight:700;">${escapeHTML(r.laminas || '—')}</td>
-                  <td>${escapeHTML(r.operario || '—')}</td>
-                  <td style="color:#78716c;font-size:11px;">${escapeHTML(r.obs || '—')}</td>
-                </tr>`).join('')}</tbody>
-            </table>
+            <h1 style="color:#92400e;">REPORTE PRODUCCIÓN</h1>
+            <div class="pp3-subtitle">${periodoLabel}</div>
           </div>
         </div>
-
-        <div class="pp2-card">
-          <div class="pp2-card-title t-armado">🔨 MUEBLES ESPECIALES · ARMADO <span style="color:#78716c;font-size:10px;font-weight:400;">(${armado.length})</span></div>
-          <div class="pp2-table-wrap" style="margin-top:10px;">
-            <table class="pp2-table">
-              <thead><tr><th>N°</th><th>CANT.</th><th>DESCRIPCIÓN</th><th>MEDIDA</th><th>ÁREA</th><th>CLIENTE</th><th>COLOR</th><th>LOCAL.</th><th>ARMADOR</th><th>FECHA</th><th>TIEMPO</th><th>ESTATUS</th></tr></thead>
-              <tbody>${!armado.length ? '<tr><td colspan="12" class="pp2-empty">Sin registros</td></tr>' :
-                armado.map(r => `<tr>
-                  <td style="color:#a8a29e;font-size:11px;">${escapeHTML(r.nro || '—')}</td>
-                  <td style="text-align:center;">${escapeHTML(r.cantidad || '—')}</td>
-                  <td style="font-size:11px;">${escapeHTML(r.descripcion || '—')}</td>
-                  <td style="font-size:11px;white-space:nowrap;">${escapeHTML(r.medida || '—')}</td>
-                  <td style="font-size:11px;">${escapeHTML(r.area || '—')}</td>
-                  <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
-                  <td style="color:#78716c;font-size:11px;">${escapeHTML(r.color || '—')}</td>
-                  <td style="font-size:11px;">${escapeHTML(r.localidad || '—')}</td>
-                  <td style="color:#0891b2;">${escapeHTML(r.armador || '—')}</td>
-                  <td style="color:#b8860b;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
-                  <td>${escapeHTML(r.tiempo || '—')}</td>
-                  <td>${estatusBadge(r.estatus)}</td>
-                </tr>`).join('')}</tbody>
-            </table>
-          </div>
+        <div class="pp3-header-right">
+          <button class="pp3-btn pp3-btn-primary" data-pp3-act="pdf-reporte" style="padding:10px 18px;">⬇️ DESCARGAR PDF</button>
         </div>
+      </div>
 
-        <div class="pp2-card">
-          <div class="pp2-card-title t-cliente">👷 CLIENTES EN PROCESO <span style="color:#78716c;font-size:10px;font-weight:400;">(${clientes.length})</span></div>
-          <div class="pp2-table-wrap" style="margin-top:10px;">
-            <table class="pp2-table">
-              <thead>
-                <tr>
-                  <th rowspan="2">FECHA</th>
-                  <th rowspan="2">CLIENTE</th>
-                  <th rowspan="2">ÁREA</th>
-                  <th colspan="5" style="text-align:center;border-bottom:1px solid #d6d3d1;">ESTADO</th>
-                  <th rowspan="2">OBS.</th>
-                </tr>
-                <tr>
-                  <th style="text-align:center;font-size:9px;">CORTE</th>
-                  <th style="text-align:center;font-size:9px;">CINTA</th>
-                  <th style="text-align:center;font-size:9px;">PERF.</th>
-                  <th style="text-align:center;font-size:9px;">ARMADO</th>
-                  <th style="text-align:center;font-size:9px;">EMPAQUE</th>
-                </tr>
-              </thead>
-              <tbody>${!clientes.length ? '<tr><td colspan="9" class="pp2-empty">Sin registros</td></tr>' :
-                clientes.map(r => `<tr>
-                  <td style="color:#d97706;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
-                  <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
-                  <td>${escapeHTML(r.area || '—')}</td>
-                  ${ETAPAS.map(et => {
-                    const st = getEtapaState(r.estados, et);
-                    return `<td style="text-align:center;"><div class="pp2-stage-cell ${stageClass(st)} readonly" title="${ETAPA_LABELS[et]}: ${stageTitle(st)}">${stageMark(st) || '·'}</div></td>`;
-                  }).join('')}
-                  <td style="color:#78716c;font-size:11px;">${escapeHTML(r.obs || '—')}</td>
-                </tr>`).join('')}</tbody>
-            </table>
-          </div>
+      <div class="pp3-filter-bar">
+        <span class="pp3-filter-label">📅 FILTRAR:</span>
+        <button class="pp3-fbtn ${State.repMode==='all'?'active':''}" data-pp3-repmode="all">📋 Todo el historial</button>
+        <button class="pp3-fbtn ${State.repMode==='range'?'active':''}" data-pp3-repmode="range">📅 Por Rango de Fechas</button>
+        <div id="pp3-rep-range" style="display:${State.repMode==='range'?'flex':'none'};align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:11px;color:#78716c;">Del</span>
+          <input type="date" class="pp3-input" id="pp3-rep-desde" value="${State.repDesde}">
+          <span style="font-size:11px;color:#78716c;">al</span>
+          <input type="date" class="pp3-input" id="pp3-rep-hasta" value="${State.repHasta}">
+          <button class="pp3-fbtn pp3-fbtn-clear" data-pp3-act="clear-rep">✕ Limpiar</button>
         </div>
+        <span style="color:#0d9488;font-size:11px;font-weight:700;margin-left:auto;">${total} registros · ${periodoLabel}</span>
+      </div>
 
-        <div class="pp2-card">
-          <div class="pp2-card-title t-rpt">📋 REPORTE DE PRODUCCIÓN <span style="color:#78716c;font-size:10px;font-weight:400;">(${rpt.length})</span></div>
-          <div class="pp2-table-wrap" style="margin-top:10px;">
-            <table class="pp2-table">
-              <thead><tr><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>COLOR</th><th>OPERADOR</th><th>CIUDAD</th><th style="text-align:center;">CANT.</th><th>MEDIDA</th><th>ESTADO</th></tr></thead>
-              <tbody>${!rpt.length ? '<tr><td colspan="9" class="pp2-empty">Sin registros</td></tr>' :
-                rpt.map(r => `<tr>
-                  <td style="color:#b8860b;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
-                  <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
-                  <td>${escapeHTML(r.area || '—')}</td>
-                  <td style="color:#78716c;font-size:11px;">${escapeHTML(r.color || '—')}</td>
-                  <td>${escapeHTML(r.operador || '—')}</td>
-                  <td>${ciudadBadge(r.ciudad)}</td>
-                  <td style="text-align:center;color:#0d9488;font-weight:700;">${escapeHTML(r.cantidad_lam || '—')}</td>
-                  <td style="font-size:11px;">${escapeHTML(r.medida_lam || '—')}</td>
-                  <td>${estadoBadge(r.estado)}</td>
-                </tr>`).join('')}</tbody>
-            </table>
-          </div>
+      <div class="pp3-kpi-row">
+        <div class="pp3-kpi k1"><div class="pp3-kpi-lbl">⚙️ Cortes</div><div class="pp3-kpi-val">${f.corte.length}</div><div class="pp3-kpi-sub">Período</div></div>
+        <div class="pp3-kpi k2"><div class="pp3-kpi-lbl">🔨 Armados</div><div class="pp3-kpi-val">${f.armado.length}</div><div class="pp3-kpi-sub">Período</div></div>
+        <div class="pp3-kpi k3"><div class="pp3-kpi-lbl">👷 Taller</div><div class="pp3-kpi-val">${f.clientes_taller.length}</div><div class="pp3-kpi-sub">Período</div></div>
+        <div class="pp3-kpi k3"><div class="pp3-kpi-lbl">✅ Proceso</div><div class="pp3-kpi-val">${f.clientes.length}</div><div class="pp3-kpi-sub">Período</div></div>
+        <div class="pp3-kpi k4"><div class="pp3-kpi-lbl">📋 Rpt</div><div class="pp3-kpi-val">${f.rpt.length}</div><div class="pp3-kpi-sub">Período</div></div>
+        <div class="pp3-kpi k5"><div class="pp3-kpi-lbl">📐 Total Láminas</div><div class="pp3-kpi-val">${lamTotal}</div><div class="pp3-kpi-sub">Período</div></div>
+      </div>
+
+      <div class="pp3-card">
+        <div class="pp3-card-title">⚙️ CORTE (${f.corte.length})</div>
+        <div class="pp3-table-wrap" style="margin-top:10px;">
+          <table class="pp3-table">
+            <thead><tr><th>FECHA</th><th>MÁQUINA / TURNO</th><th style="text-align:center;">LÁMINAS</th><th>OPERARIO</th><th>OBSERVACIONES</th></tr></thead>
+            <tbody>${!f.corte.length ? '<tr><td colspan="5" class="pp3-empty">Sin registros</td></tr>' :
+              f.corte.map(r => `<tr>
+                <td style="color:#0d9488;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                <td>${maqBadge(r.maquina)}</td>
+                <td style="text-align:center;color:#b8860b;font-weight:700;">${escapeHTML(r.laminas || '—')}</td>
+                <td>${escapeHTML(r.operario || '—')}</td>
+                <td style="color:#78716c;font-size:11px;">${escapeHTML(r.obs || '—')}</td>
+              </tr>`).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="pp3-card">
+        <div class="pp3-card-title t-armado">🔨 ARMADO (${f.armado.length})</div>
+        <div class="pp3-table-wrap" style="margin-top:10px;">
+          <table class="pp3-table">
+            <thead><tr><th>N°</th><th>CANT.</th><th>DESCRIPCIÓN</th><th>MEDIDA</th><th>ÁREA</th><th>CLIENTE</th><th>COLOR</th><th>LOCAL.</th><th>ARMADOR</th><th>FECHA</th><th>TIEMPO</th><th>ESTATUS</th></tr></thead>
+            <tbody>${!f.armado.length ? '<tr><td colspan="12" class="pp3-empty">Sin registros</td></tr>' :
+              f.armado.map(r => `<tr>
+                <td style="color:#a8a29e;font-size:11px;">${escapeHTML(r.nro || '—')}</td>
+                <td style="text-align:center;">${escapeHTML(r.cantidad || '—')}</td>
+                <td style="font-size:11px;">${escapeHTML(r.descripcion || '—')}</td>
+                <td style="font-size:11px;white-space:nowrap;">${escapeHTML(r.medida || '—')}</td>
+                <td style="font-size:11px;">${escapeHTML(r.area || '—')}</td>
+                <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
+                <td style="color:#78716c;font-size:11px;">${escapeHTML(r.color || '—')}</td>
+                <td style="font-size:11px;">${escapeHTML(r.localidad || '—')}</td>
+                <td style="color:#0891b2;">${escapeHTML(r.armador || '—')}</td>
+                <td style="color:#b8860b;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                <td>${escapeHTML(r.tiempo || '—')}</td>
+                <td>${estatusBadge(r.estatus)}</td>
+              </tr>`).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="pp3-card">
+        <div class="pp3-card-title t-cliente">👷 CLIENTES EN TALLER (${f.clientes_taller.length})</div>
+        <div class="pp3-table-wrap" style="margin-top:10px;">
+          <table class="pp3-table">
+            <thead><tr><th>FECHA</th><th>CLIENTE</th><th>OBSERVACIONES</th></tr></thead>
+            <tbody>${!f.clientes_taller.length ? '<tr><td colspan="3" class="pp3-empty">Sin registros</td></tr>' :
+              f.clientes_taller.map(r => `<tr>
+                <td style="color:#d97706;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
+                <td style="color:#78716c;font-size:11px;">${escapeHTML(r.obs || '—')}</td>
+              </tr>`).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="pp3-card">
+        <div class="pp3-card-title t-cliente">✅ CLIENTES EN PROCESO (${f.clientes.length})</div>
+        <div class="pp3-table-wrap" style="margin-top:10px;">
+          <table class="pp3-table">
+            <thead>
+              <tr>
+                <th rowspan="2">FECHA</th>
+                <th rowspan="2">CLIENTE</th>
+                <th rowspan="2">ÁREA</th>
+                <th colspan="5" style="text-align:center;border-bottom:1px solid #d6d3d1;">ESTADO</th>
+                <th rowspan="2">OBS.</th>
+              </tr>
+              <tr>
+                <th style="text-align:center;font-size:9px;">CORTE</th>
+                <th style="text-align:center;font-size:9px;">CINTA</th>
+                <th style="text-align:center;font-size:9px;">PERF.</th>
+                <th style="text-align:center;font-size:9px;">ARMADO</th>
+                <th style="text-align:center;font-size:9px;">EMPAQUE</th>
+              </tr>
+            </thead>
+            <tbody>${!f.clientes.length ? '<tr><td colspan="9" class="pp3-empty">Sin registros</td></tr>' :
+              f.clientes.map((r, i) => `<tr>
+                <td style="color:#d97706;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
+                <td>${escapeHTML(r.area || '—')}</td>
+                ${checkRowHTML(r.estados, i, false)}
+                <td style="color:#78716c;font-size:11px;">${escapeHTML(r.obs || '—')}</td>
+              </tr>`).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="pp3-card">
+        <div class="pp3-card-title t-rpt">📋 REPORTE DE PRODUCCIÓN (${f.rpt.length})</div>
+        <div class="pp3-table-wrap" style="margin-top:10px;">
+          <table class="pp3-table">
+            <thead><tr><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>COLOR</th><th>OPERADOR</th><th>CIUDAD</th><th style="text-align:center;">CANT.</th><th>MEDIDA</th><th>ESTADO</th></tr></thead>
+            <tbody>${!f.rpt.length ? '<tr><td colspan="9" class="pp3-empty">Sin registros</td></tr>' :
+              f.rpt.map(r => `<tr>
+                <td style="color:#b8860b;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
+                <td>${escapeHTML(r.area || '—')}</td>
+                <td style="color:#78716c;font-size:11px;">${escapeHTML(r.color || '—')}</td>
+                <td>${escapeHTML(r.operador || '—')}</td>
+                <td>${ciudadBadge(r.ciudad)}</td>
+                <td style="text-align:center;color:#0d9488;font-weight:700;">${escapeHTML(r.cantidad_lam || '—')}</td>
+                <td style="font-size:11px;">${escapeHTML(r.medida_lam || '—')}</td>
+                <td>${estadoBadge(r.estado)}</td>
+              </tr>`).join('')}</tbody>
+          </table>
         </div>
       </div>
     `;
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // 10. RENDER: GRÁFICO NUEVO (LÁMINAS POR MÁQUINA Y TURNO)
+  // MODALES (HTML)
   // ═══════════════════════════════════════════════════════════════════
-  // Este se inyecta DEBAJO del Resumen original de React (sin reemplazarlo)
-  function ensureChartCardInResumen(contentPanel) {
-    if (!contentPanel) return;
-    let card = document.getElementById('pp2-chart-tm-card');
-    if (!card) {
-      card = document.createElement('div');
-      card.id = 'pp2-chart-tm-card';
-      card.className = 'pp2-overlay';
-      card.style.cssText = 'padding:0 24px 24px;background:#faf8f5;';
-      card.innerHTML = `
-        <div class="pp2-card" style="margin-top:0;">
-          <div class="pp2-card-title">📊 LÁMINAS CORTADAS · POR MÁQUINA Y TURNO</div>
-          <div class="pp2-card-sub">Comparativo agrupado · suma de láminas registradas en Corte</div>
-          <div style="margin-top:12px;height:280px;position:relative;">
-            <canvas id="pp2-chart-tm"></canvas>
+  function buildModalsHTML() {
+    return `
+      <!-- Modal Corte -->
+      <div class="pp3-overlay" id="pp3-mod-corte">
+        <div class="pp3-modal" style="max-width:580px;">
+          <div class="pp3-modal-header">
+            <div class="pp3-modal-title" id="pp3-mc-title">⚙️ Nuevo Registro de Corte</div>
+            <button class="pp3-modal-close" data-pp3-close="pp3-mod-corte">×</button>
+          </div>
+          <div class="pp3-modal-body">
+            <div class="pp3-form-grid">
+              <div class="pp3-form-group"><label>Fecha</label><input id="pp3-mc-fecha" type="date"></div>
+              <div class="pp3-form-group"><label>Máquina / Turno</label>
+                <select id="pp3-mc-maquina">
+                  <option>MAQUINA GIBBEN - TC</option>
+                  <option>MAQUINA GIBBEN - TB</option>
+                  <option>MAQUINA GABBIANNI - TB</option>
+                  <option>MAQUINA GABBIANNI - TC</option>
+                </select>
+              </div>
+              <div class="pp3-form-group"><label>Cantidad de Láminas</label><input id="pp3-mc-laminas" type="number" min="0" step="0.01" placeholder="0"></div>
+              <div class="pp3-form-group"><label>Nombre Operario</label><input id="pp3-mc-operario" placeholder="Nombre del operario"></div>
+              <div class="pp3-form-group pp3-full"><label>Observaciones</label><textarea id="pp3-mc-obs" placeholder="Observaciones adicionales..."></textarea></div>
+            </div>
+          </div>
+          <div class="pp3-modal-footer">
+            <button class="pp3-btn pp3-btn-ghost" data-pp3-close="pp3-mod-corte">Cancelar</button>
+            <button class="pp3-btn pp3-btn-primary" data-pp3-save="corte">Guardar</button>
           </div>
         </div>
-      `;
-      contentPanel.appendChild(card);
-    }
-    drawChartTurnoMaquina();
-  }
+      </div>
 
-  function drawChartTurnoMaquina() {
-    const canvas = document.getElementById('pp2-chart-tm');
-    if (!canvas || typeof Chart === 'undefined') return;
-    const D = window.PROD_DATA;
-    const tmData = {};
-    (D.corte || []).forEach(r => {
-      const m = (r.maquina || '').toUpperCase();
-      const lam = parseFloat(r.laminas) || 0;
-      let maquina = 'OTRA';
-      let turno = '?';
-      if (m.includes('GIBBEN')) maquina = 'GIBBEN';
-      else if (m.includes('GABBIANNI') || m.includes('GABBIANI')) maquina = 'GABBIANNI';
-      else {
-        const parts = m.replace(/MAQUINA\s+/i, '').split(/\s*-\s*/);
-        maquina = (parts[0] || 'OTRA').trim();
-      }
-      const tmatch = m.match(/T([A-Z])\b/);
-      if (tmatch) turno = 'T' + tmatch[1];
-      if (!tmData[maquina]) tmData[maquina] = {};
-      tmData[maquina][turno] = (tmData[maquina][turno] || 0) + lam;
-    });
-
-    const maquinas = Object.keys(tmData);
-    const turnosSet = new Set();
-    maquinas.forEach(m => Object.keys(tmData[m]).forEach(t => turnosSet.add(t)));
-    const turnos = [...turnosSet].sort();
-    const palette = ['#0d9488', '#0891b2', '#b8860b', '#d97706', '#7c3aed'];
-    const datasets = turnos.map((t, i) => ({
-      label: 'Turno ' + t.replace(/^T/, ''),
-      data: maquinas.map(m => tmData[m][t] || 0),
-      backgroundColor: palette[i % palette.length],
-      borderRadius: 6,
-      borderSkipped: false,
-    }));
-
-    if (State.chartTurnoMaquina) State.chartTurnoMaquina.destroy();
-    State.chartTurnoMaquina = new Chart(canvas, {
-      type: 'bar',
-      data: { labels: maquinas, datasets },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'top', labels: { color: '#57534e', font: { size: 11, weight: '700' } } },
-          tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y} láminas` } },
-        },
-        scales: {
-          x: { ticks: { color: '#57534e', font: { weight: '700' } }, grid: { color: '#e7e5e4' } },
-          y: { beginAtZero: true, ticks: { color: '#57534e' }, grid: { color: '#e7e5e4' }, title: { display: true, text: 'Láminas', color: '#78716c', font: { size: 10 } } },
-        },
-      },
-    });
-  }
-
-  function removeChartCard() {
-    const card = document.getElementById('pp2-chart-tm-card');
-    if (card) card.remove();
-    if (State.chartTurnoMaquina) {
-      State.chartTurnoMaquina.destroy();
-      State.chartTurnoMaquina = null;
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════════════
-  // 11. MODAL CLIENTES EN PROCESO (con checklist 3 estados)
-  // ═══════════════════════════════════════════════════════════════════
-  let _modalEstados = { corte: null, cinta: null, perforacion: null, armado: null, empaque: null };
-
-  function getOrCreateModal() {
-    let modal = document.getElementById('pp2-modal-cliente');
-    if (modal) return modal;
-    modal = document.createElement('div');
-    modal.id = 'pp2-modal-cliente';
-    modal.className = 'pp2-modal-overlay';
-    modal.innerHTML = `
-      <div class="pp2-modal" style="max-width:660px;">
-        <div class="pp2-modal-header">
-          <div class="pp2-modal-title" id="pp2-modal-title">👷 Cliente en Proceso</div>
-          <button class="pp2-modal-close" data-pp2-action="close-modal">×</button>
-        </div>
-        <div class="pp2-modal-body">
-          <div class="pp2-form-grid">
-            <div class="pp2-form-group"><label>Fecha</label><input id="pp2-mcl-fecha" type="date"></div>
-            <div class="pp2-form-group"><label>Cliente</label><input id="pp2-mcl-cliente" placeholder="Nombre del cliente"></div>
-            <div class="pp2-form-group pp2-full"><label>Área</label><input id="pp2-mcl-area" placeholder="Ej: COCINA, CLOSET, BAÑO..."></div>
-            <div class="pp2-form-group pp2-full">
-              <label>Estado · Etapas de Producción</label>
-              <div class="pp2-checklist-modal" id="pp2-mcl-checklist">
-                <div class="pp2-check-cell" data-pp2-mt="corte"><div class="pp2-check-cell-lbl">CORTE</div><div class="pp2-check-cell-mark">·</div><div class="pp2-check-cell-status">—</div></div>
-                <div class="pp2-check-cell" data-pp2-mt="cinta"><div class="pp2-check-cell-lbl">CINTA</div><div class="pp2-check-cell-mark">·</div><div class="pp2-check-cell-status">—</div></div>
-                <div class="pp2-check-cell" data-pp2-mt="perforacion"><div class="pp2-check-cell-lbl">PERFORACIÓN</div><div class="pp2-check-cell-mark">·</div><div class="pp2-check-cell-status">—</div></div>
-                <div class="pp2-check-cell" data-pp2-mt="armado"><div class="pp2-check-cell-lbl">ARMADO</div><div class="pp2-check-cell-mark">·</div><div class="pp2-check-cell-status">—</div></div>
-                <div class="pp2-check-cell" data-pp2-mt="empaque"><div class="pp2-check-cell-lbl">EMPAQUE</div><div class="pp2-check-cell-mark">·</div><div class="pp2-check-cell-status">—</div></div>
+      <!-- Modal Armado -->
+      <div class="pp3-overlay" id="pp3-mod-armado">
+        <div class="pp3-modal" style="max-width:720px;">
+          <div class="pp3-modal-header">
+            <div class="pp3-modal-title" id="pp3-ma-title">🔨 Nuevo Registro de Armado</div>
+            <button class="pp3-modal-close" data-pp3-close="pp3-mod-armado">×</button>
+          </div>
+          <div class="pp3-modal-body">
+            <div class="pp3-form-grid">
+              <div class="pp3-form-group"><label>N°</label><input id="pp3-ma-nro" placeholder="Ej: 8, 27, 30..."></div>
+              <div class="pp3-form-group"><label>Cantidad</label><input id="pp3-ma-cantidad" type="number" min="1" placeholder="1"></div>
+              <div class="pp3-form-group"><label>Descripción</label><input id="pp3-ma-descripcion" placeholder="Ej: Panel Doble"></div>
+              <div class="pp3-form-group"><label>Medida</label><input id="pp3-ma-medida" placeholder="Ej: 34 1/2x21x1 1/2"></div>
+              <div class="pp3-form-group"><label>Área</label><input id="pp3-ma-area" placeholder="Ej: Cocina, Escritorio..."></div>
+              <div class="pp3-form-group"><label>Cliente</label><input id="pp3-ma-cliente" placeholder="Nombre del cliente"></div>
+              <div class="pp3-form-group"><label>Color</label><input id="pp3-ma-color" placeholder="Ej: Roble Eternity 5/8"></div>
+              <div class="pp3-form-group"><label>Localidad</label>
+                <select id="pp3-ma-localidad">
+                  <option value="SPS">SPS — San Pedro Sula</option>
+                  <option value="TGU">TGU — Tegucigalpa</option>
+                  <option value="CRT">CRT — Cortés</option>
+                </select>
               </div>
-              <div style="font-size:10px;color:#a8a29e;margin-top:6px;">
-                Haz clic en cada etapa para alternar:
-                <strong style="color:#0f766e;">vacío → COMPLETADO (X) → PENDIENTE (P) → vacío</strong>
+              <div class="pp3-form-group"><label>Armador</label><input id="pp3-ma-armador" placeholder="Nombre del armador"></div>
+              <div class="pp3-form-group"><label>Fecha Inicio</label><input id="pp3-ma-fecha" type="date"></div>
+              <div class="pp3-form-group"><label>Tiempo Armado</label><input id="pp3-ma-tiempo" placeholder="Ej: 2 1/2 Horas, 1 Día..."></div>
+              <div class="pp3-form-group"><label>Estatus</label>
+                <select id="pp3-ma-estatus">
+                  <option value="TERMINADO">✅ Terminado</option>
+                  <option value="EN PROCESO">⚙️ En Proceso</option>
+                  <option value="PENDIENTE">⏳ Pendiente</option>
+                </select>
               </div>
             </div>
-            <div class="pp2-form-group pp2-full"><label>Observaciones</label><textarea id="pp2-mcl-obs" placeholder="Detalles del proceso..."></textarea></div>
+          </div>
+          <div class="pp3-modal-footer">
+            <button class="pp3-btn pp3-btn-ghost" data-pp3-close="pp3-mod-armado">Cancelar</button>
+            <button class="pp3-btn pp3-btn-primary" data-pp3-save="armado">Guardar</button>
           </div>
         </div>
-        <div class="pp2-modal-footer">
-          <button class="pp2-btn pp2-btn-ghost" data-pp2-action="close-modal">Cancelar</button>
-          <button class="pp2-btn pp2-btn-primary" data-pp2-action="save-cliente">Guardar</button>
+      </div>
+
+      <!-- Modal Cliente en Taller (simple) -->
+      <div class="pp3-overlay" id="pp3-mod-taller">
+        <div class="pp3-modal" style="max-width:560px;">
+          <div class="pp3-modal-header">
+            <div class="pp3-modal-title" id="pp3-mt-title">👷 Cliente en Taller</div>
+            <button class="pp3-modal-close" data-pp3-close="pp3-mod-taller">×</button>
+          </div>
+          <div class="pp3-modal-body">
+            <div class="pp3-form-grid">
+              <div class="pp3-form-group"><label>Fecha</label><input id="pp3-mt-fecha" type="date"></div>
+              <div class="pp3-form-group"><label>Cliente</label><input id="pp3-mt-cliente" placeholder="Nombre del cliente"></div>
+              <div class="pp3-form-group pp3-full"><label>Observaciones</label><textarea id="pp3-mt-obs" placeholder="Detalles..."></textarea></div>
+            </div>
+          </div>
+          <div class="pp3-modal-footer">
+            <button class="pp3-btn pp3-btn-ghost" data-pp3-close="pp3-mod-taller">Cancelar</button>
+            <button class="pp3-btn pp3-btn-primary" data-pp3-save="taller">Guardar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Cliente en Proceso (con checklist) -->
+      <div class="pp3-overlay" id="pp3-mod-proceso">
+        <div class="pp3-modal" style="max-width:660px;">
+          <div class="pp3-modal-header">
+            <div class="pp3-modal-title" id="pp3-mp-title">✅ Cliente en Proceso</div>
+            <button class="pp3-modal-close" data-pp3-close="pp3-mod-proceso">×</button>
+          </div>
+          <div class="pp3-modal-body">
+            <div class="pp3-form-grid">
+              <div class="pp3-form-group"><label>Fecha</label><input id="pp3-mp-fecha" type="date"></div>
+              <div class="pp3-form-group"><label>Cliente</label><input id="pp3-mp-cliente" placeholder="Nombre del cliente"></div>
+              <div class="pp3-form-group pp3-full"><label>Área</label><input id="pp3-mp-area" placeholder="Ej: COCINA, CLOSET, BAÑO..."></div>
+              <div class="pp3-form-group pp3-full">
+                <label>Estado · Etapas de Producción</label>
+                <div class="pp3-checklist-modal" id="pp3-mp-checklist">
+                  <div class="pp3-check-cell" data-pp3-mt="corte"><div class="pp3-check-cell-lbl">CORTE</div><div class="pp3-check-cell-mark">·</div><div class="pp3-check-cell-status">—</div></div>
+                  <div class="pp3-check-cell" data-pp3-mt="cinta"><div class="pp3-check-cell-lbl">CINTA</div><div class="pp3-check-cell-mark">·</div><div class="pp3-check-cell-status">—</div></div>
+                  <div class="pp3-check-cell" data-pp3-mt="perforacion"><div class="pp3-check-cell-lbl">PERFORACIÓN</div><div class="pp3-check-cell-mark">·</div><div class="pp3-check-cell-status">—</div></div>
+                  <div class="pp3-check-cell" data-pp3-mt="armado"><div class="pp3-check-cell-lbl">ARMADO</div><div class="pp3-check-cell-mark">·</div><div class="pp3-check-cell-status">—</div></div>
+                  <div class="pp3-check-cell" data-pp3-mt="empaque"><div class="pp3-check-cell-lbl">EMPAQUE</div><div class="pp3-check-cell-mark">·</div><div class="pp3-check-cell-status">—</div></div>
+                </div>
+                <div style="font-size:10px;color:#a8a29e;margin-top:6px;">
+                  Clic en cada etapa para alternar:
+                  <strong style="color:#0f766e;">vacío → COMPLETADO (X) → PENDIENTE (P) → vacío</strong>
+                </div>
+              </div>
+              <div class="pp3-form-group pp3-full"><label>Observaciones</label><textarea id="pp3-mp-obs" placeholder="Detalles del proceso..."></textarea></div>
+            </div>
+          </div>
+          <div class="pp3-modal-footer">
+            <button class="pp3-btn pp3-btn-ghost" data-pp3-close="pp3-mod-proceso">Cancelar</button>
+            <button class="pp3-btn pp3-btn-primary" data-pp3-save="proceso">Guardar</button>
+          </div>
         </div>
       </div>
     `;
-    document.body.appendChild(modal);
-    // Eventos del modal
-    modal.addEventListener('click', (ev) => {
-      if (ev.target === modal) { closeModal(); return; }
-      const cell = ev.target.closest('[data-pp2-mt]');
-      if (cell) {
-        const et = cell.getAttribute('data-pp2-mt');
-        _modalEstados[et] = nextEtapaState(_modalEstados[et]);
-        applyChecklistUI();
-        return;
-      }
-      const act = ev.target.closest('[data-pp2-action]');
-      if (!act) return;
-      const a = act.getAttribute('data-pp2-action');
-      if (a === 'close-modal') closeModal();
-      else if (a === 'save-cliente') saveCliente();
-    });
-    return modal;
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  // ABRIR MODALES
+  // ═══════════════════════════════════════════════════════════════════
+  function openModal(id) { const el = document.getElementById(id); if (el) el.classList.add('open'); }
+  function closeModal(id) { const el = document.getElementById(id); if (el) el.classList.remove('open'); }
+  function setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v == null ? '' : v; }
+  function getVal(id) { const el = document.getElementById(id); return el ? el.value : ''; }
+
+  let _modalEstados = { corte: null, cinta: null, perforacion: null, armado: null, empaque: null };
+
   function applyChecklistUI() {
-    document.querySelectorAll('#pp2-mcl-checklist .pp2-check-cell').forEach(cell => {
-      const et = cell.getAttribute('data-pp2-mt');
+    document.querySelectorAll('#pp3-mp-checklist .pp3-check-cell').forEach(cell => {
+      const et = cell.getAttribute('data-pp3-mt');
       const st = _modalEstados[et];
       cell.classList.remove('s-done', 's-pend');
       if (st === 'done') cell.classList.add('s-done');
       else if (st === 'pend') cell.classList.add('s-pend');
-      const mark = cell.querySelector('.pp2-check-cell-mark');
-      const status = cell.querySelector('.pp2-check-cell-status');
+      const mark = cell.querySelector('.pp3-check-cell-mark');
+      const status = cell.querySelector('.pp3-check-cell-status');
       if (mark) mark.textContent = stageMark(st) || '·';
       if (status) status.textContent = stageTitle(st);
     });
   }
 
-  function openModal() { const m = getOrCreateModal(); m.classList.add('open'); }
-  function closeModal() { const m = document.getElementById('pp2-modal-cliente'); if (m) m.classList.remove('open'); }
-
-  function abrirNuevo() {
-    State.editClienteIdx = -1;
-    getOrCreateModal();
-    document.getElementById('pp2-modal-title').textContent = '👷 Nuevo Cliente en Proceso';
-    document.getElementById('pp2-mcl-fecha').value = todayISO();
-    document.getElementById('pp2-mcl-cliente').value = '';
-    document.getElementById('pp2-mcl-area').value = '';
-    document.getElementById('pp2-mcl-obs').value = '';
-    _modalEstados = { corte: null, cinta: null, perforacion: null, armado: null, empaque: null };
-    applyChecklistUI();
-    openModal();
-  }
-
-  function abrirEditar(idx) {
-    const r = window.PROD_DATA.clientes[idx];
-    if (!r) return;
-    State.editClienteIdx = idx;
-    getOrCreateModal();
-    document.getElementById('pp2-modal-title').textContent = '👷 Editar Cliente en Proceso';
-    document.getElementById('pp2-mcl-fecha').value = prodToISO(r.fecha);
-    document.getElementById('pp2-mcl-cliente').value = r.cliente || '';
-    document.getElementById('pp2-mcl-area').value = r.area || '';
-    document.getElementById('pp2-mcl-obs').value = r.obs || '';
-    _modalEstados = {
-      corte:       getEtapaState(r.estados, 'corte'),
-      cinta:       getEtapaState(r.estados, 'cinta'),
-      perforacion: getEtapaState(r.estados, 'perforacion'),
-      armado:      getEtapaState(r.estados, 'armado'),
-      empaque:     getEtapaState(r.estados, 'empaque'),
-    };
-    applyChecklistUI();
-    openModal();
-  }
-
-  function saveCliente() {
-    const fecha = document.getElementById('pp2-mcl-fecha').value;
-    const cliente = document.getElementById('pp2-mcl-cliente').value.trim();
-    if (!fecha || !cliente) { toast('⚠ Ingresa fecha y cliente', 'warn'); return; }
-    const obj = {
-      fecha: prodFromISO(fecha),
-      cliente,
-      area: document.getElementById('pp2-mcl-area').value.trim(),
-      obs: document.getElementById('pp2-mcl-obs').value.trim(),
-      estados: { ..._modalEstados },
-    };
-    const D = window.PROD_DATA;
-    if (!D.clientes) D.clientes = [];
-    if (State.editClienteIdx >= 0) {
-      // Preservar campos que el bundle de React pueda usar
-      D.clientes[State.editClienteIdx] = { ...D.clientes[State.editClienteIdx], ...obj };
-      toast('✓ Cliente actualizado', 'ok');
-    } else {
-      D.clientes.push(obj);
-      D.clientes.sort((a, b) => prodToISO(a.fecha).localeCompare(prodToISO(b.fecha)));
-      toast('✓ Cliente agregado', 'ok');
+  function abrirNuevo(type) {
+    State.editMode = { type, index: -1 };
+    const today = todayISO();
+    if (type === 'corte') {
+      document.getElementById('pp3-mc-title').textContent = '⚙️ Nuevo Registro de Corte';
+      setVal('pp3-mc-fecha', today);
+      setVal('pp3-mc-maquina', 'MAQUINA GIBBEN - TC');
+      setVal('pp3-mc-laminas', '');
+      setVal('pp3-mc-operario', '');
+      setVal('pp3-mc-obs', '');
+      openModal('pp3-mod-corte');
+    } else if (type === 'armado') {
+      document.getElementById('pp3-ma-title').textContent = '🔨 Nuevo Registro de Armado';
+      ['pp3-ma-nro','pp3-ma-cantidad','pp3-ma-descripcion','pp3-ma-medida','pp3-ma-area','pp3-ma-cliente','pp3-ma-color','pp3-ma-armador','pp3-ma-tiempo'].forEach(id => setVal(id, ''));
+      setVal('pp3-ma-fecha', today);
+      setVal('pp3-ma-localidad', 'SPS');
+      setVal('pp3-ma-estatus', 'TERMINADO');
+      openModal('pp3-mod-armado');
+    } else if (type === 'taller') {
+      document.getElementById('pp3-mt-title').textContent = '👷 Nuevo Cliente en Taller';
+      setVal('pp3-mt-fecha', today);
+      setVal('pp3-mt-cliente', '');
+      setVal('pp3-mt-obs', '');
+      openModal('pp3-mod-taller');
+    } else if (type === 'proceso') {
+      document.getElementById('pp3-mp-title').textContent = '✅ Nuevo Cliente en Proceso';
+      setVal('pp3-mp-fecha', today);
+      setVal('pp3-mp-cliente', '');
+      setVal('pp3-mp-area', '');
+      setVal('pp3-mp-obs', '');
+      _modalEstados = { corte: null, cinta: null, perforacion: null, armado: null, empaque: null };
+      applyChecklistUI();
+      openModal('pp3-mod-proceso');
     }
-    saveData();
-    closeModal();
-    renderActiveTab();
   }
 
-  function eliminarCliente(idx) {
-    if (!confirm('¿Eliminar este cliente?')) return;
-    if (!window.PROD_DATA.clientes) return;
-    window.PROD_DATA.clientes.splice(idx, 1);
-    saveData();
-    renderActiveTab();
+  function abrirEditar(type, idx) {
+    State.editMode = { type, index: idx };
+    if (type === 'corte') {
+      const r = window.PROD_DATA.corte[idx]; if (!r) return;
+      document.getElementById('pp3-mc-title').textContent = '⚙️ Editar Registro de Corte';
+      setVal('pp3-mc-fecha', prodToISO(r.fecha));
+      setVal('pp3-mc-maquina', r.maquina || 'MAQUINA GIBBEN - TC');
+      setVal('pp3-mc-laminas', r.laminas || '');
+      setVal('pp3-mc-operario', r.operario || '');
+      setVal('pp3-mc-obs', r.obs || '');
+      openModal('pp3-mod-corte');
+    } else if (type === 'armado') {
+      const r = window.PROD_DATA.armado[idx]; if (!r) return;
+      document.getElementById('pp3-ma-title').textContent = '🔨 Editar Registro de Armado';
+      setVal('pp3-ma-nro', r.nro || '');
+      setVal('pp3-ma-cantidad', r.cantidad || '');
+      setVal('pp3-ma-descripcion', r.descripcion || '');
+      setVal('pp3-ma-medida', r.medida || '');
+      setVal('pp3-ma-area', r.area || '');
+      setVal('pp3-ma-cliente', r.cliente || '');
+      setVal('pp3-ma-color', r.color || '');
+      setVal('pp3-ma-localidad', r.localidad || 'SPS');
+      setVal('pp3-ma-armador', r.armador || '');
+      setVal('pp3-ma-fecha', prodToISO(r.fecha));
+      setVal('pp3-ma-tiempo', r.tiempo || '');
+      setVal('pp3-ma-estatus', r.estatus || 'TERMINADO');
+      openModal('pp3-mod-armado');
+    } else if (type === 'taller') {
+      const r = window.PROD_DATA.clientes_taller[idx]; if (!r) return;
+      document.getElementById('pp3-mt-title').textContent = '👷 Editar Cliente en Taller';
+      setVal('pp3-mt-fecha', prodToISO(r.fecha));
+      setVal('pp3-mt-cliente', r.cliente || '');
+      setVal('pp3-mt-obs', r.obs || '');
+      openModal('pp3-mod-taller');
+    } else if (type === 'proceso') {
+      const r = window.PROD_DATA.clientes[idx]; if (!r) return;
+      document.getElementById('pp3-mp-title').textContent = '✅ Editar Cliente en Proceso';
+      setVal('pp3-mp-fecha', prodToISO(r.fecha));
+      setVal('pp3-mp-cliente', r.cliente || '');
+      setVal('pp3-mp-area', r.area || '');
+      setVal('pp3-mp-obs', r.obs || '');
+      _modalEstados = {
+        corte: getEtapaState(r.estados, 'corte'),
+        cinta: getEtapaState(r.estados, 'cinta'),
+        perforacion: getEtapaState(r.estados, 'perforacion'),
+        armado: getEtapaState(r.estados, 'armado'),
+        empaque: getEtapaState(r.estados, 'empaque'),
+      };
+      applyChecklistUI();
+      openModal('pp3-mod-proceso');
+    }
+  }
+
+  function guardar(type) {
+    if (type === 'corte') {
+      const fecha = getVal('pp3-mc-fecha');
+      if (!fecha) { toast('⚠ Ingresa la fecha', 'warn'); return; }
+      const obj = {
+        fecha: prodFromISO(fecha),
+        maquina: getVal('pp3-mc-maquina'),
+        laminas: getVal('pp3-mc-laminas').trim(),
+        operario: getVal('pp3-mc-operario').trim(),
+        obs: getVal('pp3-mc-obs').trim(),
+      };
+      const D = window.PROD_DATA;
+      if (State.editMode.index >= 0 && State.editMode.type === 'corte') {
+        D.corte[State.editMode.index] = obj;
+        toast('✓ Corte actualizado', 'ok');
+      } else {
+        D.corte.push(obj);
+        D.corte.sort((a,b) => prodToISO(a.fecha).localeCompare(prodToISO(b.fecha)));
+        toast('✓ Corte agregado', 'ok');
+      }
+      saveData(); closeModal('pp3-mod-corte'); renderActiveView();
+    } else if (type === 'armado') {
+      const fecha = getVal('pp3-ma-fecha');
+      if (!fecha) { toast('⚠ Ingresa la fecha', 'warn'); return; }
+      const obj = {
+        nro: getVal('pp3-ma-nro').trim(),
+        cantidad: getVal('pp3-ma-cantidad').trim(),
+        descripcion: getVal('pp3-ma-descripcion').trim(),
+        medida: getVal('pp3-ma-medida').trim(),
+        area: getVal('pp3-ma-area').trim(),
+        cliente: getVal('pp3-ma-cliente').trim(),
+        color: getVal('pp3-ma-color').trim(),
+        localidad: getVal('pp3-ma-localidad'),
+        armador: getVal('pp3-ma-armador').trim(),
+        fecha: prodFromISO(fecha),
+        tiempo: getVal('pp3-ma-tiempo').trim(),
+        estatus: getVal('pp3-ma-estatus'),
+      };
+      const D = window.PROD_DATA;
+      if (State.editMode.index >= 0 && State.editMode.type === 'armado') {
+        D.armado[State.editMode.index] = obj;
+        toast('✓ Armado actualizado', 'ok');
+      } else {
+        D.armado.push(obj);
+        D.armado.sort((a,b) => prodToISO(a.fecha).localeCompare(prodToISO(b.fecha)));
+        toast('✓ Armado agregado', 'ok');
+      }
+      saveData(); closeModal('pp3-mod-armado'); renderActiveView();
+    } else if (type === 'taller') {
+      const fecha = getVal('pp3-mt-fecha');
+      const cliente = getVal('pp3-mt-cliente').trim();
+      if (!fecha || !cliente) { toast('⚠ Ingresa fecha y cliente', 'warn'); return; }
+      const obj = { fecha: prodFromISO(fecha), cliente, obs: getVal('pp3-mt-obs').trim() };
+      const D = window.PROD_DATA;
+      if (!D.clientes_taller) D.clientes_taller = [];
+      if (State.editMode.index >= 0 && State.editMode.type === 'taller') {
+        D.clientes_taller[State.editMode.index] = obj;
+        toast('✓ Cliente actualizado', 'ok');
+      } else {
+        D.clientes_taller.push(obj);
+        D.clientes_taller.sort((a,b) => prodToISO(a.fecha).localeCompare(prodToISO(b.fecha)));
+        toast('✓ Cliente agregado', 'ok');
+      }
+      saveData(); closeModal('pp3-mod-taller'); renderActiveView();
+    } else if (type === 'proceso') {
+      const fecha = getVal('pp3-mp-fecha');
+      const cliente = getVal('pp3-mp-cliente').trim();
+      if (!fecha || !cliente) { toast('⚠ Ingresa fecha y cliente', 'warn'); return; }
+      const obj = {
+        fecha: prodFromISO(fecha), cliente,
+        area: getVal('pp3-mp-area').trim(),
+        obs: getVal('pp3-mp-obs').trim(),
+        estados: { ..._modalEstados },
+      };
+      const D = window.PROD_DATA;
+      if (!D.clientes) D.clientes = [];
+      if (State.editMode.index >= 0 && State.editMode.type === 'proceso') {
+        D.clientes[State.editMode.index] = { ...D.clientes[State.editMode.index], ...obj };
+        toast('✓ Cliente actualizado', 'ok');
+      } else {
+        D.clientes.push(obj);
+        D.clientes.sort((a,b) => prodToISO(a.fecha).localeCompare(prodToISO(b.fecha)));
+        toast('✓ Cliente agregado', 'ok');
+      }
+      saveData(); closeModal('pp3-mod-proceso'); renderActiveView();
+    }
+  }
+
+  function eliminar(type, idx) {
+    if (!confirm('¿Eliminar este registro?')) return;
+    const map = { corte: 'corte', armado: 'armado', taller: 'clientes_taller', proceso: 'clientes' };
+    const key = map[type];
+    if (!window.PROD_DATA[key]) return;
+    window.PROD_DATA[key].splice(idx, 1);
+    saveData(); renderActiveView();
     toast('✓ Eliminado', 'ok');
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // 12. PDFs
+  // PDFs
   // ═══════════════════════════════════════════════════════════════════
-  function exportarPDFCliente() {
-    const D = window.PROD_DATA;
-    const clientes = D.clientes || [];
-    const fecha = new Date().toLocaleDateString('es-HN', { day: '2-digit', month: 'long', year: 'numeric' });
-    const rows = clientes.map((r, i) => {
-      const e = r.estados || {};
-      const mk = (et) => {
-        const st = getEtapaState(e, et);
-        if (st === 'done') return '<span style="color:#0d9488;font-weight:800;font-size:14px;">X</span>';
-        if (st === 'pend') return '<span style="color:#d97706;font-weight:800;font-size:11px;background:#fef3c7;padding:1px 6px;border-radius:4px;">PEND</span>';
-        return '<span style="color:#d6d3d1;">·</span>';
-      };
-      return `<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.area||'—')}</td><td style="text-align:center;">${mk('corte')}</td><td style="text-align:center;">${mk('cinta')}</td><td style="text-align:center;">${mk('perforacion')}</td><td style="text-align:center;">${mk('armado')}</td><td style="text-align:center;">${mk('empaque')}</td><td>${escapeHTML(r.obs||'—')}</td></tr>`;
-    }).join('');
-
-    const win = window.open('', '_blank');
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Clientes en Proceso</title>
+  function pdfWindow(title, body) {
+    const w = window.open('', '_blank');
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title>
       <style>
         body{font-family:Arial,sans-serif;padding:24px;color:#1c1917;background:#fff;}
         h1{font-size:20px;color:#0f766e;margin-bottom:4px;}
-        p.sub{color:#78716c;font-size:11px;margin-bottom:20px;}
-        table{width:100%;border-collapse:collapse;font-size:11px;}
-        th{background:#0f766e;color:#fff;padding:8px;text-align:left;font-size:10px;letter-spacing:.5px;text-transform:uppercase;}
-        td{padding:7px 8px;border-bottom:1px solid #e7e5e4;vertical-align:middle;}
-        tr:nth-child(even){background:#fafaf9;}
-        .footer{margin-top:24px;font-size:10px;color:#a8a29e;text-align:right;border-top:1px solid #e7e5e4;padding-top:8px;}
-      </style></head><body>
-      <h1>👷 Clientes en Proceso</h1><p class="sub">${clientes.length} registros · Generado: ${fecha}</p>
-      <table><thead><tr><th>#</th><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>CORTE</th><th>CINTA</th><th>PERFOR.</th><th>ARMADO</th><th>EMPAQUE</th><th>OBSERVACIONES</th></tr></thead><tbody>${rows}</tbody></table>
-      <div class="footer">Panel de Control — Producción</div>
-      <script>window.onload=()=>setTimeout(()=>window.print(),250);<\/script>
-      </body></html>`);
-    win.document.close();
-    toast('✓ PDF listo', 'ok');
-  }
-
-  function exportarPDFSemana() {
-    const sem = getProdSemanaLS();
-    const { corte, armado, clientes, rpt = [], desde, hasta } = sem;
-    if (!corte.length && !armado.length && !clientes.length && !rpt.length) {
-      toast('Sin datos en el período', 'warn'); return;
-    }
-    const fecha = new Date().toLocaleDateString('es-HN', { day: '2-digit', month: 'long', year: 'numeric' });
-    const titulo = sem.custom ? '🏭 Producción — Rango Personalizado' : '🏭 Producción — Semana Actual (Lun-Sáb)';
-    const rowsC = corte.map((r, i) => `<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td>${escapeHTML(r.maquina||'')}</td><td style="text-align:center;font-weight:700;">${escapeHTML(r.laminas||'—')}</td><td>${escapeHTML(r.operario||'—')}</td><td>${escapeHTML(r.obs||'—')}</td></tr>`).join('');
-    const rowsA = armado.map((r, i) => `<tr><td>${escapeHTML(r.nro||(i+1))}</td><td>${escapeHTML(r.cantidad||'—')}</td><td>${escapeHTML(r.descripcion||'—')}</td><td>${escapeHTML(r.area||'—')}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.armador||'—')}</td><td>${prodDisp(r.fecha)}</td><td>${escapeHTML(r.tiempo||'—')}</td><td><strong>${escapeHTML(r.estatus||'—')}</strong></td></tr>`).join('');
-    const rowsCl = clientes.map((r, i) => {
-      const e = r.estados || {};
-      const mk = (et) => {
-        const st = getEtapaState(e, et);
-        if (st === 'done') return '<span style="color:#0d9488;font-weight:800;">X</span>';
-        if (st === 'pend') return '<span style="color:#d97706;font-weight:800;font-size:9px;background:#fef3c7;padding:1px 4px;border-radius:3px;">PEND</span>';
-        return '<span style="color:#d6d3d1;">·</span>';
-      };
-      return `<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.area||'—')}</td><td style="text-align:center;">${mk('corte')}</td><td style="text-align:center;">${mk('cinta')}</td><td style="text-align:center;">${mk('perforacion')}</td><td style="text-align:center;">${mk('armado')}</td><td style="text-align:center;">${mk('empaque')}</td><td>${escapeHTML(r.obs||'—')}</td></tr>`;
-    }).join('');
-    const rowsR = rpt.map((r, i) => `<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.area||'—')}</td><td>${escapeHTML(r.operador||'—')}</td><td>${escapeHTML(r.ciudad||'—')}</td><td style="text-align:center;font-weight:700;">${escapeHTML(r.cantidad_lam||'—')}</td><td>${escapeHTML(r.medida_lam||'—')}</td><td><strong>${escapeHTML(r.estado||'—')}</strong></td></tr>`).join('');
-
-    const win = window.open('', '_blank');
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Producción Período</title>
-      <style>
-        body{font-family:Arial,sans-serif;padding:24px;color:#1c1917;background:#fff;}
-        h1{font-size:22px;color:#0f766e;margin-bottom:4px;}
-        p.sub{color:#78716c;font-size:11px;margin-bottom:20px;}
         h2{font-size:13px;font-weight:700;padding:8px 12px;border-radius:6px;margin:20px 0 10px;}
-        .hc{background:#ccfbf1;color:#0f766e;}
-        .ha{background:#cffafe;color:#0e7490;}
-        .hcl{background:#ffedd5;color:#9a3412;}
-        .hr{background:#fef3c7;color:#854d0e;}
+        .hc{background:#ccfbf1;color:#0f766e;}.ha{background:#cffafe;color:#0e7490;}
+        .hcl{background:#ffedd5;color:#9a3412;}.hr{background:#fef3c7;color:#854d0e;}
+        p.sub{color:#78716c;font-size:11px;margin-bottom:20px;}
         table{width:100%;border-collapse:collapse;font-size:11px;}
         th{background:#0f766e;color:#fff;padding:8px;text-align:left;font-size:10px;letter-spacing:.5px;text-transform:uppercase;}
         td{padding:7px 8px;border-bottom:1px solid #e7e5e4;vertical-align:top;}
         tr:nth-child(even){background:#fafaf9;}
-        .footer{margin-top:24px;font-size:10px;color:#a8a29e;text-align:center;border-top:1px solid #e7e5e4;padding-top:8px;}
-      </style></head><body>
-      <h1>${titulo}</h1>
-      <p class="sub">${prodDisp(desde)} → ${prodDisp(hasta)} · Generado: ${fecha}</p>
-      ${corte.length ? `<h2 class="hc">⚙️ Corte (${corte.length})</h2><table><thead><tr><th>#</th><th>FECHA</th><th>MÁQUINA</th><th>LÁM.</th><th>OPERARIO</th><th>OBS.</th></tr></thead><tbody>${rowsC}</tbody></table>` : ''}
-      ${armado.length ? `<h2 class="ha">🔨 Armado (${armado.length})</h2><table><thead><tr><th>N°</th><th>CANT</th><th>DESCRIP.</th><th>ÁREA</th><th>CLIENTE</th><th>ARMADOR</th><th>FECHA</th><th>TIEMPO</th><th>ESTATUS</th></tr></thead><tbody>${rowsA}</tbody></table>` : ''}
-      ${clientes.length ? `<h2 class="hcl">👷 Clientes en Proceso (${clientes.length})</h2><table><thead><tr><th>#</th><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>CORTE</th><th>CINTA</th><th>PERF.</th><th>ARMADO</th><th>EMPAQUE</th><th>OBS.</th></tr></thead><tbody>${rowsCl}</tbody></table>` : ''}
-      ${rpt.length ? `<h2 class="hr">📋 Reporte de Producción (${rpt.length})</h2><table><thead><tr><th>#</th><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>OPERADOR</th><th>CIUDAD</th><th>CANT.</th><th>MEDIDA</th><th>ESTADO</th></tr></thead><tbody>${rowsR}</tbody></table>` : ''}
-      <div class="footer">Panel de Control — Producción · ${prodDisp(desde)} → ${prodDisp(hasta)}</div>
-      <script>window.onload=()=>setTimeout(()=>window.print(),300);<\/script>
+        .footer{margin-top:24px;font-size:10px;color:#a8a29e;text-align:right;border-top:1px solid #e7e5e4;padding-top:8px;}
+      </style></head><body>${body}
+      <script>window.onload=()=>setTimeout(()=>window.print(),250);<\/script>
       </body></html>`);
-    win.document.close();
+    w.document.close();
+  }
+
+  function pdfCorte() {
+    const D = window.PROD_DATA, c = D.corte || [];
+    const f = new Date().toLocaleDateString('es-HN', { day: '2-digit', month: 'long', year: 'numeric' });
+    pdfWindow('Reporte Corte', `<h1>⚙️ Reporte de Corte por Máquina</h1>
+      <p class="sub">${c.length} registros · Generado: ${f}</p>
+      <table><thead><tr><th>#</th><th>FECHA</th><th>MÁQUINA</th><th>LÁM.</th><th>OPERARIO</th><th>OBS.</th></tr></thead>
+      <tbody>${c.map((r,i)=>`<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td>${escapeHTML(r.maquina||'')}</td><td style="text-align:center;font-weight:700;">${escapeHTML(r.laminas||'—')}</td><td>${escapeHTML(r.operario||'—')}</td><td>${escapeHTML(r.obs||'—')}</td></tr>`).join('')}</tbody></table>
+      <div class="footer">Panel de Control — Producción</div>`);
+    toast('✓ PDF listo', 'ok');
+  }
+
+  function pdfArmado() {
+    const D = window.PROD_DATA, a = D.armado || [];
+    const f = new Date().toLocaleDateString('es-HN', { day: '2-digit', month: 'long', year: 'numeric' });
+    pdfWindow('Reporte Armado', `<h1>🔨 Reporte de Armado</h1>
+      <p class="sub">${a.length} registros · Generado: ${f}</p>
+      <table><thead><tr><th>N°</th><th>CANT</th><th>DESCR.</th><th>MEDIDA</th><th>ÁREA</th><th>CLIENTE</th><th>COLOR</th><th>LOC.</th><th>ARMADOR</th><th>FECHA</th><th>TIEMPO</th><th>ESTATUS</th></tr></thead>
+      <tbody>${a.map((r,i)=>`<tr><td>${escapeHTML(r.nro||(i+1))}</td><td>${escapeHTML(r.cantidad||'—')}</td><td>${escapeHTML(r.descripcion||'—')}</td><td>${escapeHTML(r.medida||'—')}</td><td>${escapeHTML(r.area||'—')}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.color||'—')}</td><td>${escapeHTML(r.localidad||'—')}</td><td>${escapeHTML(r.armador||'—')}</td><td>${prodDisp(r.fecha)}</td><td>${escapeHTML(r.tiempo||'—')}</td><td><strong>${escapeHTML(r.estatus||'—')}</strong></td></tr>`).join('')}</tbody></table>
+      <div class="footer">Panel de Control — Producción</div>`);
+    toast('✓ PDF listo', 'ok');
+  }
+
+  function pdfTaller() {
+    const D = window.PROD_DATA, t = D.clientes_taller || [];
+    const f = new Date().toLocaleDateString('es-HN', { day: '2-digit', month: 'long', year: 'numeric' });
+    pdfWindow('Clientes Taller', `<h1>👷 Clientes en Taller</h1>
+      <p class="sub">${t.length} registros · Generado: ${f}</p>
+      <table><thead><tr><th>#</th><th>FECHA</th><th>CLIENTE</th><th>OBSERVACIONES</th></tr></thead>
+      <tbody>${t.map((r,i)=>`<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.obs||'—')}</td></tr>`).join('')}</tbody></table>
+      <div class="footer">Panel de Control — Producción</div>`);
+    toast('✓ PDF listo', 'ok');
+  }
+
+  function pdfProceso() {
+    const D = window.PROD_DATA, c = D.clientes || [];
+    const f = new Date().toLocaleDateString('es-HN', { day: '2-digit', month: 'long', year: 'numeric' });
+    const mk = (e, et) => {
+      const st = getEtapaState(e, et);
+      if (st === 'done') return '<span style="color:#0d9488;font-weight:800;">X</span>';
+      if (st === 'pend') return '<span style="color:#d97706;font-weight:800;font-size:10px;background:#fef3c7;padding:1px 5px;border-radius:3px;">PEND</span>';
+      return '<span style="color:#d6d3d1;">·</span>';
+    };
+    pdfWindow('Clientes Proceso', `<h1>✅ Clientes en Proceso</h1>
+      <p class="sub">${c.length} registros · Generado: ${f}</p>
+      <table><thead><tr><th>#</th><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>CORTE</th><th>CINTA</th><th>PERFOR.</th><th>ARMADO</th><th>EMPAQUE</th><th>OBSERVACIONES</th></tr></thead>
+      <tbody>${c.map((r,i)=>`<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.area||'—')}</td><td style="text-align:center;">${mk(r.estados,'corte')}</td><td style="text-align:center;">${mk(r.estados,'cinta')}</td><td style="text-align:center;">${mk(r.estados,'perforacion')}</td><td style="text-align:center;">${mk(r.estados,'armado')}</td><td style="text-align:center;">${mk(r.estados,'empaque')}</td><td>${escapeHTML(r.obs||'—')}</td></tr>`).join('')}</tbody></table>
+      <div class="footer">Panel de Control — Producción</div>`);
+    toast('✓ PDF listo', 'ok');
+  }
+
+  function pdfSemana() {
+    const sem = getProdSemanaLS();
+    const { corte, armado, clientes, clientes_taller, rpt = [], desde, hasta } = sem;
+    if (!corte.length && !armado.length && !clientes.length && !clientes_taller.length && !rpt.length) {
+      toast('Sin datos en el período', 'warn'); return;
+    }
+    const f = new Date().toLocaleDateString('es-HN', { day: '2-digit', month: 'long', year: 'numeric' });
+    const titulo = sem.custom ? '🏭 Producción — Rango Personalizado' : '🏭 Producción — Semana Actual (Lun-Sáb)';
+    const mk = (e, et) => {
+      const st = getEtapaState(e, et);
+      if (st === 'done') return '<span style="color:#0d9488;font-weight:800;">X</span>';
+      if (st === 'pend') return '<span style="color:#d97706;font-weight:800;font-size:10px;background:#fef3c7;padding:1px 5px;border-radius:3px;">PEND</span>';
+      return '<span style="color:#d6d3d1;">·</span>';
+    };
+    let body = `<h1>${titulo}</h1><p class="sub">${prodDisp(desde)} → ${prodDisp(hasta)} · Generado: ${f}</p>`;
+    if (corte.length) body += `<h2 class="hc">⚙️ Corte (${corte.length})</h2><table><thead><tr><th>#</th><th>FECHA</th><th>MÁQUINA</th><th>LÁM.</th><th>OPERARIO</th><th>OBS.</th></tr></thead><tbody>${corte.map((r,i)=>`<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td>${escapeHTML(r.maquina||'')}</td><td style="text-align:center;font-weight:700;">${escapeHTML(r.laminas||'—')}</td><td>${escapeHTML(r.operario||'—')}</td><td>${escapeHTML(r.obs||'—')}</td></tr>`).join('')}</tbody></table>`;
+    if (armado.length) body += `<h2 class="ha">🔨 Armado (${armado.length})</h2><table><thead><tr><th>N°</th><th>CANT</th><th>DESCR.</th><th>ÁREA</th><th>CLIENTE</th><th>ARMADOR</th><th>FECHA</th><th>TIEMPO</th><th>ESTATUS</th></tr></thead><tbody>${armado.map((r,i)=>`<tr><td>${escapeHTML(r.nro||(i+1))}</td><td>${escapeHTML(r.cantidad||'—')}</td><td>${escapeHTML(r.descripcion||'—')}</td><td>${escapeHTML(r.area||'—')}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.armador||'—')}</td><td>${prodDisp(r.fecha)}</td><td>${escapeHTML(r.tiempo||'—')}</td><td><strong>${escapeHTML(r.estatus||'—')}</strong></td></tr>`).join('')}</tbody></table>`;
+    if (clientes_taller.length) body += `<h2 class="hcl">👷 Clientes en Taller (${clientes_taller.length})</h2><table><thead><tr><th>#</th><th>FECHA</th><th>CLIENTE</th><th>OBS.</th></tr></thead><tbody>${clientes_taller.map((r,i)=>`<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.obs||'—')}</td></tr>`).join('')}</tbody></table>`;
+    if (clientes.length) body += `<h2 class="hcl">✅ Clientes en Proceso (${clientes.length})</h2><table><thead><tr><th>#</th><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>CORTE</th><th>CINTA</th><th>PERF.</th><th>ARMADO</th><th>EMPAQUE</th><th>OBS.</th></tr></thead><tbody>${clientes.map((r,i)=>`<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.area||'—')}</td><td style="text-align:center;">${mk(r.estados,'corte')}</td><td style="text-align:center;">${mk(r.estados,'cinta')}</td><td style="text-align:center;">${mk(r.estados,'perforacion')}</td><td style="text-align:center;">${mk(r.estados,'armado')}</td><td style="text-align:center;">${mk(r.estados,'empaque')}</td><td>${escapeHTML(r.obs||'—')}</td></tr>`).join('')}</tbody></table>`;
+    if (rpt.length) body += `<h2 class="hr">📋 Reporte de Producción (${rpt.length})</h2><table><thead><tr><th>#</th><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>OPERADOR</th><th>CIUDAD</th><th>CANT.</th><th>MEDIDA</th><th>ESTADO</th></tr></thead><tbody>${rpt.map((r,i)=>`<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.area||'—')}</td><td>${escapeHTML(r.operador||'—')}</td><td>${escapeHTML(r.ciudad||'—')}</td><td style="text-align:center;font-weight:700;">${escapeHTML(r.cantidad_lam||'—')}</td><td>${escapeHTML(r.medida_lam||'—')}</td><td><strong>${escapeHTML(r.estado||'—')}</strong></td></tr>`).join('')}</tbody></table>`;
+    body += `<div class="footer">Panel de Control — Producción · ${prodDisp(desde)} → ${prodDisp(hasta)}</div>`;
+    pdfWindow('Producción Período', body);
     toast('✓ PDF Período listo', 'ok');
   }
 
-  function exportarPDFReporte() {
-    const { corte, armado, clientes, rpt } = getFiltradoReporte();
-    if (!corte.length && !armado.length && !clientes.length && !rpt.length) {
+  function pdfReporte() {
+    const f = getFiltradoReporte();
+    if (!f.corte.length && !f.armado.length && !f.clientes.length && !f.clientes_taller.length && !f.rpt.length) {
       toast('Sin datos para exportar', 'warn'); return;
     }
     const fecha = new Date().toLocaleDateString('es-HN', { day: '2-digit', month: 'long', year: 'numeric' });
     const periodo = State.repMode === 'all'
       ? 'Historial completo'
       : `${State.repDesde ? prodDisp(prodFromISO(State.repDesde)) : 'inicio'} → ${State.repHasta ? prodDisp(prodFromISO(State.repHasta)) : 'hoy'}`;
-    const lamTotal = rpt.reduce((s, r) => s + (parseFloat(r.cantidad_lam) || 0), 0);
-    const rowsC = corte.map((r, i) => `<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td>${escapeHTML(r.maquina||'')}</td><td style="text-align:center;font-weight:700;">${escapeHTML(r.laminas||'—')}</td><td>${escapeHTML(r.operario||'—')}</td><td>${escapeHTML(r.obs||'—')}</td></tr>`).join('');
-    const rowsA = armado.map((r, i) => `<tr><td>${escapeHTML(r.nro||(i+1))}</td><td>${escapeHTML(r.cantidad||'—')}</td><td>${escapeHTML(r.descripcion||'—')}</td><td>${escapeHTML(r.medida||'—')}</td><td>${escapeHTML(r.area||'—')}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.color||'—')}</td><td>${escapeHTML(r.localidad||'—')}</td><td>${escapeHTML(r.armador||'—')}</td><td>${prodDisp(r.fecha)}</td><td>${escapeHTML(r.tiempo||'—')}</td><td><strong>${escapeHTML(r.estatus||'—')}</strong></td></tr>`).join('');
-    const rowsCl = clientes.map((r, i) => {
-      const e = r.estados || {};
-      const mk = (et) => {
-        const st = getEtapaState(e, et);
-        if (st === 'done') return '<span style="color:#0d9488;font-weight:800;">X</span>';
-        if (st === 'pend') return '<span style="color:#d97706;font-weight:800;font-size:9px;background:#fef3c7;padding:1px 4px;border-radius:3px;">PEND</span>';
-        return '<span style="color:#d6d3d1;">·</span>';
-      };
-      return `<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.area||'—')}</td><td style="text-align:center;">${mk('corte')}</td><td style="text-align:center;">${mk('cinta')}</td><td style="text-align:center;">${mk('perforacion')}</td><td style="text-align:center;">${mk('armado')}</td><td style="text-align:center;">${mk('empaque')}</td><td>${escapeHTML(r.obs||'—')}</td></tr>`;
-    }).join('');
-    const rowsR = rpt.map((r, i) => `<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.area||'—')}</td><td>${escapeHTML(r.color||'—')}</td><td>${escapeHTML(r.operador||'—')}</td><td>${escapeHTML(r.ciudad||'—')}</td><td style="text-align:center;font-weight:700;">${escapeHTML(r.cantidad_lam||'—')}</td><td>${escapeHTML(r.medida_lam||'—')}</td><td><strong>${escapeHTML(r.estado||'—')}</strong></td></tr>`).join('');
-
-    const win = window.open('', '_blank');
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Reporte Producción</title>
+    const lamTotal = f.rpt.reduce((s, r) => s + (parseFloat(r.cantidad_lam) || 0), 0);
+    const mk = (e, et) => {
+      const st = getEtapaState(e, et);
+      if (st === 'done') return '<span style="color:#0d9488;font-weight:800;">X</span>';
+      if (st === 'pend') return '<span style="color:#d97706;font-weight:800;font-size:9px;background:#fef3c7;padding:1px 4px;border-radius:3px;">PEND</span>';
+      return '<span style="color:#d6d3d1;">·</span>';
+    };
+    const w = window.open('', '_blank');
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Reporte Producción</title>
       <style>
         *{box-sizing:border-box;margin:0;padding:0;}
         body{font-family:'Segoe UI',Arial,sans-serif;color:#1c1917;background:#fff;}
@@ -3753,7 +4394,7 @@
         .kpi-box .lbl{font-size:9px;color:#78716c;letter-spacing:1px;text-transform:uppercase;margin-top:4px;}
         .kpi-box.c1 .num{color:#0d9488;}.kpi-box.c2 .num{color:#0891b2;}.kpi-box.c3 .num{color:#d97706;}.kpi-box.c4 .num{color:#b8860b;}.kpi-box.c5 .num{color:#7c3aed;}
         .page{padding:32px 40px;}
-        .sec-title{display:flex;align-items:center;font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:8px 14px;border-radius:6px;margin:20px 0 10px;}
+        .sec-title{font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:8px 14px;border-radius:6px;margin:20px 0 10px;}
         .sec-c{background:#ccfbf1;color:#0f766e;border-left:4px solid #0d9488;}
         .sec-a{background:#cffafe;color:#155e75;border-left:4px solid #0891b2;}
         .sec-cl{background:#ffedd5;color:#9a3412;border-left:4px solid #d97706;}
@@ -3773,256 +4414,339 @@
         <div class="cover-range">📅 ${periodo}</div>
         <div class="cover-date">Generado: ${fecha}</div>
         <div class="kpi-row">
-          <div class="kpi-box c1"><div class="num">${corte.length}</div><div class="lbl">Cortes</div></div>
-          <div class="kpi-box c2"><div class="num">${armado.length}</div><div class="lbl">Armados</div></div>
-          <div class="kpi-box c3"><div class="num">${clientes.length}</div><div class="lbl">En Proceso</div></div>
-          <div class="kpi-box c4"><div class="num">${rpt.length}</div><div class="lbl">Rpt. Prod.</div></div>
+          <div class="kpi-box c1"><div class="num">${f.corte.length}</div><div class="lbl">Cortes</div></div>
+          <div class="kpi-box c2"><div class="num">${f.armado.length}</div><div class="lbl">Armados</div></div>
+          <div class="kpi-box c3"><div class="num">${f.clientes_taller.length}</div><div class="lbl">Taller</div></div>
+          <div class="kpi-box c3"><div class="num">${f.clientes.length}</div><div class="lbl">Proceso</div></div>
+          <div class="kpi-box c4"><div class="num">${f.rpt.length}</div><div class="lbl">Rpt. Prod.</div></div>
           <div class="kpi-box c5"><div class="num">${lamTotal}</div><div class="lbl">Láminas</div></div>
         </div>
       </div>
       <div class="page">
-        ${corte.length ? `<div class="sec-title sec-c">⚙️ Reporte de Corte por Máquina (${corte.length})</div>
-          <table><thead><tr><th>#</th><th>Fecha</th><th>Máquina/Turno</th><th>Láminas</th><th>Operario</th><th>Obs.</th></tr></thead><tbody>${rowsC}</tbody></table>` : ''}
-        ${armado.length ? `<div class="sec-title sec-a">🔨 Muebles Especiales · Armado (${armado.length})</div>
-          <table><thead><tr><th>N°</th><th>Cant.</th><th>Descrip.</th><th>Medida</th><th>Área</th><th>Cliente</th><th>Color</th><th>Local.</th><th>Armador</th><th>Fecha</th><th>Tiempo</th><th>Estatus</th></tr></thead><tbody>${rowsA}</tbody></table>` : ''}
-        ${clientes.length ? `<div class="sec-title sec-cl">👷 Clientes en Proceso (${clientes.length})</div>
-          <table><thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Área</th><th>Corte</th><th>Cinta</th><th>Perf.</th><th>Armado</th><th>Empaque</th><th>Obs.</th></tr></thead><tbody>${rowsCl}</tbody></table>` : ''}
-        ${rpt.length ? `<div class="sec-title sec-r">📋 Reporte de Producción (${rpt.length})</div>
-          <table><thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Área</th><th>Color</th><th>Operador</th><th>Ciudad</th><th>Cant.</th><th>Medida</th><th>Estado</th></tr></thead><tbody>${rowsR}</tbody></table>` : ''}
+        ${f.corte.length ? `<div class="sec-title sec-c">⚙️ Reporte de Corte por Máquina (${f.corte.length})</div><table><thead><tr><th>#</th><th>Fecha</th><th>Máquina</th><th>Lám.</th><th>Operario</th><th>Obs.</th></tr></thead><tbody>${f.corte.map((r,i)=>`<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td>${escapeHTML(r.maquina||'')}</td><td style="text-align:center;font-weight:700;">${escapeHTML(r.laminas||'—')}</td><td>${escapeHTML(r.operario||'—')}</td><td>${escapeHTML(r.obs||'—')}</td></tr>`).join('')}</tbody></table>` : ''}
+        ${f.armado.length ? `<div class="sec-title sec-a">🔨 Muebles Especiales · Armado (${f.armado.length})</div><table><thead><tr><th>N°</th><th>Cant</th><th>Descr.</th><th>Medida</th><th>Área</th><th>Cliente</th><th>Color</th><th>Loc.</th><th>Armador</th><th>Fecha</th><th>Tiempo</th><th>Estatus</th></tr></thead><tbody>${f.armado.map((r,i)=>`<tr><td>${escapeHTML(r.nro||(i+1))}</td><td>${escapeHTML(r.cantidad||'—')}</td><td>${escapeHTML(r.descripcion||'—')}</td><td>${escapeHTML(r.medida||'—')}</td><td>${escapeHTML(r.area||'—')}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.color||'—')}</td><td>${escapeHTML(r.localidad||'—')}</td><td>${escapeHTML(r.armador||'—')}</td><td>${prodDisp(r.fecha)}</td><td>${escapeHTML(r.tiempo||'—')}</td><td><strong>${escapeHTML(r.estatus||'—')}</strong></td></tr>`).join('')}</tbody></table>` : ''}
+        ${f.clientes_taller.length ? `<div class="sec-title sec-cl">👷 Clientes en Taller (${f.clientes_taller.length})</div><table><thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Obs.</th></tr></thead><tbody>${f.clientes_taller.map((r,i)=>`<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.obs||'—')}</td></tr>`).join('')}</tbody></table>` : ''}
+        ${f.clientes.length ? `<div class="sec-title sec-cl">✅ Clientes en Proceso (${f.clientes.length})</div><table><thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Área</th><th>Corte</th><th>Cinta</th><th>Perf.</th><th>Armado</th><th>Empaque</th><th>Obs.</th></tr></thead><tbody>${f.clientes.map((r,i)=>`<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.area||'—')}</td><td style="text-align:center;">${mk(r.estados,'corte')}</td><td style="text-align:center;">${mk(r.estados,'cinta')}</td><td style="text-align:center;">${mk(r.estados,'perforacion')}</td><td style="text-align:center;">${mk(r.estados,'armado')}</td><td style="text-align:center;">${mk(r.estados,'empaque')}</td><td>${escapeHTML(r.obs||'—')}</td></tr>`).join('')}</tbody></table>` : ''}
+        ${f.rpt.length ? `<div class="sec-title sec-r">📋 Reporte de Producción (${f.rpt.length})</div><table><thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Área</th><th>Color</th><th>Operador</th><th>Ciudad</th><th>Cant.</th><th>Medida</th><th>Estado</th></tr></thead><tbody>${f.rpt.map((r,i)=>`<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.area||'—')}</td><td>${escapeHTML(r.color||'—')}</td><td>${escapeHTML(r.operador||'—')}</td><td>${escapeHTML(r.ciudad||'—')}</td><td style="text-align:center;font-weight:700;">${escapeHTML(r.cantidad_lam||'—')}</td><td>${escapeHTML(r.medida_lam||'—')}</td><td><strong>${escapeHTML(r.estado||'—')}</strong></td></tr>`).join('')}</tbody></table>` : ''}
         <div class="footer"><span>Panel de Control — Módulo Producción</span><span>${periodo} · ${fecha}</span></div>
       </div>
       <script>window.onload=()=>setTimeout(()=>window.print(),300);<\/script>
       </body></html>`);
-    win.document.close();
+    w.document.close();
     toast('✓ Reporte PDF listo', 'ok');
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // 13. CONTROL: MOSTRAR / OCULTAR HOST DE TAB INTERCEPTADA
+  // SIDEBAR + RENDER
   // ═══════════════════════════════════════════════════════════════════
-  // Para no luchar con React, ponemos un div HOST encima del panel de contenido
-  // de la tab interceptada con position:absolute y mismo bounding box.
-  function getOrCreateHost() {
-    let host = document.getElementById('pp2-host');
-    if (host) return host;
-    host = document.createElement('div');
-    host.id = 'pp2-host';
-    host.style.cssText = 'position:absolute;background:#faf8f5;z-index:10;display:none;overflow-y:auto;border-radius:8px;';
-    document.body.appendChild(host);
-    // Eventos delegados
+  const VIEWS = [
+    { key: 'resumen',  label: 'Resumen',           icon: '📊', group: 'VISTAS',   countKey: null },
+    { key: 'semana',   label: 'Semana actual',     icon: '📅', group: 'VISTAS',   countKey: null },
+    { key: 'corte',    label: 'Corte',             icon: '⚙️', group: 'GESTIÓN',  countKey: 'corte' },
+    { key: 'armado',   label: 'Armado',            icon: '🔨', group: 'GESTIÓN',  countKey: 'armado' },
+    { key: 'taller',   label: 'Clientes en taller',icon: '👷', group: 'GESTIÓN',  countKey: 'clientes_taller' },
+    { key: 'proceso',  label: 'Clientes en proceso',icon:'✅', group: 'GESTIÓN',  countKey: 'clientes' },
+    { key: 'reporte',  label: 'Reporte Producción',icon: '📋', group: 'REPORTES', countKey: 'rpt' },
+  ];
+
+  function buildSidebarHTML() {
+    const D = window.PROD_DATA;
+    const grouped = { 'VISTAS': [], 'GESTIÓN': [], 'REPORTES': [] };
+    VIEWS.forEach(v => grouped[v.group].push(v));
+
+    const renderItem = v => {
+      const count = v.countKey ? (D[v.countKey] || []).length : null;
+      const active = State.activeView === v.key ? 'active' : '';
+      return `<button class="pp3-sb-item ${active}" data-pp3-view="${v.key}">
+        <span class="pp3-sb-icon">${v.icon}</span>
+        <span>${v.label}</span>
+        ${count != null ? `<span class="pp3-sb-count">${count}</span>` : ''}
+      </button>`;
+    };
+
+    const renderGroup = (title, items) => `
+      <div class="pp3-sb-group">
+        <div class="pp3-sb-group-title">PRODUCCIÓN · ${title}</div>
+        ${items.map(renderItem).join('')}
+      </div>
+    `;
+
+    return `
+      <div class="pp3-sb-brand">
+        <div class="pp3-sb-brand-logo">In</div>
+        <div>
+          <div class="pp3-sb-brand-text-1">Interiorshn</div>
+          <div class="pp3-sb-brand-text-2">ERP · vista única</div>
+        </div>
+      </div>
+      <div class="pp3-sb-active">
+        <div>
+          <div class="pp3-sb-active-text">Producción</div>
+          <div class="pp3-sb-active-sub">PRODUCCIÓN</div>
+        </div>
+        <button class="pp3-sb-back" data-pp3-act="back" title="Volver">⤺</button>
+      </div>
+      ${renderGroup('VISTAS',   grouped['VISTAS'])}
+      ${renderGroup('GESTIÓN',  grouped['GESTIÓN'])}
+      ${renderGroup('REPORTES', grouped['REPORTES'])}
+      <div class="pp3-sb-foot">
+        <div class="pp3-sb-foot-dot"></div>
+        En vivo · Firebase
+      </div>
+    `;
+  }
+
+  function renderActiveView() {
+    const sidebar = document.getElementById('pp3-sidebar');
+    const panel = document.getElementById('pp3-panel');
+    if (!sidebar || !panel) return;
+    sidebar.innerHTML = buildSidebarHTML();
+    if (State.activeView === 'resumen')      renderResumen(panel);
+    else if (State.activeView === 'corte')   renderCorte(panel);
+    else if (State.activeView === 'armado')  renderArmado(panel);
+    else if (State.activeView === 'taller')  renderTaller(panel);
+    else if (State.activeView === 'proceso') renderProceso(panel);
+    else if (State.activeView === 'semana')  renderSemana(panel);
+    else if (State.activeView === 'reporte') renderReporte(panel);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // EVENTOS
+  // ═══════════════════════════════════════════════════════════════════
+  function attachEvents(host) {
+    if (host.__pp3Wired) return;
+    host.__pp3Wired = true;
+
     host.addEventListener('click', (ev) => {
       const t = ev.target;
-      // Toggle en celda de etapa
-      const cell = t.closest('[data-pp2-toggle]');
+
+      // Cambio de vista (sidebar)
+      const v = t.closest('[data-pp3-view]');
+      if (v) {
+        State.activeView = v.getAttribute('data-pp3-view');
+        renderActiveView();
+        return;
+      }
+
+      // Toggle de etapa en tabla (Clientes en proceso)
+      const cell = t.closest('[data-pp3-toggle]');
       if (cell) {
-        const idx = parseInt(cell.getAttribute('data-pp2-toggle'), 10);
-        const et = cell.getAttribute('data-pp2-etapa');
-        const D = window.PROD_DATA;
-        if (D.clientes && D.clientes[idx]) {
-          const r = D.clientes[idx];
+        const idx = parseInt(cell.getAttribute('data-pp3-toggle'), 10);
+        const et = cell.getAttribute('data-pp3-etapa');
+        const r = window.PROD_DATA.clientes[idx];
+        if (r) {
           if (!r.estados) r.estados = {};
           r.estados[et] = nextEtapaState(getEtapaState(r.estados, et));
           saveData();
-          renderActiveTab();
+          renderActiveView();
         }
         return;
       }
+
       // Modos
-      const sm = t.closest('[data-pp2-semmode]');
+      const sm = t.closest('[data-pp3-semmode]');
       if (sm) {
-        State.semMode = sm.getAttribute('data-pp2-semmode');
+        State.semMode = sm.getAttribute('data-pp3-semmode');
         if (State.semMode === 'current') { State.semDesde = ''; State.semHasta = ''; }
-        renderActiveTab();
+        renderActiveView();
         return;
       }
-      const rm = t.closest('[data-pp2-repmode]');
+      const rm = t.closest('[data-pp3-repmode]');
       if (rm) {
-        State.repMode = rm.getAttribute('data-pp2-repmode');
+        State.repMode = rm.getAttribute('data-pp3-repmode');
         if (State.repMode === 'all') { State.repDesde = ''; State.repHasta = ''; }
-        renderActiveTab();
+        renderActiveView();
         return;
       }
+
       // Acciones
-      const act = t.closest('[data-pp2-action]');
-      if (act) {
-        const a = act.getAttribute('data-pp2-action');
-        if (a === 'add-cliente')  abrirNuevo();
-        if (a === 'edit-cliente') abrirEditar(parseInt(act.getAttribute('data-pp2-idx'), 10));
-        if (a === 'del-cliente')  eliminarCliente(parseInt(act.getAttribute('data-pp2-idx'), 10));
-        if (a === 'pdf-cliente')  exportarPDFCliente();
-        if (a === 'pdf-semana')   exportarPDFSemana();
-        if (a === 'pdf-reporte')  exportarPDFReporte();
-        if (a === 'clear-sem')    { State.semDesde = ''; State.semHasta = ''; renderActiveTab(); }
-        if (a === 'clear-rep')    { State.repDesde = ''; State.repHasta = ''; renderActiveTab(); }
+      const a = t.closest('[data-pp3-act]');
+      if (a) {
+        const act = a.getAttribute('data-pp3-act');
+        const idx = parseInt(a.getAttribute('data-pp3-idx'), 10);
+        if (act === 'back')           hideHost();
+        else if (act === 'add-corte')   abrirNuevo('corte');
+        else if (act === 'add-armado')  abrirNuevo('armado');
+        else if (act === 'add-taller')  abrirNuevo('taller');
+        else if (act === 'add-proceso') abrirNuevo('proceso');
+        else if (act === 'edit-corte')   abrirEditar('corte', idx);
+        else if (act === 'edit-armado')  abrirEditar('armado', idx);
+        else if (act === 'edit-taller')  abrirEditar('taller', idx);
+        else if (act === 'edit-proceso') abrirEditar('proceso', idx);
+        else if (act === 'del-corte')    eliminar('corte', idx);
+        else if (act === 'del-armado')   eliminar('armado', idx);
+        else if (act === 'del-taller')   eliminar('taller', idx);
+        else if (act === 'del-proceso')  eliminar('proceso', idx);
+        else if (act === 'pdf-corte')   pdfCorte();
+        else if (act === 'pdf-armado')  pdfArmado();
+        else if (act === 'pdf-taller')  pdfTaller();
+        else if (act === 'pdf-proceso') pdfProceso();
+        else if (act === 'pdf-semana')  pdfSemana();
+        else if (act === 'pdf-reporte') pdfReporte();
+        else if (act === 'clear-sem')   { State.semDesde = ''; State.semHasta = ''; renderActiveView(); }
+        else if (act === 'clear-rep')   { State.repDesde = ''; State.repHasta = ''; renderActiveView(); }
         return;
       }
+
+      // Cerrar modal
+      const c = t.closest('[data-pp3-close]');
+      if (c) { closeModal(c.getAttribute('data-pp3-close')); return; }
+      const cls = t.closest('.pp3-modal-close');
+      if (cls) { const ov = cls.closest('.pp3-overlay'); if (ov) ov.classList.remove('open'); return; }
+
+      // Guardar modal
+      const sv = t.closest('[data-pp3-save]');
+      if (sv) { guardar(sv.getAttribute('data-pp3-save')); return; }
+
+      // Toggle checklist en modal
+      const mc = t.closest('[data-pp3-mt]');
+      if (mc) {
+        const et = mc.getAttribute('data-pp3-mt');
+        _modalEstados[et] = nextEtapaState(_modalEstados[et]);
+        applyChecklistUI();
+        return;
+      }
+
+      // Cerrar al click fuera del modal
+      if (t.classList && t.classList.contains('pp3-overlay')) {
+        t.classList.remove('open');
+      }
+    });
+
+    host.addEventListener('input', (ev) => {
+      const t = ev.target;
+      if (t.id === 'pp3-arm-q')      { State.armFiltCliente = t.value; renderActiveView(); }
+      if (t.id === 'pp3-sem-desde')  { State.semDesde = t.value; renderActiveView(); }
+      if (t.id === 'pp3-sem-hasta')  { State.semHasta = t.value; renderActiveView(); }
+      if (t.id === 'pp3-rep-desde')  { State.repDesde = t.value; renderActiveView(); }
+      if (t.id === 'pp3-rep-hasta')  { State.repHasta = t.value; renderActiveView(); }
     });
     host.addEventListener('change', (ev) => {
-      const t = ev.target;
-      if (t.id === 'pp2-sem-desde') { State.semDesde = t.value; renderActiveTab(); }
-      if (t.id === 'pp2-sem-hasta') { State.semHasta = t.value; renderActiveTab(); }
-      if (t.id === 'pp2-rep-desde') { State.repDesde = t.value; renderActiveTab(); }
-      if (t.id === 'pp2-rep-hasta') { State.repHasta = t.value; renderActiveTab(); }
+      if (ev.target.id === 'pp3-arm-est') { State.armFiltEstatus = ev.target.value; renderActiveView(); }
     });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // HOST: MOSTRAR / OCULTAR
+  // ═══════════════════════════════════════════════════════════════════
+  function buildHost() {
+    let host = document.getElementById('pp3-host');
+    if (host) return host;
+    host = document.createElement('div');
+    host.id = 'pp3-host';
+    host.innerHTML = `
+      <aside id="pp3-sidebar"></aside>
+      <main id="pp3-panel"></main>
+    `;
+    document.body.appendChild(host);
+
+    // Modales en otro contenedor (para que estén siempre disponibles)
+    let modals = document.getElementById('pp3-modals');
+    if (!modals) {
+      modals = document.createElement('div');
+      modals.id = 'pp3-modals';
+      modals.innerHTML = buildModalsHTML();
+      document.body.appendChild(modals);
+    }
+
+    attachEvents(host);
+    attachEvents(modals);
     return host;
   }
 
-  function positionHostOver(target) {
-    const host = getOrCreateHost();
-    const r = target.getBoundingClientRect();
-    const sy = window.scrollY, sx = window.scrollX;
-    host.style.top    = (r.top + sy) + 'px';
-    host.style.left   = (r.left + sx) + 'px';
-    host.style.width  = r.width + 'px';
-    // Alto mínimo para que se vea bien
-    host.style.minHeight = Math.max(r.height, 400) + 'px';
-    host.style.display = 'block';
-  }
-
-  function showHostOnPanel(panel, renderFn) {
-    if (!panel) return;
-    const host = getOrCreateHost();
-    positionHostOver(panel);
-    renderFn(host);
+  function showHost() {
+    const host = buildHost();
+    host.classList.add('open');
+    document.body.classList.add('pp3-locked');
+    State.moduleVisible = true;
+    if (!State.activeView) State.activeView = 'resumen';
+    renderActiveView();
   }
 
   function hideHost() {
-    const host = document.getElementById('pp2-host');
-    if (host) host.style.display = 'none';
-  }
-
-  // Mantener posición sincronizada al scroll/resize
-  function attachHostSync() {
-    const reposition = () => {
-      const host = document.getElementById('pp2-host');
-      if (!host || host.style.display === 'none') return;
-      const tabsInfo = findProduccionTabs();
-      if (!tabsInfo) { hideHost(); return; }
-      const panel = findContentPanel(tabsInfo);
-      if (!panel) { hideHost(); return; }
-      positionHostOver(panel);
-    };
-    window.addEventListener('scroll', reposition, true);
-    window.addEventListener('resize', reposition);
+    const host = document.getElementById('pp3-host');
+    if (host) host.classList.remove('open');
+    document.body.classList.remove('pp3-locked');
+    State.moduleVisible = false;
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // 14. RENDER GLOBAL POR TAB ACTIVA
+  // INTERCEPTOR: detectar cuando React abre el módulo Producción
   // ═══════════════════════════════════════════════════════════════════
-  function renderActiveTab() {
-    const tabsInfo = findProduccionTabs();
-    if (!tabsInfo) return;
-    const panel = findContentPanel(tabsInfo);
-    if (!panel) return;
-    const host = getOrCreateHost();
-
-    if (State.activeTab === 'proceso')  { showHostOnPanel(panel, renderClientesEnProceso); removeChartCard(); }
-    else if (State.activeTab === 'semana')   { showHostOnPanel(panel, renderSemana); removeChartCard(); }
-    else if (State.activeTab === 'reporte')  { showHostOnPanel(panel, renderReporte); removeChartCard(); }
-    else if (State.activeTab === 'resumen')  {
-      // En Resumen: dejamos visible el de React y agregamos el chart NUEVO debajo
-      hideHost();
-      ensureChartCardInResumen(panel);
+  function isProduccionOpenInReact() {
+    // Estrategia 1: header h1/h2 con texto exacto "PRODUCCIÓN"
+    const headers = document.querySelectorAll('h1, h2, h3');
+    for (const h of headers) {
+      if (h.closest && h.closest('#pp3-host')) continue;
+      const txt = (h.textContent || '').trim().toUpperCase();
+      if (txt === 'PRODUCCIÓN' || txt === 'PRODUCCION' || txt === '🏭 PRODUCCIÓN') {
+        const r = h.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) return h;
+      }
     }
-    else { hideHost(); removeChartCard(); }
+    // Estrategia 2: detectar tabs típicas del módulo (Resumen + Corte + Armado visibles)
+    const buttons = [...document.querySelectorAll('button, [role="tab"]')];
+    let hasResumen = false, hasCorte = false, hasArmado = false;
+    for (const b of buttons) {
+      if (b.closest && b.closest('#pp3-host')) continue;
+      const txt = (b.textContent || '').trim().toLowerCase();
+      const stripped = txt.replace(/\s*\(\d+\)\s*$/, '').trim();
+      const r = b.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+      if (r.height > 80) continue;
+      if (stripped === 'resumen') hasResumen = true;
+      if (stripped === 'corte') hasCorte = true;
+      if (stripped === 'armado') hasArmado = true;
+    }
+    if (hasResumen && hasCorte && hasArmado) return true;
+    return null;
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // 15. INTERCEPTOR DE TABS
-  // ═══════════════════════════════════════════════════════════════════
-  function bindTabIntercept(tabsInfo) {
-    if (!tabsInfo) return;
-    const T = tabsInfo.tabs;
-
-    const wireTab = (el, key) => {
-      if (!el || el.__pp2Wired) return;
-      el.__pp2Wired = true;
-      // No usamos preventDefault porque queremos que React también marque la tab como activa visualmente.
-      // En la fase de capture, decidimos qué hacer DESPUÉS de que React responda.
-      el.addEventListener('click', () => {
-        State.activeTab = key;
-        // Pequeño delay para que React renderice su panel y podamos posicionar encima
-        setTimeout(renderActiveTab, 50);
-        setTimeout(renderActiveTab, 200);
-        setTimeout(renderActiveTab, 500);
-      });
-    };
-
-    wireTab(T.resumen, 'resumen');
-    wireTab(T.corte, 'corte');
-    wireTab(T.armado, 'armado');
-    wireTab(T.taller, 'taller');
-    wireTab(T.proceso, 'proceso');
-    wireTab(T.semana, 'semana');
-    wireTab(T.reporte, 'reporte');
-  }
-
-  // ═══════════════════════════════════════════════════════════════════
-  // 16. WATCHER PRINCIPAL
-  // ═══════════════════════════════════════════════════════════════════
-  let _wTimer = null;
+  let _navTimer = null;
   function startWatcher() {
     const tick = () => {
-      const tabsInfo = findProduccionTabs();
-      if (!tabsInfo) {
-        if (State.moduleVisible) {
-          State.moduleVisible = false;
-          State.activeTab = null;
-          hideHost();
-          removeChartCard();
-        }
-        return;
-      }
-      State.moduleVisible = true;
-      renombrarTabReporte(tabsInfo);
-      bindTabIntercept(tabsInfo);
-      // Si tenemos una tab interceptada activa, mantén el host posicionado
-      if (State.activeTab) {
-        renderActiveTab();
+      const found = isProduccionOpenInReact();
+      if (found && !State.moduleVisible) {
+        showHost();
+      } else if (!found && State.moduleVisible) {
+        hideHost();
       }
     };
-
     const obs = new MutationObserver(() => {
-      clearTimeout(_wTimer);
-      _wTimer = setTimeout(tick, 100);
+      clearTimeout(_navTimer);
+      _navTimer = setTimeout(tick, 80);
     });
     obs.observe(document.body, { childList: true, subtree: true, characterData: true });
-
-    // Ticks iniciales
     setTimeout(tick, 600);
     setTimeout(tick, 1500);
     setTimeout(tick, 3000);
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // 17. INICIALIZACIÓN
+  // INICIALIZACIÓN
   // ═══════════════════════════════════════════════════════════════════
   function init() {
     injectStyles();
     listenFirebaseProduccion();
     startWatcher();
-    attachHostSync();
 
-    // Tag fijo para indicar que el patch está activo
-    if (!document.getElementById('pp2-tag')) {
+    if (!document.getElementById('pp3-tag')) {
       const tag = document.createElement('div');
-      tag.id = 'pp2-tag';
-      tag.className = 'pp2-tag';
-      tag.textContent = 'Producción Patch v2.0';
+      tag.id = 'pp3-tag';
+      tag.className = 'pp3-tag';
+      tag.textContent = 'Producción Patch v3.0';
       document.body.appendChild(tag);
     }
 
-    log('v2.0 cargado · esperando navegación a Producción');
+    State.inited = true;
+    console.log('[Produccion-Patch v3] v3.0 cargado · esperando navegación a Producción');
 
-    // Debug
-    window.__pp2 = {
-      State,
+    Object.assign(window.__pp3, {
+      show: showHost, hide: hideHost,
+      forceView: (key) => { State.activeView = key; if (!State.moduleVisible) showHost(); else renderActiveView(); },
       data: () => window.PROD_DATA,
-      tabs: () => findProduccionTabs(),
-      panel: () => { const t = findProduccionTabs(); return t ? findContentPanel(t) : null; },
-      forceTab: (key) => { State.activeTab = key; renderActiveTab(); },
-      version: '2.0.0',
-    };
+      version: '3.0.0',
+    });
   }
 
   if (document.readyState === 'loading') {
@@ -4032,6 +4756,8 @@
   }
 })();
 </script>
+
+
 
 
 </body>
