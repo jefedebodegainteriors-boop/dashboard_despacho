@@ -44,14 +44,13 @@
 <script src="app.min.js"></script>
 
 <!-- ============================================================
-     PATCH · DESPACHO CON HERRAJES v3.5
+     PATCH · DESPACHO CON HERRAJES v3.2
      ────────────────────────────────────────────────────────────
      Fase 1: Modal Nuevo Despacho con tabla de herrajes
      Fase 2: Editar despacho con herrajes
      Fase 3: Salida automática de inventario (SALIDA_VENTA)
      Detalle: Clic en fila → ver herrajes enviados/pendientes
-     v3.5: Cache de Firebase via evento `db-update` + fallback DOM
-           (necesario porque main no se guarda en localStorage)
+     v3.2 Fix: getCurrentUser() corregida + utility de reparación
      ============================================================ -->
 <script>
 /* ════════════════════════════════════════════════════════════════════════════
@@ -132,122 +131,31 @@
   // SECCIÓN 1: ACCESO A INVENTARIO (lectura)
   // ─────────────────────────────────────────────────────────────────────
 
-  // ─────────────────────────────────────────────────────────────────────
-  // SECCIÓN 1: ACCESO A INVENTARIO Y MAIN (lectura)
-  // ─────────────────────────────────────────────────────────────────────
-  //
-  // Estrategia robusta para acceder a los datos:
-  //  1. Cache interno alimentado por el evento `db-update` que Firebase
-  //     dispara cuando llegan datos en vivo. Esta es la fuente PRIMARIA.
-  //  2. Fallback a localStorage (para modo offline o entre cargas).
-  //
-  // De esta forma funciona tanto si el usuario tiene Firebase activo
-  // (que NO escribe a localStorage hasta el primer setItem) como en
-  // modo offline.
-  // ─────────────────────────────────────────────────────────────────────
-
-  const _cache = {
-    main: null,           // último payload de 'main' recibido
-    inventario: null,     // último payload de 'inventario' recibido
-    produccion: null,
-    operaciones: null,
-  };
-
-  // Listener global para capturar TODOS los snapshots de Firebase
-  document.addEventListener('db-update', (ev) => {
-    const detail = ev.detail;
-    if (!detail || !detail.key || !detail.payload) return;
-    if (detail.key in _cache) {
-      _cache[detail.key] = detail.payload;
-      // Para debug
-      if (detail.key === 'main' && Array.isArray(detail.payload.desp)) {
-        // log(`Cache 'main' actualizado: ${detail.payload.desp.length} despachos`);
-      }
-    }
-  });
-
   function getInventario() {
-    // Cache primero
-    if (_cache.inventario) return _cache.inventario;
-    // Fallback localStorage
     try {
       const raw = localStorage.getItem('interiorshn_local_state_v1');
       if (!raw) return null;
       return JSON.parse(raw)?.inventario || null;
     } catch (e) {
-      err('No se pudo leer inventario', e);
+      err('No se pudo leer inventario de localStorage', e);
       return null;
     }
   }
 
   function getMain() {
-    // Cache primero
-    if (_cache.main) return _cache.main;
-    // Fallback localStorage
     try {
       const raw = localStorage.getItem('interiorshn_local_state_v1');
       if (!raw) return null;
       return JSON.parse(raw)?.main || null;
     } catch (e) {
-      err('No se pudo leer main', e);
+      err('No se pudo leer main de localStorage', e);
       return null;
     }
   }
 
   function getDespachos() {
     const m = getMain();
-    if (Array.isArray(m?.desp) && m.desp.length > 0) return m.desp;
-
-    // Último fallback: parsear las filas visibles del DOM
-    // Esto es útil cuando el cache aún no se ha llenado y localStorage está vacío
-    return getDespachosFromDOM();
-  }
-
-  /**
-   * Lee los despachos visibles parseando la tabla del DOM.
-   * Útil como fallback cuando no tenemos cache ni localStorage.
-   * Solo recupera campos básicos (cliente, area, fecha, ciudad, etc.) — los
-   * herrajes NO están en el DOM, así que el modal mostrará "sin herrajes".
-   */
-  function getDespachosFromDOM() {
-    const desps = [];
-    const tablas = document.querySelectorAll('table');
-    for (const tabla of tablas) {
-      // Detectar si es la tabla de despachos por sus headers
-      const headers = Array.from(tabla.querySelectorAll('thead th'))
-        .map(th => (th.textContent || '').trim().toLowerCase());
-      const idxFecha = headers.findIndex(h => h === 'fecha');
-      const idxCliente = headers.findIndex(h => h === 'cliente');
-      const idxArea = headers.findIndex(h => h === 'área' || h === 'area');
-      // Necesita al menos fecha + cliente para considerarse tabla de despachos
-      if (idxFecha < 0 || idxCliente < 0) continue;
-      const idxColor = headers.findIndex(h => h === 'color');
-      const idxInst = headers.findIndex(h => h === 'instalador');
-      const idxCiudad = headers.findIndex(h => h === 'ciudad');
-      const idxTipo = headers.findIndex(h => h === 'tipo');
-      const idxEstado = headers.findIndex(h => h === 'estado');
-
-      const trs = tabla.querySelectorAll('tbody tr');
-      for (const tr of trs) {
-        const tds = tr.querySelectorAll('td');
-        if (tds.length < 2) continue;
-        const cliente = (tds[idxCliente]?.textContent || '').trim();
-        if (!cliente) continue;
-        desps.push({
-          fecha: (tds[idxFecha]?.textContent || '').trim(),
-          cliente: cliente,
-          area: idxArea >= 0 ? (tds[idxArea]?.textContent || '').trim() : '',
-          color: idxColor >= 0 ? (tds[idxColor]?.textContent || '').trim() : '',
-          instalador: idxInst >= 0 ? (tds[idxInst]?.textContent || '').trim() : '',
-          ciudad: idxCiudad >= 0 ? (tds[idxCiudad]?.textContent || '').trim() : '',
-          tipo: idxTipo >= 0 ? (tds[idxTipo]?.textContent || '').trim() : '',
-          estado: idxEstado >= 0 ? (tds[idxEstado]?.textContent || '').trim() : '',
-          herrajes: {}, // No disponibles desde el DOM
-          _fromDOM: true,
-        });
-      }
-    }
-    return desps;
+    return Array.isArray(m?.desp) ? m.desp : [];
   }
 
   function getHerrajesProductos() {
@@ -1492,73 +1400,47 @@
     return plan;
   }
 
-  // Cache del usuario detectado (solo se calcula una vez por sesión)
-  let _cachedUser = null;
-
-  /**
-   * Detecta el usuario actual SIN tocar el DOM.
-   *
-   * Estrategia (en orden de prioridad):
-   *  1) Ya tenemos cache → devolverlo
-   *  2) Usuario establecido manualmente via __dhPatch.setUser() → usarlo
-   *  3) Mirar `inventario.auditoria`: el último registro con usuarioId limpio
-   *     es el usuario actual (el sistema lo escribe correctamente)
-   *  4) Mirar `inventario.movimientos`: igual que auditoría
-   *  5) Default: 'logistica'
-   *
-   * NUNCA toca el DOM para evitar el bug de capturar textContent gigante.
-   */
   function getCurrentUser() {
-    if (_cachedUser) return _cachedUser;
-
-    // Manualmente establecido (debug / override)
-    if (window.__dhUserOverride) {
-      _cachedUser = String(window.__dhUserOverride).slice(0, 30);
-      return _cachedUser;
-    }
-
+    // Estrategia 1: buscar el div específico del header con "X · Interiorshn"
+    // Es la forma más limpia y robusta. Estructura: <div class="text-stone-500 ...">Jorge · Interiorshn</div>
     try {
-      const inv = getInventario();
-      if (inv) {
-        // 1. Buscar en auditoría (más reciente primero)
-        const audi = Array.isArray(inv.auditoria) ? inv.auditoria : [];
-        for (const a of audi) {
-          const u = sanitizeUsuarioId(a?.usuarioId);
-          if (u && u !== 'sistema' && u !== 'sistema_migracion_excel') {
-            _cachedUser = u;
-            return u;
-          }
-        }
-        // 2. Buscar en movimientos
-        const movs = Array.isArray(inv.movimientos) ? inv.movimientos : [];
-        for (let i = movs.length - 1; i >= 0; i--) {
-          const u = sanitizeUsuarioId(movs[i]?.usuarioId);
-          if (u && u !== 'sistema' && u !== 'sistema_migracion_excel') {
-            _cachedUser = u;
-            return u;
+      const candidates = document.querySelectorAll('div.text-stone-500, div[class*="stone-500"]');
+      for (const el of candidates) {
+        const txt = (el.textContent || '').trim();
+        // Patrón estricto: "NOMBRE · Interiorshn" donde NOMBRE no tiene saltos de línea
+        // ni más de 50 caracteres. Esto evita capturar bloques enteros del DOM.
+        if (txt.length < 60 && txt.includes('· Interiorshn')) {
+          // Extraer solo el nombre (antes del " · Interiorshn")
+          const nombre = txt.split('·')[0].trim();
+          if (nombre && nombre.length < 30 && !/\n/.test(nombre)) {
+            // Devolver en lowercase y sin "·" (formato "jorge", "admin", etc.)
+            return nombre.toLowerCase();
           }
         }
       }
-    } catch (e) {
-      warn('getCurrentUser falló', e);
-    }
+    } catch (e) { /* fallthrough */ }
 
-    return null; // → caller usa 'logistica' como default
-  }
+    // Estrategia 2: buscar el botón Logout que tiene cerca el nombre
+    // (como fallback si el patrón anterior no matchea)
+    try {
+      const sidebar = document.querySelector('aside, nav');
+      if (sidebar) {
+        // Buscar elementos cortos con patrón "X · Interiorshn"
+        const all = sidebar.querySelectorAll('div, span');
+        for (const el of all) {
+          const txt = (el.textContent || '').trim();
+          if (txt.length < 60 && /·\s*Interiorshn/i.test(txt)) {
+            const nombre = txt.split('·')[0].trim();
+            if (nombre && nombre.length < 30 && !/\n/.test(nombre)) {
+              return nombre.toLowerCase();
+            }
+          }
+        }
+      }
+    } catch (e) { /* fallthrough */ }
 
-  /**
-   * Limpia un usuarioId potencialmente corrupto.
-   * Devuelve null si está corrupto, o el valor limpio si está OK.
-   */
-  function sanitizeUsuarioId(value) {
-    if (value == null) return null;
-    const s = String(value).trim();
-    if (!s) return null;
-    if (s.length > 60) return null;            // demasiado largo → corrupto
-    if (/\n|\r/.test(s)) return null;          // contiene saltos de línea → corrupto
-    if (/\s{3,}/.test(s)) return null;         // múltiples espacios consecutivos → corrupto
-    if (/[<>{}]/.test(s)) return null;         // contiene HTML → corrupto
-    return s;
+    // Si nada funciona, devolver null y que el caller use 'logistica' como default
+    return null;
   }
 
   /** Convierte una fecha DD/MM/YY o YYYY-MM-DD a ISO (YYYY-MM-DDT00:00:00.000Z) */
@@ -1915,19 +1797,7 @@
   // ════════════════════════════════════════════════════════════════════════
 
   function mostrarDetalleHerrajes(despacho, indexEnArray) {
-    if (!despacho) {
-      err('mostrarDetalleHerrajes llamado sin despacho');
-      return;
-    }
-    log('Abriendo detalle:', {
-      cliente: despacho.cliente,
-      area: despacho.area,
-      fecha: despacho.fecha,
-      herrajes: despacho.herrajes,
-      herrPendDesc: despacho.herrPendDesc,
-      herrPendEntregado: despacho.herrPendEntregado,
-      indexEnArray
-    });
+    if (!despacho) return;
     cerrarDetalleHerrajes(); // por si ya hay uno abierto
     injectStyles();
 
@@ -2170,162 +2040,47 @@
       cur = cur.parentElement;
     }
 
-    // El clic debe estar en una fila <tr> de una tabla
+    // El clic debe estar en una fila <tr> de la tabla de despachos
     const tr = target.closest ? target.closest('tr') : null;
     if (!tr) return;
 
     // No abrir si la fila está en un <thead>
     if (tr.closest('thead')) return;
 
-    // Validación: la fila debe tener al menos 4 celdas (las tablas pequeñas
-    // de filtros, KPIs, etc. tienen menos columnas y no nos interesan)
-    const cells = tr.querySelectorAll('td');
-    if (cells.length < 4) return;
+    // Necesita tener al menos botón "Editar" o "×" cerca para considerarse
+    // una fila con datos editables (filtra encabezados, filas de totales, etc.)
+    const hasEditButton = Array.from(tr.querySelectorAll('button')).some(b =>
+      /editar/i.test(b.textContent || ''));
+    if (!hasEditButton) return;
 
-    // Identificar qué celda tiene el cliente. Estrategia:
-    // 1. Buscar la PRIMERA celda cuyo texto coincida con un cliente conocido
-    //    de los despachos. Esto es lo más robusto: no depende de qué columna
-    //    sea (que puede variar por orden de columnas, vista, etc.)
+    // Identificar el despacho por el contenido de la fila
+    const cliente = tr.querySelector('td:nth-child(2)')?.textContent?.trim();
+    if (!cliente) return;
+
     const desps = getDespachos();
-    if (!desps.length) return;
-
-    // Conjunto de clientes (para búsqueda rápida)
-    const clientesSet = new Set(desps.map(d => (d.cliente || '').trim()).filter(Boolean));
-
-    let clienteEncontrado = null;
-    for (let i = 0; i < cells.length; i++) {
-      const txt = (cells[i].textContent || '').trim();
-      if (clientesSet.has(txt)) {
-        clienteEncontrado = txt;
-        break;
-      }
-    }
-
-    if (!clienteEncontrado) {
-      // No es una fila de despachos
-      return;
-    }
-
-    // Ahora desambiguar: filtrar por cliente y luego por fecha o área
     const candidatos = desps
       .map((d, i) => ({ d, i }))
-      .filter(x => (x.d.cliente || '').trim() === clienteEncontrado);
-
+      .filter(x => (x.d.cliente || '').trim() === cliente);
     if (!candidatos.length) return;
 
+    // Si hay múltiples del mismo cliente, usar área y fecha para desambiguar
     let elegido = candidatos[0];
     if (candidatos.length > 1) {
-      // Recoger todos los textos de las celdas para hacer match con fecha y área
-      const cellTexts = Array.from(cells).map(c => (c.textContent || '').trim());
-
-      // Buscar candidato cuyo área Y fecha coincidan con alguna celda de la fila
-      const matchExacto = candidatos.find(x => {
-        const area = (x.d.area || '').trim();
-        const fechaCorta = formatearFechaCorta(x.d.fecha);
-        return cellTexts.includes(area) && cellTexts.includes(fechaCorta);
-      });
-      if (matchExacto) {
-        elegido = matchExacto;
-      } else {
-        // Fallback: solo área
-        const matchArea = candidatos.find(x => {
-          const area = (x.d.area || '').trim();
-          return area && cellTexts.includes(area);
-        });
-        if (matchArea) elegido = matchArea;
-      }
+      const area = tr.querySelector('td:nth-child(3)')?.textContent?.trim();
+      const fechaTxt = tr.querySelector('td:nth-child(1)')?.textContent?.trim();
+      const better = candidatos.find(x => {
+        const sameArea = (x.d.area || '').trim() === area;
+        const sameFechaCorta = formatearFechaCorta(x.d.fecha) === fechaTxt;
+        return sameArea && sameFechaCorta;
+      }) || candidatos.find(x => (x.d.area || '').trim() === area);
+      if (better) elegido = better;
     }
-
-    log('Clic en fila → abriendo detalle:', elegido.d.cliente, elegido.d.area);
 
     // Abrir el modal de detalle
     ev.preventDefault();
     ev.stopPropagation();
     mostrarDetalleHerrajes(elegido.d, elegido.i);
   }, /* capture */ false);
-
-  // ── VISUAL FEEDBACK: añadir cursor pointer a las filas de despachos ──
-  // El dashboard de React no marca las filas como clickeables, pero ahora sí lo son.
-  // Usamos un MutationObserver que detecta filas nuevas en el DOM y las marca.
-  (function setupRowVisualFeedback() {
-    const styleId = 'dh-row-cursor-style';
-    if (!document.getElementById(styleId)) {
-      const s = document.createElement('style');
-      s.id = styleId;
-      s.textContent = `
-        tbody tr.dh-clickable { cursor: pointer; transition: background-color .12s; }
-        tbody tr.dh-clickable:hover { background-color: #f0fdfa !important; }
-      `;
-      document.head.appendChild(s);
-    }
-
-    let lastDespCount = 0;
-    let clientesCache = new Set();
-    function refreshClientesCache() {
-      const desps = getDespachos();
-      if (desps.length !== lastDespCount) {
-        lastDespCount = desps.length;
-        clientesCache = new Set(desps.map(d => (d.cliente || '').trim()).filter(Boolean));
-      }
-    }
-
-    function marcarFilas() {
-      refreshClientesCache();
-      if (clientesCache.size === 0) return;
-      // Buscar todas las filas de tablas y marcar las que tienen un cliente conocido
-      const trs = document.querySelectorAll('tbody tr');
-      for (const tr of trs) {
-        if (tr.classList.contains('dh-clickable')) continue;
-        if (tr.classList.contains('dh-clickable-checked')) continue;
-        const cells = tr.querySelectorAll('td');
-        if (cells.length < 4) {
-          tr.classList.add('dh-clickable-checked');
-          continue;
-        }
-        let isDespacho = false;
-        for (const c of cells) {
-          const txt = (c.textContent || '').trim();
-          if (clientesCache.has(txt)) {
-            isDespacho = true;
-            break;
-          }
-        }
-        if (isDespacho) tr.classList.add('dh-clickable');
-        tr.classList.add('dh-clickable-checked');
-      }
-    }
-
-    // Re-marcar cada vez que cambie el DOM (filtros, paginación, etc.)
-    const observer = new MutationObserver(() => {
-      // Throttle: solo re-marcar después de un pequeño delay
-      clearTimeout(observer._t);
-      observer._t = setTimeout(marcarFilas, 200);
-    });
-
-    // Esperar a que body esté disponible
-    function start() {
-      if (document.body) {
-        observer.observe(document.body, { childList: true, subtree: true });
-        marcarFilas();
-      } else {
-        setTimeout(start, 100);
-      }
-    }
-    start();
-
-    // Re-evaluar cuando cambian los despachos en localStorage (Firebase sync)
-    setInterval(() => {
-      const desps = getDespachos();
-      if (desps.length !== lastDespCount) {
-        // Limpiar marcas para re-procesar
-        document.querySelectorAll('.dh-clickable-checked').forEach(el => {
-          el.classList.remove('dh-clickable-checked');
-          el.classList.remove('dh-clickable');
-        });
-        marcarFilas();
-      }
-    }, 3000);
-  })();
 
   // ════════════════════════════════════════════════════════════════════════
   // ESTILOS adicionales para el modal de detalle
@@ -2436,44 +2191,46 @@
   // INICIALIZACIÓN
   // ─────────────────────────────────────────────────────────────────────
 
+  log('Patch v3.2 (Fases 1+2+3 + Detalle + Fix usuario) activo. Inventario detectado:',
+      getHerrajesProductos().length, 'herrajes.');
+
   /**
    * UTILIDAD DE REPARACIÓN: arregla movimientos en inventario cuyo usuarioId
-   * tiene texto basura. Se ejecuta automáticamente al cargar el dashboard
-   * y también puede llamarse manualmente desde consola.
-   *
-   * @param {boolean} silencioso - si true, no muestra toast (para auto-fix)
+   * tiene texto basura (más de 50 chars, contiene saltos de línea, etc).
+   * Los reemplaza con 'logistica'. Llamar manualmente desde consola si es
+   * necesario. Devuelve cuántos movs se arreglaron.
    */
-  async function repararUsuariosDañados(silencioso) {
+  async function repararUsuariosDañados() {
     const inv = getInventario();
-    if (!inv?.movimientos && !inv?.auditoria) {
-      if (!silencioso) console.log('[reparar] No hay inventario o movimientos');
+    if (!inv?.movimientos) {
+      console.log('[reparar] No hay inventario o movimientos');
       return 0;
     }
     let count = 0;
-
-    const movs = (inv.movimientos || []).map(m => {
-      const limpio = sanitizeUsuarioId(m.usuarioId);
-      if (limpio === null && m.usuarioId) {
-        // El usuarioId existe pero está corrupto
+    const movs = inv.movimientos.map(m => {
+      const u = String(m.usuarioId || '');
+      const corrupto = u.length > 60 || /\n/.test(u) || /Despacho\s+a.*Despacho\s+a/i.test(u);
+      if (corrupto) {
         count++;
-        const original = String(m.usuarioId).slice(0, 200);
-        return { ...m, usuarioId: 'logistica', _usuarioOriginal: original };
+        console.log('[reparar] Mov corrupto:', m.id, '· cantidad:', m.cantidad);
+        return { ...m, usuarioId: 'logistica', _usuarioOriginal: u.slice(0, 100) };
       }
       return m;
     });
 
+    // También en auditoría
     const audi = (inv.auditoria || []).map(a => {
-      const limpio = sanitizeUsuarioId(a.usuarioId);
-      if (limpio === null && a.usuarioId) {
+      const u = String(a.usuarioId || '');
+      const corrupto = u.length > 60 || /\n/.test(u);
+      if (corrupto) {
         count++;
-        const original = String(a.usuarioId).slice(0, 200);
-        return { ...a, usuarioId: 'logistica', _usuarioOriginal: original };
+        return { ...a, usuarioId: 'logistica', _usuarioOriginal: u.slice(0, 100) };
       }
       return a;
     });
 
     if (count === 0) {
-      if (!silencioso) console.log('[reparar] No hay datos corruptos. Todo OK.');
+      console.log('[reparar] No se encontraron movimientos con usuarioId corrupto.');
       return 0;
     }
 
@@ -2490,103 +2247,32 @@
     if (typeof window._fbSave === 'function') {
       try {
         await window._fbSave('inventario', newInv);
-        if (!silencioso) {
-          console.log(`[reparar] ✓ ${count} entrada(s) arreglada(s) y guardada(s) en Firebase`);
-        } else {
-          log(`Auto-reparación: ${count} entrada(s) corregida(s) silenciosamente`);
-        }
+        console.log(`[reparar] ✓ ${count} entradas arregladas y guardadas en Firebase`);
       } catch (e) {
         warn('Firebase falló (datos quedan en localStorage)', e);
       }
     } else {
-      if (!silencioso) console.log(`[reparar] ✓ ${count} entrada(s) arreglada(s) en localStorage`);
+      console.log(`[reparar] ✓ ${count} entradas arregladas en localStorage`);
     }
 
-    if (!silencioso) {
-      toast(`✓ ${count} movimiento(s) reparado(s). Recarga la página para verlo.`, 'ok', 5000);
-    }
+    toast(`✓ ${count} movimiento(s) reparado(s). Recarga la página para verlo.`, 'ok', 5000);
     return count;
   }
 
-  /**
-   * Auto-reparación con retry. Se llama al cargar y reintenta hasta que
-   * el inventario tenga datos (porque puede tardar en sincronizar Firebase).
-   */
-  function programarAutoReparacion() {
-    let intentos = 0;
-    const maxIntentos = 8;
-    const intervalo = 3000; // 3s
-
-    const tick = async () => {
-      intentos++;
-      const inv = getInventario();
-      const tieneDatos = inv && (
-        (inv.movimientos && inv.movimientos.length > 0) ||
-        (inv.auditoria && inv.auditoria.length > 0)
-      );
-
-      if (tieneDatos) {
-        try {
-          const arreglados = await repararUsuariosDañados(/*silencioso=*/true);
-          if (arreglados > 0) {
-            log(`✓ Auto-reparación completada: ${arreglados} movimiento(s) corregido(s)`);
-            // Disparar un toast suave para informar
-            setTimeout(() => {
-              toast(`✓ Se corrigieron ${arreglados} movimiento(s) con datos dañados`, 'info', 4000);
-            }, 1500);
-          }
-        } catch (e) {
-          warn('Auto-reparación falló', e);
-        }
-        return; // ya completado, no más reintentos
-      }
-
-      if (intentos < maxIntentos) {
-        setTimeout(tick, intervalo);
-      } else {
-        log('Auto-reparación abortada: inventario sin datos después de varios reintentos');
-      }
-    };
-
-    // Primer intento después de 2 segundos (para dejar que React monte y Firebase sincronice)
-    setTimeout(tick, 2000);
-  }
-
-  // ─────────────────────────────────────────────────────────────────────
-  // LOG INICIAL + AUTO-REPARACIÓN + LISTENER + EXPOSICIÓN PÚBLICA
-  // ─────────────────────────────────────────────────────────────────────
-
-  log('Patch v3.5 (Cache Firebase + fallback DOM) activo. Inventario detectado:',
-      getHerrajesProductos().length, 'herrajes.');
-
-  // Auto-reparación al cargar: arregla movimientos dañados sin que el usuario
-  // tenga que hacer nada manualmente. Se ejecuta a los 2s y reintenta hasta 8x.
-  programarAutoReparacion();
-
-  // Si llegan datos nuevos del Firebase, resetear el cache del usuario
-  document.addEventListener('db-update', (ev) => {
-    const detail = ev.detail;
-    if (detail?.key === 'inventario' && detail?.payload) {
-      _cachedUser = null;
-    }
-  });
-
-  // Exponer para debug manual y override
+  // Exponer para debug manual
   window.__dhPatch = {
     abrirModalNuevo: abrirModalNuevoDespacho,
     abrirModalEditar: abrirModalEditarDespacho,
     mostrarDetalle: mostrarDetalleHerrajes,
     marcarEntregado: marcarHerrPendEntregado,
-    repararUsuariosDañados: () => repararUsuariosDañados(false),
-    setUser: (u) => { window.__dhUserOverride = u; _cachedUser = null; log('Usuario override:', u); },
-    getUser: getCurrentUser,
+    repararUsuariosDañados: repararUsuariosDañados,
     getState: () => ({ ...State }),
     getHerrajes: getHerrajesProductos,
     getStock: getStockProducto,
     getDespachos: getDespachos,
     revertirMovs: revertirMovimientosDeDespacho,
     config: CONFIG,
-    version: '3.5.0',
+    version: '3.2.0',
   };
 })();
 
@@ -2753,5 +2439,1600 @@
     }
   });
 </script>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     PATCH · MÓDULO PRODUCCIÓN v2.0 (QUIRÚRGICO)
+     ═══════════════════════════════════════════════════════════════════════
+     Cambios aplicados (sin tocar Corte, Armado ni Clientes en taller):
+     1. Renombrar tab "Reporte láminas" → "Reporte Producción"
+     2. En Resumen: agregar gráfico de láminas cortadas por máquina y turno
+     3. Reemplazar tab "Clientes en proceso" con tabla de checklist
+        (CORTE/CINTA/PERFORACIÓN/ARMADO/EMPAQUE con 3 estados:
+         X = COMPLETADO · P = PENDIENTE · vacío = no aplica)
+     4. Reemplazar tab "Semana actual" con lógica lunes-sábado + selector de rango
+     5. Reemplazar tab "Reporte Producción" (renombrada) con reporte completo
+        portado del index.html (4 secciones + portada PDF)
+
+     Estrategia: deja que app.min.js renderice el módulo normalmente.
+     Cuando el usuario hace clic en una de las 4 tabs modificadas, intercepta
+     el clic y monta el contenido nuevo encima del contenedor activo.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(() => {
+  'use strict';
+
+  const NS = '[Produccion-Patch v2]';
+  const log  = (...a) => console.log(NS, ...a);
+  const warn = (...a) => console.warn(NS, ...a);
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 1. ESTADO Y CONFIGURACIÓN
+  // ═══════════════════════════════════════════════════════════════════
+  const State = {
+    activeTab: null,           // tab interceptada actualmente activa
+    semMode: 'current',        // current | range
+    semDesde: '',
+    semHasta: '',
+    repMode: 'all',            // all | range
+    repDesde: '',
+    repHasta: '',
+    editClienteIdx: -1,        // índice editando en Clientes en proceso
+    chartTurnoMaquina: null,   // instancia Chart.js del gráfico nuevo
+    moduleVisible: false,      // si el módulo Producción está visible
+  };
+
+  if (!window.PROD_DATA) {
+    window.PROD_DATA = { corte: [], armado: [], clientes: [], rpt: [] };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 2. HELPERS
+  // ═══════════════════════════════════════════════════════════════════
+  function prodToISO(f)   { if(!f) return ''; const p = String(f).split('/'); return p.length===3 ? `${p[2]}-${p[1]}-${p[0]}` : f; }
+  function prodFromISO(f) { if(!f) return ''; const p = String(f).split('-'); return p.length===3 ? `${p[2]}/${p[1]}/${p[0]}` : f; }
+  function prodDisp(f)    { if(!f) return '—'; const p = String(f).split('/'); return p.length===3 ? `${p[0]}/${p[1]}/${p[2].slice(2)}` : f; }
+  function todayISO()     { return new Date().toISOString().split('T')[0]; }
+  function escapeHTML(s)  { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function saveData() {
+    try { localStorage.setItem('prod_v1', JSON.stringify(window.PROD_DATA)); }
+    catch (e) { warn('localStorage save fail', e); }
+    if (typeof window._fbSave === 'function') {
+      try {
+        const result = window._fbSave('produccion', window.PROD_DATA);
+        if (result && typeof result.catch === 'function') {
+          result.catch(e => warn('fb save fail', e));
+        }
+      } catch (e) { warn('fb save throw', e); }
+    } else if (typeof window._fbSaveProd === 'function') {
+      try { window._fbSaveProd(window.PROD_DATA); } catch (e) { warn('fb saveprod fail', e); }
+    }
+  }
+
+  function listenFirebaseProduccion() {
+    document.addEventListener('db-update', (ev) => {
+      const { key, payload } = ev.detail || {};
+      if (key !== 'produccion' || !payload) return;
+      try {
+        window.PROD_DATA = {
+          corte:    Array.isArray(payload.corte)    ? payload.corte    : [],
+          armado:   Array.isArray(payload.armado)   ? payload.armado   : [],
+          clientes: Array.isArray(payload.clientes) ? payload.clientes : [],
+          rpt:      Array.isArray(payload.rpt)      ? payload.rpt      : [],
+        };
+        if (State.activeTab) renderActiveTab();
+      } catch (e) { warn('parse payload fail', e); }
+    });
+  }
+
+  // CAMBIO #4: Semana lunes-sábado (en lugar de martes-martes)
+  function getProdSemanaLS() {
+    if (State.semMode === 'range' && State.semDesde && State.semHasta) {
+      const desdeISO = State.semDesde, hastaISO = State.semHasta;
+      const desde = prodFromISO(desdeISO), hasta = prodFromISO(hastaISO);
+      const fil = arr => arr.filter(r => {
+        const iso = prodToISO(r.fecha);
+        return iso >= desdeISO && iso <= hastaISO;
+      });
+      return {
+        corte:    fil(window.PROD_DATA.corte),
+        armado:   fil(window.PROD_DATA.armado),
+        clientes: fil(window.PROD_DATA.clientes),
+        rpt:      fil(window.PROD_DATA.rpt || []),
+        desde, hasta, desdeISO, hastaISO, custom: true,
+      };
+    }
+    const now = new Date();
+    const day = now.getDay();
+    const diff = day === 0 ? 6 : (day - 1);
+    const lun = new Date(now); lun.setDate(now.getDate() - diff);
+    const sab = new Date(lun); sab.setDate(lun.getDate() + 5);
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const desdeISO = fmt(lun), hastaISO = fmt(sab);
+    const desde = prodFromISO(desdeISO), hasta = prodFromISO(hastaISO);
+    const fil = arr => arr.filter(r => {
+      const iso = prodToISO(r.fecha);
+      return iso >= desdeISO && iso <= hastaISO;
+    });
+    return {
+      corte:    fil(window.PROD_DATA.corte),
+      armado:   fil(window.PROD_DATA.armado),
+      clientes: fil(window.PROD_DATA.clientes),
+      rpt:      fil(window.PROD_DATA.rpt || []),
+      desde, hasta, desdeISO, hastaISO, custom: false,
+    };
+  }
+
+  function toast(msg, tipo, ms) {
+    const el = document.createElement('div');
+    el.className = 'pp2-toast ' + (tipo || 'ok');
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), ms || 2200);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 3. ESTILOS (consistente con dashboard-share: teal/gold/stone)
+  // ═══════════════════════════════════════════════════════════════════
+  function injectStyles() {
+    if (document.getElementById('pp2-styles')) return;
+    const s = document.createElement('style');
+    s.id = 'pp2-styles';
+    s.textContent = `
+      /* ════ PRODUCCIÓN PATCH v2 · ESTILOS ════ */
+      .pp2-overlay {
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        background: #faf8f5;
+        padding: 20px 24px;
+        color: #1c1917;
+        min-height: 400px;
+      }
+      .pp2-overlay *, .pp2-overlay *::before, .pp2-overlay *::after { box-sizing: border-box; }
+
+      /* KPIs */
+      .pp2-kpi-row {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px; margin-bottom: 16px;
+      }
+      .pp2-kpi {
+        background: #ffffff; border: 1px solid #e7e5e4; border-radius: 12px;
+        padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,.03);
+        position: relative; overflow: hidden;
+      }
+      .pp2-kpi::before {
+        content: ''; position: absolute; top: 0; left: 0;
+        width: 4px; height: 100%; border-radius: 12px 0 0 12px; background: #0d9488;
+      }
+      .pp2-kpi.k1::before { background: #0d9488; }
+      .pp2-kpi.k2::before { background: #0891b2; }
+      .pp2-kpi.k3::before { background: #d97706; }
+      .pp2-kpi.k4::before { background: #b8860b; }
+      .pp2-kpi.k5::before { background: #7c3aed; }
+      .pp2-kpi-lbl {
+        color: #78716c; font-size: 10px; letter-spacing: 1.5px;
+        text-transform: uppercase; font-weight: 700; margin-bottom: 6px;
+      }
+      .pp2-kpi-val { font-size: 26px; font-weight: 800; line-height: 1; color: #1c1917; }
+      .pp2-kpi.k1 .pp2-kpi-val { color: #0d9488; }
+      .pp2-kpi.k2 .pp2-kpi-val { color: #0891b2; }
+      .pp2-kpi.k3 .pp2-kpi-val { color: #d97706; }
+      .pp2-kpi.k4 .pp2-kpi-val { color: #b8860b; }
+      .pp2-kpi.k5 .pp2-kpi-val { color: #7c3aed; }
+      .pp2-kpi-sub { color: #a8a29e; font-size: 10px; margin-top: 4px; }
+
+      /* Cards */
+      .pp2-card {
+        background: #ffffff; border: 1px solid #e7e5e4; border-radius: 12px;
+        padding: 16px 18px; margin-bottom: 14px;
+        box-shadow: 0 1px 2px rgba(0,0,0,.03);
+      }
+      .pp2-card-header {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 12px; gap: 10px; flex-wrap: wrap;
+      }
+      .pp2-card-title {
+        color: #134e4a; font-size: 12px; font-weight: 800;
+        letter-spacing: 1px; text-transform: uppercase;
+      }
+      .pp2-card-title.t-cliente { color: #d97706; }
+      .pp2-card-title.t-armado { color: #0891b2; }
+      .pp2-card-title.t-rpt { color: #b8860b; }
+      .pp2-card-sub { color: #78716c; font-size: 10px; margin-top: 2px; }
+
+      /* Tablas */
+      .pp2-table-wrap {
+        overflow-x: auto; border: 1px solid #e7e5e4; border-radius: 10px; background: #ffffff;
+      }
+      .pp2-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      .pp2-table thead th {
+        background: #f5f5f4; padding: 10px 12px; text-align: left;
+        font-size: 10px; letter-spacing: 1px; color: #57534e; font-weight: 700;
+        border-bottom: 1px solid #e7e5e4; text-transform: uppercase; white-space: nowrap;
+      }
+      .pp2-table tbody td {
+        padding: 9px 12px; border-bottom: 1px solid #f5f5f4;
+        color: #1c1917; vertical-align: middle;
+      }
+      .pp2-table tbody tr:last-child td { border-bottom: 0; }
+      .pp2-table tbody tr:hover { background: #fafaf9; }
+      .pp2-table .pp2-empty {
+        text-align: center; padding: 28px; color: #a8a29e;
+        font-size: 12px; font-style: italic;
+      }
+
+      /* Botones */
+      .pp2-btn {
+        padding: 8px 14px; font-size: 12px; font-weight: 700;
+        border-radius: 8px; cursor: pointer; border: 1px solid transparent;
+        transition: background .15s, border-color .15s; font-family: inherit;
+        white-space: nowrap;
+      }
+      .pp2-btn-primary { background: #0d9488; color: #fff; }
+      .pp2-btn-primary:hover { background: #0f766e; }
+      .pp2-btn-ghost { background: #fff; color: #57534e; border-color: #d6d3d1; }
+      .pp2-btn-ghost:hover { background: #f5f5f4; }
+      .pp2-btn-add { background: #ccfbf1; color: #0f766e; border-color: #5eead4; }
+      .pp2-btn-add:hover { background: #99f6e4; }
+      .pp2-btn-pdf { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+      .pp2-btn-pdf:hover { background: #fde68a; }
+      .pp2-btn-sm { padding: 5px 10px; font-size: 11px; }
+      .pp2-btn-edit { background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; }
+      .pp2-btn-edit:hover { background: #bae6fd; }
+      .pp2-btn-del { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+      .pp2-btn-del:hover { background: #fecaca; }
+
+      /* Filtros */
+      .pp2-filter-bar {
+        background: #ffffff; border: 1px solid #e7e5e4; border-radius: 12px;
+        padding: 12px 16px; margin-bottom: 14px;
+        display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      }
+      .pp2-filter-label {
+        color: #b8860b; font-size: 10px; letter-spacing: 1.5px;
+        text-transform: uppercase; font-weight: 700;
+      }
+      .pp2-fbtn {
+        padding: 6px 12px; font-size: 11px; font-weight: 700;
+        border-radius: 7px; cursor: pointer; background: #fafaf9;
+        color: #78716c; border: 1px solid #e7e5e4; font-family: inherit; transition: all .15s;
+      }
+      .pp2-fbtn:hover { background: #f5f5f4; color: #44403c; }
+      .pp2-fbtn.active { background: #0d9488; color: #fff; border-color: #0d9488; }
+      .pp2-fbtn-clear { padding: 5px 10px; font-size: 10px; }
+      .pp2-input, .pp2-select {
+        background: #fff; border: 1px solid #d6d3d1; color: #1c1917;
+        padding: 7px 11px; border-radius: 8px; font-size: 12px;
+        outline: none; font-family: inherit;
+      }
+      .pp2-input:focus, .pp2-select:focus { border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,.15); }
+
+      /* Badges */
+      .pp2-badge {
+        display: inline-block; padding: 2px 8px; border-radius: 14px;
+        font-size: 10px; font-weight: 700; letter-spacing: .3px;
+      }
+      .pp2-badge-ok    { background: #ccfbf1; color: #115e59; border: 1px solid #5eead4; }
+      .pp2-badge-proc  { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+      .pp2-badge-pend  { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+      .pp2-badge-stop  { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+      .pp2-badge-sps   { background: #f3e8ff; color: #6b21a8; border: 1px solid #d8b4fe; }
+      .pp2-badge-tgu   { background: #cffafe; color: #155e75; border: 1px solid #67e8f9; }
+      .pp2-badge-crt   { background: #fef3c7; color: #854d0e; border: 1px solid #fde68a; }
+      .pp2-badge-maq   { background: #ccfbf1; color: #115e59; border: 1px solid #5eead4; }
+
+      /* CHECKLIST DE 3 ESTADOS (CORTE/CINTA/PERFORACIÓN/ARMADO/EMPAQUE) */
+      .pp2-stage-cell {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 32px; height: 28px; border-radius: 6px;
+        font-size: 11px; font-weight: 800; letter-spacing: .5px;
+        background: #fafaf9; color: #d6d3d1; border: 1px solid #e7e5e4;
+        cursor: pointer; transition: all .15s; user-select: none;
+      }
+      .pp2-stage-cell:hover { background: #f5f5f4; border-color: #d6d3d1; }
+      .pp2-stage-cell.s-done {
+        background: #0d9488; color: #fff; border-color: #0f766e;
+        box-shadow: 0 0 0 2px rgba(13,148,136,.15);
+      }
+      .pp2-stage-cell.s-pend {
+        background: #fef3c7; color: #92400e; border-color: #fcd34d;
+        box-shadow: 0 0 0 2px rgba(217,119,6,.12);
+      }
+      .pp2-stage-cell.readonly { cursor: default; }
+      .pp2-stage-cell.readonly:hover { background: inherit; }
+
+      .pp2-checklist-modal {
+        display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 6px;
+      }
+      .pp2-check-cell {
+        background: #fafaf9; border: 1px solid #e7e5e4; border-radius: 8px;
+        padding: 10px 8px; text-align: center; cursor: pointer; transition: all .15s;
+      }
+      .pp2-check-cell:hover { background: #f5f5f4; border-color: #d6d3d1; }
+      .pp2-check-cell.s-done {
+        background: #ccfbf1; border-color: #14b8a6;
+        box-shadow: 0 0 0 2px rgba(13,148,136,.15);
+      }
+      .pp2-check-cell.s-pend {
+        background: #fef3c7; border-color: #d97706;
+        box-shadow: 0 0 0 2px rgba(217,119,6,.15);
+      }
+      .pp2-check-cell-lbl {
+        font-size: 9px; font-weight: 700; color: #78716c;
+        letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px;
+      }
+      .pp2-check-cell.s-done .pp2-check-cell-lbl { color: #0f766e; }
+      .pp2-check-cell.s-pend .pp2-check-cell-lbl { color: #92400e; }
+      .pp2-check-cell-mark {
+        font-size: 18px; font-weight: 800; color: #d6d3d1; line-height: 1.1;
+      }
+      .pp2-check-cell-status {
+        font-size: 9px; color: #a8a29e; margin-top: 2px; letter-spacing: .5px;
+      }
+      .pp2-check-cell.s-done .pp2-check-cell-mark { color: #0d9488; }
+      .pp2-check-cell.s-done .pp2-check-cell-status { color: #0f766e; font-weight: 700; }
+      .pp2-check-cell.s-pend .pp2-check-cell-mark { font-size: 14px; color: #d97706; }
+      .pp2-check-cell.s-pend .pp2-check-cell-status { color: #92400e; font-weight: 700; }
+
+      /* Modal */
+      .pp2-modal-overlay {
+        position: fixed; inset: 0; z-index: 9000;
+        background: rgba(0,0,0,.45); display: none;
+        align-items: flex-start; justify-content: center;
+        padding: 24px 16px; overflow-y: auto;
+      }
+      .pp2-modal-overlay.open { display: flex; animation: pp2-fade .15s ease-out; }
+      @keyframes pp2-fade { from { opacity: 0 } to { opacity: 1 } }
+      .pp2-modal {
+        background: #fff; border-radius: 14px;
+        box-shadow: 0 20px 60px rgba(0,0,0,.25), 0 4px 16px rgba(0,0,0,.1);
+        max-width: 700px; width: 100%; margin: auto;
+        display: flex; flex-direction: column; max-height: calc(100vh - 48px); overflow: hidden;
+      }
+      .pp2-modal-header {
+        padding: 16px 22px; border-bottom: 1px solid #e7e5e4;
+        display: flex; align-items: center; justify-content: space-between;
+      }
+      .pp2-modal-title { font-weight: 800; color: #134e4a; font-size: 15px; }
+      .pp2-modal-close {
+        background: none; border: 0; font-size: 24px; line-height: 1;
+        color: #a8a29e; cursor: pointer; padding: 4px 8px;
+      }
+      .pp2-modal-close:hover { color: #44403c; }
+      .pp2-modal-body { padding: 18px 22px; overflow-y: auto; flex: 1; }
+      .pp2-modal-footer {
+        padding: 14px 22px; border-top: 1px solid #e7e5e4;
+        display: flex; align-items: center; justify-content: flex-end;
+        gap: 8px; flex-wrap: wrap; background: #fafaf9;
+      }
+      .pp2-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .pp2-form-grid .pp2-full { grid-column: 1 / -1; }
+      .pp2-form-group label {
+        display: block; font-size: 10px; font-weight: 700;
+        letter-spacing: 1.5px; color: #78716c; margin-bottom: 5px; text-transform: uppercase;
+      }
+      .pp2-form-group input, .pp2-form-group select, .pp2-form-group textarea {
+        width: 100%; padding: 8px 10px; font-size: 13px; color: #1c1917;
+        background: #fff; border: 1px solid #d6d3d1; border-radius: 8px;
+        outline: none; font-family: inherit;
+      }
+      .pp2-form-group textarea { min-height: 70px; resize: vertical; }
+      .pp2-form-group input:focus, .pp2-form-group select:focus, .pp2-form-group textarea:focus {
+        border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,.15);
+      }
+
+      /* Toast */
+      .pp2-toast {
+        position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+        background: #1c1917; color: #fff; padding: 10px 18px; border-radius: 10px;
+        font-size: 13px; z-index: 9999;
+        box-shadow: 0 10px 30px rgba(0,0,0,.3);
+        animation: pp2-toast-in .2s ease-out;
+      }
+      @keyframes pp2-toast-in {
+        from { opacity: 0; transform: translate(-50%, 10px); }
+        to   { opacity: 1; transform: translate(-50%, 0); }
+      }
+      .pp2-toast.error { background: #991b1b; }
+      .pp2-toast.warn  { background: #92400e; }
+      .pp2-toast.ok    { background: #065f46; }
+
+      /* Indicador del patch arriba a la derecha */
+      .pp2-tag {
+        position: fixed; bottom: 8px; right: 8px;
+        background: rgba(15, 118, 110, 0.85); color: #fff;
+        font-size: 9px; padding: 3px 8px; border-radius: 6px;
+        font-family: ui-monospace, monospace; letter-spacing: .5px;
+        z-index: 9999; pointer-events: none; opacity: .7;
+      }
+    `;
+    document.head.appendChild(s);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 4. HELPERS DE RENDER (badges, stages)
+  // ═══════════════════════════════════════════════════════════════════
+  const ETAPAS = ['corte', 'cinta', 'perforacion', 'armado', 'empaque'];
+  const ETAPA_LABELS = {
+    corte: 'CORTE', cinta: 'CINTA', perforacion: 'PERFORACIÓN',
+    armado: 'ARMADO', empaque: 'EMPAQUE',
+  };
+
+  // 3 estados: 'done' (X verde), 'pend' (P amarillo), null/'' (vacío)
+  function getEtapaState(estados, etapa) {
+    if (!estados) return null;
+    const v = estados[etapa];
+    if (v === 'done' || v === true || v === 'X' || v === 'x') return 'done';
+    if (v === 'pend' || v === 'pendiente' || v === 'PENDIENTE' || v === 'P') return 'pend';
+    return null;
+  }
+  function nextEtapaState(curr) {
+    // ciclo: vacío → done → pend → vacío
+    if (!curr) return 'done';
+    if (curr === 'done') return 'pend';
+    return null;
+  }
+  function stageMark(state) {
+    if (state === 'done') return 'X';
+    if (state === 'pend') return 'P';
+    return '';
+  }
+  function stageTitle(state) {
+    if (state === 'done') return 'COMPLETADO';
+    if (state === 'pend') return 'PENDIENTE';
+    return 'No marcado';
+  }
+  function stageClass(state) {
+    if (state === 'done') return 's-done';
+    if (state === 'pend') return 's-pend';
+    return '';
+  }
+
+  function ciudadBadge(ciudad) {
+    const map = { 'San Pedro Sula': 'pp2-badge-sps', 'Tegucigalpa': 'pp2-badge-tgu', 'Cortés': 'pp2-badge-crt' };
+    return `<span class="pp2-badge ${map[ciudad] || 'pp2-badge-sps'}">${escapeHTML(ciudad || '—')}</span>`;
+  }
+  function estadoBadge(estado) {
+    const cls = estado === 'Completado' ? 'pp2-badge-ok' : estado === 'Pendiente' ? 'pp2-badge-stop' : 'pp2-badge-proc';
+    return `<span class="pp2-badge ${cls}">${escapeHTML(estado || '—')}</span>`;
+  }
+  function estatusBadge(estatus) {
+    const cls = estatus === 'TERMINADO' ? 'pp2-badge-ok' : estatus === 'PENDIENTE' ? 'pp2-badge-stop' : 'pp2-badge-proc';
+    return `<span class="pp2-badge ${cls}">${escapeHTML(estatus || '—')}</span>`;
+  }
+  function maqBadge(m) {
+    return `<span class="pp2-badge pp2-badge-maq">${escapeHTML(m || '—')}</span>`;
+  }
+
+  function setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 5. DETECCIÓN DEL MÓDULO Y SUS TABS
+  // ═══════════════════════════════════════════════════════════════════
+
+  // Encuentra el header "PRODUCCIÓN" del módulo (visible)
+  function findProduccionHeader() {
+    const headers = document.querySelectorAll('h1, h2, h3');
+    for (const h of headers) {
+      if (h.closest && h.closest('[id^="pp2-"]')) continue;
+      const txt = (h.textContent || '').trim().toUpperCase();
+      if (txt === 'PRODUCCIÓN' || txt === 'PRODUCCION') {
+        const r = h.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) return h;
+      }
+    }
+    return null;
+  }
+
+  // Encuentra los botones de tabs del módulo Producción
+  // (basado en imagen 1: "Resumen", "Corte (33)", "Armado (38)", "Clientes en taller (13)",
+  //  "Clientes en proceso (13)", "Semana actual", "Reporte láminas (8)")
+  function findProduccionTabs() {
+    const header = findProduccionHeader();
+    if (!header) return null;
+    // Buscar el contenedor común del módulo (subir hasta padre que contenga las tabs)
+    let container = header.parentElement;
+    let depth = 0;
+    while (container && depth < 8) {
+      // Cualquier elemento que tenga al menos 2 hijos texto que sean nombres de tabs
+      const candidates = container.querySelectorAll('button, a, [role="tab"], div, span');
+      const tabs = {};
+      for (const el of candidates) {
+        if (el.closest('[id^="pp2-"]')) continue;
+        const txt = (el.textContent || '').trim();
+        if (!txt) continue;
+        // Match exacto o con (N) al final
+        const stripped = txt.replace(/\s*\(\d+\)\s*$/, '').trim();
+        const lower = stripped.toLowerCase();
+        // Solo elementos clickables visibles
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) continue;
+        // Solo elementos pequeños (no contenedores grandes)
+        if (r.height > 80) continue;
+        if (lower === 'resumen' && !tabs.resumen) tabs.resumen = el;
+        else if (lower === 'corte' && !tabs.corte) tabs.corte = el;
+        else if (lower === 'armado' && !tabs.armado) tabs.armado = el;
+        else if (lower === 'clientes en taller' && !tabs.taller) tabs.taller = el;
+        else if (lower === 'clientes en proceso' && !tabs.proceso) tabs.proceso = el;
+        else if (lower === 'semana actual' && !tabs.semana) tabs.semana = el;
+        else if ((lower === 'reporte láminas' || lower === 'reporte laminas' || lower === 'reporte producción' || lower === 'reporte produccion') && !tabs.reporte) tabs.reporte = el;
+      }
+      if (tabs.resumen && tabs.corte && tabs.armado) {
+        return { container, tabs };
+      }
+      container = container.parentElement;
+      depth++;
+    }
+    return null;
+  }
+
+  // Encuentra el panel donde React renderiza el contenido de la tab activa.
+  // Estrategia: el contenedor que viene DESPUÉS del bloque de tabs y es hermano cercano.
+  function findContentPanel(tabsInfo) {
+    if (!tabsInfo || !tabsInfo.container) return null;
+    // El contenido suele estar como hermano siguiente del contenedor de tabs
+    // Buscamos el primer hijo grande (>100px alto) después de las tabs
+    const tabsContainer = tabsInfo.tabs.resumen.closest('div');
+    if (!tabsContainer) return tabsInfo.container;
+    let sibling = tabsContainer.nextElementSibling;
+    while (sibling) {
+      const r = sibling.getBoundingClientRect();
+      if (r.height > 80) return sibling;
+      sibling = sibling.nextElementSibling;
+    }
+    // Fallback: el contenedor padre
+    return tabsInfo.container;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 6. RENOMBRAR TAB "Reporte láminas" → "Reporte Producción"
+  // ═══════════════════════════════════════════════════════════════════
+  // Requisito: encontrar el botón con texto "Reporte láminas" o variantes y cambiar el texto
+  // sin romper React. Usamos un MutationObserver localizado para mantener el rename.
+  function renombrarTabReporte(tabsInfo) {
+    if (!tabsInfo || !tabsInfo.tabs.reporte) return;
+    const el = tabsInfo.tabs.reporte;
+    // Buscar el nodo de texto exacto que contiene "Reporte láminas"
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    let node;
+    while ((node = walker.nextNode())) {
+      const txt = (node.nodeValue || '').trim();
+      if (/^Reporte\s+l[áa]minas\b/i.test(txt)) {
+        const newTxt = node.nodeValue.replace(/Reporte\s+l[áa]minas/i, 'Reporte Producción');
+        if (node.nodeValue !== newTxt) {
+          node.nodeValue = newTxt;
+        }
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 7. RENDER: TAB CLIENTES EN PROCESO (CHECKLIST 3 ESTADOS)
+  // ═══════════════════════════════════════════════════════════════════
+  function renderClientesEnProceso(host) {
+    const D = window.PROD_DATA;
+    const clientes = D.clientes || [];
+
+    host.innerHTML = `
+      <div class="pp2-overlay">
+        <div class="pp2-card-header" style="margin-bottom:14px;">
+          <div>
+            <div class="pp2-card-title t-cliente">👷 CLIENTES EN PROCESO</div>
+            <div class="pp2-card-sub">Avance por etapas · CORTE · CINTA · PERFORACIÓN · ARMADO · EMPAQUE</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <span style="color:#78716c;font-size:11px;">${clientes.length} registros</span>
+            <button class="pp2-btn pp2-btn-add" data-pp2-action="add-cliente">+ Agregar</button>
+            <button class="pp2-btn pp2-btn-pdf" data-pp2-action="pdf-cliente">📄 PDF</button>
+          </div>
+        </div>
+
+        <div class="pp2-card-sub" style="margin-bottom:10px;padding:10px 14px;background:#fef3c7;border-radius:8px;border:1px solid #fcd34d;color:#854d0e;font-size:11px;line-height:1.5;">
+          <strong style="color:#713f12;">Cómo marcar las etapas:</strong>
+          haz clic en cualquier celda de etapa para alternar entre los 3 estados:
+          <span class="pp2-stage-cell s-done" style="display:inline-flex;width:24px;height:20px;font-size:10px;vertical-align:middle;margin:0 2px;">X</span> COMPLETADO →
+          <span class="pp2-stage-cell s-pend" style="display:inline-flex;width:24px;height:20px;font-size:10px;vertical-align:middle;margin:0 2px;">P</span> PENDIENTE →
+          <span class="pp2-stage-cell" style="display:inline-flex;width:24px;height:20px;font-size:10px;vertical-align:middle;margin:0 2px;">·</span> sin marcar
+        </div>
+
+        <div class="pp2-table-wrap">
+          <table class="pp2-table">
+            <thead>
+              <tr>
+                <th rowspan="2">FECHA</th>
+                <th rowspan="2">CLIENTE</th>
+                <th rowspan="2">ÁREA</th>
+                <th colspan="5" style="text-align:center;border-bottom:1px solid #d6d3d1;">ESTADO</th>
+                <th rowspan="2">OBSERVACIONES</th>
+                <th rowspan="2">ACCIONES</th>
+              </tr>
+              <tr>
+                <th style="text-align:center;font-size:9px;">CORTE</th>
+                <th style="text-align:center;font-size:9px;">CINTA</th>
+                <th style="text-align:center;font-size:9px;">PERFORACIÓN</th>
+                <th style="text-align:center;font-size:9px;">ARMADO</th>
+                <th style="text-align:center;font-size:9px;">EMPAQUE</th>
+              </tr>
+            </thead>
+            <tbody id="pp2-cp-body">
+              ${!clientes.length
+                ? '<tr><td colspan="10" class="pp2-empty">Sin registros — usa "+ Agregar" para crear el primero</td></tr>'
+                : clientes.map((r, i) => `<tr>
+                    <td style="color:#d97706;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                    <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
+                    <td>${escapeHTML(r.area || '—')}</td>
+                    ${ETAPAS.map(et => {
+                      const st = getEtapaState(r.estados, et);
+                      return `<td style="text-align:center;">
+                        <div class="pp2-stage-cell ${stageClass(st)}" data-pp2-toggle="${i}" data-pp2-etapa="${et}" title="${ETAPA_LABELS[et]}: ${stageTitle(st)} (clic para cambiar)">${stageMark(st) || '·'}</div>
+                      </td>`;
+                    }).join('')}
+                    <td style="color:#78716c;font-size:11px;max-width:200px;">${escapeHTML(r.obs || '—')}</td>
+                    <td style="white-space:nowrap;">
+                      <button class="pp2-btn pp2-btn-sm pp2-btn-edit" data-pp2-action="edit-cliente" data-pp2-idx="${i}">✏ Editar</button>
+                      <button class="pp2-btn pp2-btn-sm pp2-btn-del" data-pp2-action="del-cliente" data-pp2-idx="${i}">✕</button>
+                    </td>
+                  </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 8. RENDER: TAB SEMANA ACTUAL (Lun-Sáb + selector rango)
+  // ═══════════════════════════════════════════════════════════════════
+  function renderSemana(host) {
+    const sem = getProdSemanaLS();
+    const corte = sem.corte, armado = sem.armado, clientes = sem.clientes, rpt = sem.rpt || [];
+    const lblText = sem.custom
+      ? `${prodDisp(sem.desde)} → ${prodDisp(sem.hasta)} (rango personalizado)`
+      : `${prodDisp(sem.desde)} → ${prodDisp(sem.hasta)} (lunes a sábado · semana en curso)`;
+    const total = corte.length + armado.length + clientes.length + rpt.length;
+
+    host.innerHTML = `
+      <div class="pp2-overlay">
+        <div class="pp2-card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+          <div>
+            <div class="pp2-card-title">📅 PRODUCCIÓN — SEMANA / RANGO</div>
+            <div class="pp2-card-sub">${lblText}</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <span style="font-size:24px;font-weight:800;color:#0d9488;">${total}</span>
+            <span style="color:#78716c;font-size:10px;">registros<br>en período</span>
+            <button class="pp2-btn pp2-btn-pdf" data-pp2-action="pdf-semana">📄 Imprimir Período</button>
+          </div>
+        </div>
+
+        <div class="pp2-filter-bar">
+          <span class="pp2-filter-label">📅 MODO:</span>
+          <button class="pp2-fbtn ${State.semMode==='current'?'active':''}" data-pp2-semmode="current">📋 Semana Actual (Lun-Sáb)</button>
+          <button class="pp2-fbtn ${State.semMode==='range'?'active':''}" data-pp2-semmode="range">🗓️ Rango Personalizado</button>
+          <div id="pp2-sem-range-panel" style="display:${State.semMode==='range'?'flex':'none'};align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-size:11px;color:#78716c;">Del</span>
+            <input type="date" class="pp2-input" id="pp2-sem-desde" value="${State.semDesde}">
+            <span style="font-size:11px;color:#78716c;">al</span>
+            <input type="date" class="pp2-input" id="pp2-sem-hasta" value="${State.semHasta}">
+            <button class="pp2-fbtn pp2-fbtn-clear" data-pp2-action="clear-sem">✕ Limpiar</button>
+          </div>
+        </div>
+
+        <div class="pp2-kpi-row">
+          <div class="pp2-kpi k1"><div class="pp2-kpi-lbl">⚙️ Cortes</div><div class="pp2-kpi-val">${corte.length}</div><div class="pp2-kpi-sub">en período</div></div>
+          <div class="pp2-kpi k2"><div class="pp2-kpi-lbl">🔨 Armados</div><div class="pp2-kpi-val">${armado.length}</div><div class="pp2-kpi-sub">en período</div></div>
+          <div class="pp2-kpi k3"><div class="pp2-kpi-lbl">👷 Clientes</div><div class="pp2-kpi-val">${clientes.length}</div><div class="pp2-kpi-sub">en período</div></div>
+          <div class="pp2-kpi k4"><div class="pp2-kpi-lbl">📋 Rpt. Prod.</div><div class="pp2-kpi-val">${rpt.length}</div><div class="pp2-kpi-sub">en período</div></div>
+        </div>
+
+        <div class="pp2-card">
+          <div class="pp2-card-title">⚙️ CORTE</div>
+          <div class="pp2-table-wrap" style="margin-top:10px;">
+            <table class="pp2-table">
+              <thead><tr><th>FECHA</th><th>MÁQUINA</th><th style="text-align:center;">LÁMINAS</th><th>OPERARIO</th><th>OBSERVACIONES</th></tr></thead>
+              <tbody>${!corte.length ? '<tr><td colspan="5" class="pp2-empty">Sin registros en período</td></tr>' :
+                corte.map(r => `<tr>
+                  <td style="color:#0d9488;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                  <td>${maqBadge(r.maquina)}</td>
+                  <td style="text-align:center;color:#b8860b;font-weight:700;">${escapeHTML(r.laminas || '—')}</td>
+                  <td>${escapeHTML(r.operario || '—')}</td>
+                  <td style="color:#78716c;font-size:11px;">${escapeHTML(r.obs || '—')}</td>
+                </tr>`).join('')}</tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="pp2-card">
+          <div class="pp2-card-title t-armado">🔨 ARMADO</div>
+          <div class="pp2-table-wrap" style="margin-top:10px;">
+            <table class="pp2-table">
+              <thead><tr><th>N°</th><th>CANT.</th><th>DESCRIPCIÓN</th><th>ÁREA</th><th>CLIENTE</th><th>ARMADOR</th><th>FECHA</th><th>TIEMPO</th><th>ESTATUS</th></tr></thead>
+              <tbody>${!armado.length ? '<tr><td colspan="9" class="pp2-empty">Sin registros en período</td></tr>' :
+                armado.map(r => `<tr>
+                  <td style="color:#a8a29e;font-size:11px;">${escapeHTML(r.nro || '—')}</td>
+                  <td style="text-align:center;">${escapeHTML(r.cantidad || '—')}</td>
+                  <td style="font-size:11px;">${escapeHTML(r.descripcion || '—')}</td>
+                  <td style="font-size:11px;">${escapeHTML(r.area || '—')}</td>
+                  <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
+                  <td style="color:#0891b2;">${escapeHTML(r.armador || '—')}</td>
+                  <td style="color:#b8860b;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                  <td>${escapeHTML(r.tiempo || '—')}</td>
+                  <td>${estatusBadge(r.estatus)}</td>
+                </tr>`).join('')}</tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="pp2-card">
+          <div class="pp2-card-title t-cliente">👷 CLIENTES EN PROCESO</div>
+          <div class="pp2-table-wrap" style="margin-top:10px;">
+            <table class="pp2-table">
+              <thead>
+                <tr>
+                  <th rowspan="2">FECHA</th>
+                  <th rowspan="2">CLIENTE</th>
+                  <th rowspan="2">ÁREA</th>
+                  <th colspan="5" style="text-align:center;border-bottom:1px solid #d6d3d1;">ESTADO</th>
+                  <th rowspan="2">OBS.</th>
+                </tr>
+                <tr>
+                  <th style="text-align:center;font-size:9px;">CORTE</th>
+                  <th style="text-align:center;font-size:9px;">CINTA</th>
+                  <th style="text-align:center;font-size:9px;">PERF.</th>
+                  <th style="text-align:center;font-size:9px;">ARMADO</th>
+                  <th style="text-align:center;font-size:9px;">EMPAQUE</th>
+                </tr>
+              </thead>
+              <tbody>${!clientes.length ? '<tr><td colspan="9" class="pp2-empty">Sin registros en período</td></tr>' :
+                clientes.map(r => `<tr>
+                  <td style="color:#d97706;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                  <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
+                  <td>${escapeHTML(r.area || '—')}</td>
+                  ${ETAPAS.map(et => {
+                    const st = getEtapaState(r.estados, et);
+                    return `<td style="text-align:center;"><div class="pp2-stage-cell ${stageClass(st)} readonly" title="${ETAPA_LABELS[et]}: ${stageTitle(st)}">${stageMark(st) || '·'}</div></td>`;
+                  }).join('')}
+                  <td style="color:#78716c;font-size:11px;">${escapeHTML(r.obs || '—')}</td>
+                </tr>`).join('')}</tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="pp2-card">
+          <div class="pp2-card-title t-rpt">📋 REPORTE DE PRODUCCIÓN</div>
+          <div class="pp2-table-wrap" style="margin-top:10px;">
+            <table class="pp2-table">
+              <thead><tr><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>OPERADOR</th><th>CIUDAD</th><th style="text-align:center;">CANT.</th><th>MEDIDA</th><th>ESTADO</th></tr></thead>
+              <tbody>${!rpt.length ? '<tr><td colspan="8" class="pp2-empty">Sin registros en período</td></tr>' :
+                rpt.map(r => `<tr>
+                  <td style="color:#b8860b;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                  <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
+                  <td>${escapeHTML(r.area || '—')}</td>
+                  <td>${escapeHTML(r.operador || '—')}</td>
+                  <td>${ciudadBadge(r.ciudad)}</td>
+                  <td style="text-align:center;color:#0d9488;font-weight:700;">${escapeHTML(r.cantidad_lam || '—')}</td>
+                  <td style="font-size:11px;">${escapeHTML(r.medida_lam || '—')}</td>
+                  <td>${estadoBadge(r.estado)}</td>
+                </tr>`).join('')}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 9. RENDER: TAB REPORTE PRODUCCIÓN (renombrada de "Reporte láminas")
+  // ═══════════════════════════════════════════════════════════════════
+  function getFiltradoReporte() {
+    const D = window.PROD_DATA;
+    if (State.repMode === 'all') {
+      return { corte: D.corte, armado: D.armado, clientes: D.clientes, rpt: D.rpt || [] };
+    }
+    const desde = State.repDesde, hasta = State.repHasta;
+    const fil = arr => arr.filter(r => {
+      const iso = prodToISO(r.fecha);
+      if (desde && iso < desde) return false;
+      if (hasta && iso > hasta) return false;
+      return true;
+    });
+    return { corte: fil(D.corte), armado: fil(D.armado), clientes: fil(D.clientes), rpt: fil(D.rpt || []) };
+  }
+
+  function renderReporte(host) {
+    const { corte, armado, clientes, rpt } = getFiltradoReporte();
+    const desde = State.repDesde, hasta = State.repHasta;
+    const periodoLabel = State.repMode === 'all'
+      ? 'Historial completo'
+      : `${desde ? prodDisp(prodFromISO(desde)) : 'inicio'} → ${hasta ? prodDisp(prodFromISO(hasta)) : 'hoy'}`;
+    const total = corte.length + armado.length + clientes.length + rpt.length;
+    const lamTotal = rpt.reduce((s, r) => s + (parseFloat(r.cantidad_lam) || 0), 0);
+
+    host.innerHTML = `
+      <div class="pp2-overlay">
+        <div class="pp2-card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+          <div>
+            <div class="pp2-card-title" style="font-size:18px;">📑 REPORTE DE PRODUCCIÓN</div>
+            <div class="pp2-card-sub">${periodoLabel}</div>
+          </div>
+          <button class="pp2-btn pp2-btn-primary" data-pp2-action="pdf-reporte" style="padding:10px 18px;">⬇️ DESCARGAR PDF</button>
+        </div>
+
+        <div class="pp2-filter-bar">
+          <span class="pp2-filter-label">📅 FILTRAR:</span>
+          <button class="pp2-fbtn ${State.repMode==='all'?'active':''}" data-pp2-repmode="all">📋 Todo el historial</button>
+          <button class="pp2-fbtn ${State.repMode==='range'?'active':''}" data-pp2-repmode="range">📅 Por Rango de Fechas</button>
+          <div id="pp2-rep-range" style="display:${State.repMode==='range'?'flex':'none'};align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-size:11px;color:#78716c;">Del</span>
+            <input type="date" class="pp2-input" id="pp2-rep-desde" value="${State.repDesde}">
+            <span style="font-size:11px;color:#78716c;">al</span>
+            <input type="date" class="pp2-input" id="pp2-rep-hasta" value="${State.repHasta}">
+            <button class="pp2-fbtn pp2-fbtn-clear" data-pp2-action="clear-rep">✕ Limpiar</button>
+          </div>
+          <span style="color:#0d9488;font-size:11px;font-weight:700;margin-left:auto;">${total} registros · ${periodoLabel}</span>
+        </div>
+
+        <div class="pp2-kpi-row">
+          <div class="pp2-kpi k1"><div class="pp2-kpi-lbl">⚙️ Cortes</div><div class="pp2-kpi-val">${corte.length}</div><div class="pp2-kpi-sub">Período</div></div>
+          <div class="pp2-kpi k2"><div class="pp2-kpi-lbl">🔨 Armados</div><div class="pp2-kpi-val">${armado.length}</div><div class="pp2-kpi-sub">Período</div></div>
+          <div class="pp2-kpi k3"><div class="pp2-kpi-lbl">👷 Clientes</div><div class="pp2-kpi-val">${clientes.length}</div><div class="pp2-kpi-sub">Período</div></div>
+          <div class="pp2-kpi k4"><div class="pp2-kpi-lbl">📋 Rpt. Prod.</div><div class="pp2-kpi-val">${rpt.length}</div><div class="pp2-kpi-sub">Período</div></div>
+          <div class="pp2-kpi k5"><div class="pp2-kpi-lbl">📐 Total Láminas</div><div class="pp2-kpi-val">${lamTotal}</div><div class="pp2-kpi-sub">Período</div></div>
+        </div>
+
+        <div class="pp2-card">
+          <div class="pp2-card-title">⚙️ REPORTE DE CORTE POR MÁQUINA <span style="color:#78716c;font-size:10px;font-weight:400;">(${corte.length})</span></div>
+          <div class="pp2-table-wrap" style="margin-top:10px;">
+            <table class="pp2-table">
+              <thead><tr><th>FECHA</th><th>MÁQUINA / TURNO</th><th style="text-align:center;">LÁMINAS</th><th>OPERARIO</th><th>OBSERVACIONES</th></tr></thead>
+              <tbody>${!corte.length ? '<tr><td colspan="5" class="pp2-empty">Sin registros</td></tr>' :
+                corte.map(r => `<tr>
+                  <td style="color:#0d9488;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                  <td>${maqBadge(r.maquina)}</td>
+                  <td style="text-align:center;color:#b8860b;font-weight:700;">${escapeHTML(r.laminas || '—')}</td>
+                  <td>${escapeHTML(r.operario || '—')}</td>
+                  <td style="color:#78716c;font-size:11px;">${escapeHTML(r.obs || '—')}</td>
+                </tr>`).join('')}</tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="pp2-card">
+          <div class="pp2-card-title t-armado">🔨 MUEBLES ESPECIALES · ARMADO <span style="color:#78716c;font-size:10px;font-weight:400;">(${armado.length})</span></div>
+          <div class="pp2-table-wrap" style="margin-top:10px;">
+            <table class="pp2-table">
+              <thead><tr><th>N°</th><th>CANT.</th><th>DESCRIPCIÓN</th><th>MEDIDA</th><th>ÁREA</th><th>CLIENTE</th><th>COLOR</th><th>LOCAL.</th><th>ARMADOR</th><th>FECHA</th><th>TIEMPO</th><th>ESTATUS</th></tr></thead>
+              <tbody>${!armado.length ? '<tr><td colspan="12" class="pp2-empty">Sin registros</td></tr>' :
+                armado.map(r => `<tr>
+                  <td style="color:#a8a29e;font-size:11px;">${escapeHTML(r.nro || '—')}</td>
+                  <td style="text-align:center;">${escapeHTML(r.cantidad || '—')}</td>
+                  <td style="font-size:11px;">${escapeHTML(r.descripcion || '—')}</td>
+                  <td style="font-size:11px;white-space:nowrap;">${escapeHTML(r.medida || '—')}</td>
+                  <td style="font-size:11px;">${escapeHTML(r.area || '—')}</td>
+                  <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
+                  <td style="color:#78716c;font-size:11px;">${escapeHTML(r.color || '—')}</td>
+                  <td style="font-size:11px;">${escapeHTML(r.localidad || '—')}</td>
+                  <td style="color:#0891b2;">${escapeHTML(r.armador || '—')}</td>
+                  <td style="color:#b8860b;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                  <td>${escapeHTML(r.tiempo || '—')}</td>
+                  <td>${estatusBadge(r.estatus)}</td>
+                </tr>`).join('')}</tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="pp2-card">
+          <div class="pp2-card-title t-cliente">👷 CLIENTES EN PROCESO <span style="color:#78716c;font-size:10px;font-weight:400;">(${clientes.length})</span></div>
+          <div class="pp2-table-wrap" style="margin-top:10px;">
+            <table class="pp2-table">
+              <thead>
+                <tr>
+                  <th rowspan="2">FECHA</th>
+                  <th rowspan="2">CLIENTE</th>
+                  <th rowspan="2">ÁREA</th>
+                  <th colspan="5" style="text-align:center;border-bottom:1px solid #d6d3d1;">ESTADO</th>
+                  <th rowspan="2">OBS.</th>
+                </tr>
+                <tr>
+                  <th style="text-align:center;font-size:9px;">CORTE</th>
+                  <th style="text-align:center;font-size:9px;">CINTA</th>
+                  <th style="text-align:center;font-size:9px;">PERF.</th>
+                  <th style="text-align:center;font-size:9px;">ARMADO</th>
+                  <th style="text-align:center;font-size:9px;">EMPAQUE</th>
+                </tr>
+              </thead>
+              <tbody>${!clientes.length ? '<tr><td colspan="9" class="pp2-empty">Sin registros</td></tr>' :
+                clientes.map(r => `<tr>
+                  <td style="color:#d97706;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                  <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
+                  <td>${escapeHTML(r.area || '—')}</td>
+                  ${ETAPAS.map(et => {
+                    const st = getEtapaState(r.estados, et);
+                    return `<td style="text-align:center;"><div class="pp2-stage-cell ${stageClass(st)} readonly" title="${ETAPA_LABELS[et]}: ${stageTitle(st)}">${stageMark(st) || '·'}</div></td>`;
+                  }).join('')}
+                  <td style="color:#78716c;font-size:11px;">${escapeHTML(r.obs || '—')}</td>
+                </tr>`).join('')}</tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="pp2-card">
+          <div class="pp2-card-title t-rpt">📋 REPORTE DE PRODUCCIÓN <span style="color:#78716c;font-size:10px;font-weight:400;">(${rpt.length})</span></div>
+          <div class="pp2-table-wrap" style="margin-top:10px;">
+            <table class="pp2-table">
+              <thead><tr><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>COLOR</th><th>OPERADOR</th><th>CIUDAD</th><th style="text-align:center;">CANT.</th><th>MEDIDA</th><th>ESTADO</th></tr></thead>
+              <tbody>${!rpt.length ? '<tr><td colspan="9" class="pp2-empty">Sin registros</td></tr>' :
+                rpt.map(r => `<tr>
+                  <td style="color:#b8860b;font-weight:700;white-space:nowrap;">${prodDisp(r.fecha)}</td>
+                  <td style="font-weight:700;">${escapeHTML(r.cliente || '—')}</td>
+                  <td>${escapeHTML(r.area || '—')}</td>
+                  <td style="color:#78716c;font-size:11px;">${escapeHTML(r.color || '—')}</td>
+                  <td>${escapeHTML(r.operador || '—')}</td>
+                  <td>${ciudadBadge(r.ciudad)}</td>
+                  <td style="text-align:center;color:#0d9488;font-weight:700;">${escapeHTML(r.cantidad_lam || '—')}</td>
+                  <td style="font-size:11px;">${escapeHTML(r.medida_lam || '—')}</td>
+                  <td>${estadoBadge(r.estado)}</td>
+                </tr>`).join('')}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 10. RENDER: GRÁFICO NUEVO (LÁMINAS POR MÁQUINA Y TURNO)
+  // ═══════════════════════════════════════════════════════════════════
+  // Este se inyecta DEBAJO del Resumen original de React (sin reemplazarlo)
+  function ensureChartCardInResumen(contentPanel) {
+    if (!contentPanel) return;
+    let card = document.getElementById('pp2-chart-tm-card');
+    if (!card) {
+      card = document.createElement('div');
+      card.id = 'pp2-chart-tm-card';
+      card.className = 'pp2-overlay';
+      card.style.cssText = 'padding:0 24px 24px;background:#faf8f5;';
+      card.innerHTML = `
+        <div class="pp2-card" style="margin-top:0;">
+          <div class="pp2-card-title">📊 LÁMINAS CORTADAS · POR MÁQUINA Y TURNO</div>
+          <div class="pp2-card-sub">Comparativo agrupado · suma de láminas registradas en Corte</div>
+          <div style="margin-top:12px;height:280px;position:relative;">
+            <canvas id="pp2-chart-tm"></canvas>
+          </div>
+        </div>
+      `;
+      contentPanel.appendChild(card);
+    }
+    drawChartTurnoMaquina();
+  }
+
+  function drawChartTurnoMaquina() {
+    const canvas = document.getElementById('pp2-chart-tm');
+    if (!canvas || typeof Chart === 'undefined') return;
+    const D = window.PROD_DATA;
+    const tmData = {};
+    (D.corte || []).forEach(r => {
+      const m = (r.maquina || '').toUpperCase();
+      const lam = parseFloat(r.laminas) || 0;
+      let maquina = 'OTRA';
+      let turno = '?';
+      if (m.includes('GIBBEN')) maquina = 'GIBBEN';
+      else if (m.includes('GABBIANNI') || m.includes('GABBIANI')) maquina = 'GABBIANNI';
+      else {
+        const parts = m.replace(/MAQUINA\s+/i, '').split(/\s*-\s*/);
+        maquina = (parts[0] || 'OTRA').trim();
+      }
+      const tmatch = m.match(/T([A-Z])\b/);
+      if (tmatch) turno = 'T' + tmatch[1];
+      if (!tmData[maquina]) tmData[maquina] = {};
+      tmData[maquina][turno] = (tmData[maquina][turno] || 0) + lam;
+    });
+
+    const maquinas = Object.keys(tmData);
+    const turnosSet = new Set();
+    maquinas.forEach(m => Object.keys(tmData[m]).forEach(t => turnosSet.add(t)));
+    const turnos = [...turnosSet].sort();
+    const palette = ['#0d9488', '#0891b2', '#b8860b', '#d97706', '#7c3aed'];
+    const datasets = turnos.map((t, i) => ({
+      label: 'Turno ' + t.replace(/^T/, ''),
+      data: maquinas.map(m => tmData[m][t] || 0),
+      backgroundColor: palette[i % palette.length],
+      borderRadius: 6,
+      borderSkipped: false,
+    }));
+
+    if (State.chartTurnoMaquina) State.chartTurnoMaquina.destroy();
+    State.chartTurnoMaquina = new Chart(canvas, {
+      type: 'bar',
+      data: { labels: maquinas, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top', labels: { color: '#57534e', font: { size: 11, weight: '700' } } },
+          tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y} láminas` } },
+        },
+        scales: {
+          x: { ticks: { color: '#57534e', font: { weight: '700' } }, grid: { color: '#e7e5e4' } },
+          y: { beginAtZero: true, ticks: { color: '#57534e' }, grid: { color: '#e7e5e4' }, title: { display: true, text: 'Láminas', color: '#78716c', font: { size: 10 } } },
+        },
+      },
+    });
+  }
+
+  function removeChartCard() {
+    const card = document.getElementById('pp2-chart-tm-card');
+    if (card) card.remove();
+    if (State.chartTurnoMaquina) {
+      State.chartTurnoMaquina.destroy();
+      State.chartTurnoMaquina = null;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 11. MODAL CLIENTES EN PROCESO (con checklist 3 estados)
+  // ═══════════════════════════════════════════════════════════════════
+  let _modalEstados = { corte: null, cinta: null, perforacion: null, armado: null, empaque: null };
+
+  function getOrCreateModal() {
+    let modal = document.getElementById('pp2-modal-cliente');
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'pp2-modal-cliente';
+    modal.className = 'pp2-modal-overlay';
+    modal.innerHTML = `
+      <div class="pp2-modal" style="max-width:660px;">
+        <div class="pp2-modal-header">
+          <div class="pp2-modal-title" id="pp2-modal-title">👷 Cliente en Proceso</div>
+          <button class="pp2-modal-close" data-pp2-action="close-modal">×</button>
+        </div>
+        <div class="pp2-modal-body">
+          <div class="pp2-form-grid">
+            <div class="pp2-form-group"><label>Fecha</label><input id="pp2-mcl-fecha" type="date"></div>
+            <div class="pp2-form-group"><label>Cliente</label><input id="pp2-mcl-cliente" placeholder="Nombre del cliente"></div>
+            <div class="pp2-form-group pp2-full"><label>Área</label><input id="pp2-mcl-area" placeholder="Ej: COCINA, CLOSET, BAÑO..."></div>
+            <div class="pp2-form-group pp2-full">
+              <label>Estado · Etapas de Producción</label>
+              <div class="pp2-checklist-modal" id="pp2-mcl-checklist">
+                <div class="pp2-check-cell" data-pp2-mt="corte"><div class="pp2-check-cell-lbl">CORTE</div><div class="pp2-check-cell-mark">·</div><div class="pp2-check-cell-status">—</div></div>
+                <div class="pp2-check-cell" data-pp2-mt="cinta"><div class="pp2-check-cell-lbl">CINTA</div><div class="pp2-check-cell-mark">·</div><div class="pp2-check-cell-status">—</div></div>
+                <div class="pp2-check-cell" data-pp2-mt="perforacion"><div class="pp2-check-cell-lbl">PERFORACIÓN</div><div class="pp2-check-cell-mark">·</div><div class="pp2-check-cell-status">—</div></div>
+                <div class="pp2-check-cell" data-pp2-mt="armado"><div class="pp2-check-cell-lbl">ARMADO</div><div class="pp2-check-cell-mark">·</div><div class="pp2-check-cell-status">—</div></div>
+                <div class="pp2-check-cell" data-pp2-mt="empaque"><div class="pp2-check-cell-lbl">EMPAQUE</div><div class="pp2-check-cell-mark">·</div><div class="pp2-check-cell-status">—</div></div>
+              </div>
+              <div style="font-size:10px;color:#a8a29e;margin-top:6px;">
+                Haz clic en cada etapa para alternar:
+                <strong style="color:#0f766e;">vacío → COMPLETADO (X) → PENDIENTE (P) → vacío</strong>
+              </div>
+            </div>
+            <div class="pp2-form-group pp2-full"><label>Observaciones</label><textarea id="pp2-mcl-obs" placeholder="Detalles del proceso..."></textarea></div>
+          </div>
+        </div>
+        <div class="pp2-modal-footer">
+          <button class="pp2-btn pp2-btn-ghost" data-pp2-action="close-modal">Cancelar</button>
+          <button class="pp2-btn pp2-btn-primary" data-pp2-action="save-cliente">Guardar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    // Eventos del modal
+    modal.addEventListener('click', (ev) => {
+      if (ev.target === modal) { closeModal(); return; }
+      const cell = ev.target.closest('[data-pp2-mt]');
+      if (cell) {
+        const et = cell.getAttribute('data-pp2-mt');
+        _modalEstados[et] = nextEtapaState(_modalEstados[et]);
+        applyChecklistUI();
+        return;
+      }
+      const act = ev.target.closest('[data-pp2-action]');
+      if (!act) return;
+      const a = act.getAttribute('data-pp2-action');
+      if (a === 'close-modal') closeModal();
+      else if (a === 'save-cliente') saveCliente();
+    });
+    return modal;
+  }
+
+  function applyChecklistUI() {
+    document.querySelectorAll('#pp2-mcl-checklist .pp2-check-cell').forEach(cell => {
+      const et = cell.getAttribute('data-pp2-mt');
+      const st = _modalEstados[et];
+      cell.classList.remove('s-done', 's-pend');
+      if (st === 'done') cell.classList.add('s-done');
+      else if (st === 'pend') cell.classList.add('s-pend');
+      const mark = cell.querySelector('.pp2-check-cell-mark');
+      const status = cell.querySelector('.pp2-check-cell-status');
+      if (mark) mark.textContent = stageMark(st) || '·';
+      if (status) status.textContent = stageTitle(st);
+    });
+  }
+
+  function openModal() { const m = getOrCreateModal(); m.classList.add('open'); }
+  function closeModal() { const m = document.getElementById('pp2-modal-cliente'); if (m) m.classList.remove('open'); }
+
+  function abrirNuevo() {
+    State.editClienteIdx = -1;
+    getOrCreateModal();
+    document.getElementById('pp2-modal-title').textContent = '👷 Nuevo Cliente en Proceso';
+    document.getElementById('pp2-mcl-fecha').value = todayISO();
+    document.getElementById('pp2-mcl-cliente').value = '';
+    document.getElementById('pp2-mcl-area').value = '';
+    document.getElementById('pp2-mcl-obs').value = '';
+    _modalEstados = { corte: null, cinta: null, perforacion: null, armado: null, empaque: null };
+    applyChecklistUI();
+    openModal();
+  }
+
+  function abrirEditar(idx) {
+    const r = window.PROD_DATA.clientes[idx];
+    if (!r) return;
+    State.editClienteIdx = idx;
+    getOrCreateModal();
+    document.getElementById('pp2-modal-title').textContent = '👷 Editar Cliente en Proceso';
+    document.getElementById('pp2-mcl-fecha').value = prodToISO(r.fecha);
+    document.getElementById('pp2-mcl-cliente').value = r.cliente || '';
+    document.getElementById('pp2-mcl-area').value = r.area || '';
+    document.getElementById('pp2-mcl-obs').value = r.obs || '';
+    _modalEstados = {
+      corte:       getEtapaState(r.estados, 'corte'),
+      cinta:       getEtapaState(r.estados, 'cinta'),
+      perforacion: getEtapaState(r.estados, 'perforacion'),
+      armado:      getEtapaState(r.estados, 'armado'),
+      empaque:     getEtapaState(r.estados, 'empaque'),
+    };
+    applyChecklistUI();
+    openModal();
+  }
+
+  function saveCliente() {
+    const fecha = document.getElementById('pp2-mcl-fecha').value;
+    const cliente = document.getElementById('pp2-mcl-cliente').value.trim();
+    if (!fecha || !cliente) { toast('⚠ Ingresa fecha y cliente', 'warn'); return; }
+    const obj = {
+      fecha: prodFromISO(fecha),
+      cliente,
+      area: document.getElementById('pp2-mcl-area').value.trim(),
+      obs: document.getElementById('pp2-mcl-obs').value.trim(),
+      estados: { ..._modalEstados },
+    };
+    const D = window.PROD_DATA;
+    if (!D.clientes) D.clientes = [];
+    if (State.editClienteIdx >= 0) {
+      // Preservar campos que el bundle de React pueda usar
+      D.clientes[State.editClienteIdx] = { ...D.clientes[State.editClienteIdx], ...obj };
+      toast('✓ Cliente actualizado', 'ok');
+    } else {
+      D.clientes.push(obj);
+      D.clientes.sort((a, b) => prodToISO(a.fecha).localeCompare(prodToISO(b.fecha)));
+      toast('✓ Cliente agregado', 'ok');
+    }
+    saveData();
+    closeModal();
+    renderActiveTab();
+  }
+
+  function eliminarCliente(idx) {
+    if (!confirm('¿Eliminar este cliente?')) return;
+    if (!window.PROD_DATA.clientes) return;
+    window.PROD_DATA.clientes.splice(idx, 1);
+    saveData();
+    renderActiveTab();
+    toast('✓ Eliminado', 'ok');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 12. PDFs
+  // ═══════════════════════════════════════════════════════════════════
+  function exportarPDFCliente() {
+    const D = window.PROD_DATA;
+    const clientes = D.clientes || [];
+    const fecha = new Date().toLocaleDateString('es-HN', { day: '2-digit', month: 'long', year: 'numeric' });
+    const rows = clientes.map((r, i) => {
+      const e = r.estados || {};
+      const mk = (et) => {
+        const st = getEtapaState(e, et);
+        if (st === 'done') return '<span style="color:#0d9488;font-weight:800;font-size:14px;">X</span>';
+        if (st === 'pend') return '<span style="color:#d97706;font-weight:800;font-size:11px;background:#fef3c7;padding:1px 6px;border-radius:4px;">PEND</span>';
+        return '<span style="color:#d6d3d1;">·</span>';
+      };
+      return `<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.area||'—')}</td><td style="text-align:center;">${mk('corte')}</td><td style="text-align:center;">${mk('cinta')}</td><td style="text-align:center;">${mk('perforacion')}</td><td style="text-align:center;">${mk('armado')}</td><td style="text-align:center;">${mk('empaque')}</td><td>${escapeHTML(r.obs||'—')}</td></tr>`;
+    }).join('');
+
+    const win = window.open('', '_blank');
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Clientes en Proceso</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:24px;color:#1c1917;background:#fff;}
+        h1{font-size:20px;color:#0f766e;margin-bottom:4px;}
+        p.sub{color:#78716c;font-size:11px;margin-bottom:20px;}
+        table{width:100%;border-collapse:collapse;font-size:11px;}
+        th{background:#0f766e;color:#fff;padding:8px;text-align:left;font-size:10px;letter-spacing:.5px;text-transform:uppercase;}
+        td{padding:7px 8px;border-bottom:1px solid #e7e5e4;vertical-align:middle;}
+        tr:nth-child(even){background:#fafaf9;}
+        .footer{margin-top:24px;font-size:10px;color:#a8a29e;text-align:right;border-top:1px solid #e7e5e4;padding-top:8px;}
+      </style></head><body>
+      <h1>👷 Clientes en Proceso</h1><p class="sub">${clientes.length} registros · Generado: ${fecha}</p>
+      <table><thead><tr><th>#</th><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>CORTE</th><th>CINTA</th><th>PERFOR.</th><th>ARMADO</th><th>EMPAQUE</th><th>OBSERVACIONES</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="footer">Panel de Control — Producción</div>
+      <script>window.onload=()=>setTimeout(()=>window.print(),250);<\/script>
+      </body></html>`);
+    win.document.close();
+    toast('✓ PDF listo', 'ok');
+  }
+
+  function exportarPDFSemana() {
+    const sem = getProdSemanaLS();
+    const { corte, armado, clientes, rpt = [], desde, hasta } = sem;
+    if (!corte.length && !armado.length && !clientes.length && !rpt.length) {
+      toast('Sin datos en el período', 'warn'); return;
+    }
+    const fecha = new Date().toLocaleDateString('es-HN', { day: '2-digit', month: 'long', year: 'numeric' });
+    const titulo = sem.custom ? '🏭 Producción — Rango Personalizado' : '🏭 Producción — Semana Actual (Lun-Sáb)';
+    const rowsC = corte.map((r, i) => `<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td>${escapeHTML(r.maquina||'')}</td><td style="text-align:center;font-weight:700;">${escapeHTML(r.laminas||'—')}</td><td>${escapeHTML(r.operario||'—')}</td><td>${escapeHTML(r.obs||'—')}</td></tr>`).join('');
+    const rowsA = armado.map((r, i) => `<tr><td>${escapeHTML(r.nro||(i+1))}</td><td>${escapeHTML(r.cantidad||'—')}</td><td>${escapeHTML(r.descripcion||'—')}</td><td>${escapeHTML(r.area||'—')}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.armador||'—')}</td><td>${prodDisp(r.fecha)}</td><td>${escapeHTML(r.tiempo||'—')}</td><td><strong>${escapeHTML(r.estatus||'—')}</strong></td></tr>`).join('');
+    const rowsCl = clientes.map((r, i) => {
+      const e = r.estados || {};
+      const mk = (et) => {
+        const st = getEtapaState(e, et);
+        if (st === 'done') return '<span style="color:#0d9488;font-weight:800;">X</span>';
+        if (st === 'pend') return '<span style="color:#d97706;font-weight:800;font-size:9px;background:#fef3c7;padding:1px 4px;border-radius:3px;">PEND</span>';
+        return '<span style="color:#d6d3d1;">·</span>';
+      };
+      return `<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.area||'—')}</td><td style="text-align:center;">${mk('corte')}</td><td style="text-align:center;">${mk('cinta')}</td><td style="text-align:center;">${mk('perforacion')}</td><td style="text-align:center;">${mk('armado')}</td><td style="text-align:center;">${mk('empaque')}</td><td>${escapeHTML(r.obs||'—')}</td></tr>`;
+    }).join('');
+    const rowsR = rpt.map((r, i) => `<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.area||'—')}</td><td>${escapeHTML(r.operador||'—')}</td><td>${escapeHTML(r.ciudad||'—')}</td><td style="text-align:center;font-weight:700;">${escapeHTML(r.cantidad_lam||'—')}</td><td>${escapeHTML(r.medida_lam||'—')}</td><td><strong>${escapeHTML(r.estado||'—')}</strong></td></tr>`).join('');
+
+    const win = window.open('', '_blank');
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Producción Período</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:24px;color:#1c1917;background:#fff;}
+        h1{font-size:22px;color:#0f766e;margin-bottom:4px;}
+        p.sub{color:#78716c;font-size:11px;margin-bottom:20px;}
+        h2{font-size:13px;font-weight:700;padding:8px 12px;border-radius:6px;margin:20px 0 10px;}
+        .hc{background:#ccfbf1;color:#0f766e;}
+        .ha{background:#cffafe;color:#0e7490;}
+        .hcl{background:#ffedd5;color:#9a3412;}
+        .hr{background:#fef3c7;color:#854d0e;}
+        table{width:100%;border-collapse:collapse;font-size:11px;}
+        th{background:#0f766e;color:#fff;padding:8px;text-align:left;font-size:10px;letter-spacing:.5px;text-transform:uppercase;}
+        td{padding:7px 8px;border-bottom:1px solid #e7e5e4;vertical-align:top;}
+        tr:nth-child(even){background:#fafaf9;}
+        .footer{margin-top:24px;font-size:10px;color:#a8a29e;text-align:center;border-top:1px solid #e7e5e4;padding-top:8px;}
+      </style></head><body>
+      <h1>${titulo}</h1>
+      <p class="sub">${prodDisp(desde)} → ${prodDisp(hasta)} · Generado: ${fecha}</p>
+      ${corte.length ? `<h2 class="hc">⚙️ Corte (${corte.length})</h2><table><thead><tr><th>#</th><th>FECHA</th><th>MÁQUINA</th><th>LÁM.</th><th>OPERARIO</th><th>OBS.</th></tr></thead><tbody>${rowsC}</tbody></table>` : ''}
+      ${armado.length ? `<h2 class="ha">🔨 Armado (${armado.length})</h2><table><thead><tr><th>N°</th><th>CANT</th><th>DESCRIP.</th><th>ÁREA</th><th>CLIENTE</th><th>ARMADOR</th><th>FECHA</th><th>TIEMPO</th><th>ESTATUS</th></tr></thead><tbody>${rowsA}</tbody></table>` : ''}
+      ${clientes.length ? `<h2 class="hcl">👷 Clientes en Proceso (${clientes.length})</h2><table><thead><tr><th>#</th><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>CORTE</th><th>CINTA</th><th>PERF.</th><th>ARMADO</th><th>EMPAQUE</th><th>OBS.</th></tr></thead><tbody>${rowsCl}</tbody></table>` : ''}
+      ${rpt.length ? `<h2 class="hr">📋 Reporte de Producción (${rpt.length})</h2><table><thead><tr><th>#</th><th>FECHA</th><th>CLIENTE</th><th>ÁREA</th><th>OPERADOR</th><th>CIUDAD</th><th>CANT.</th><th>MEDIDA</th><th>ESTADO</th></tr></thead><tbody>${rowsR}</tbody></table>` : ''}
+      <div class="footer">Panel de Control — Producción · ${prodDisp(desde)} → ${prodDisp(hasta)}</div>
+      <script>window.onload=()=>setTimeout(()=>window.print(),300);<\/script>
+      </body></html>`);
+    win.document.close();
+    toast('✓ PDF Período listo', 'ok');
+  }
+
+  function exportarPDFReporte() {
+    const { corte, armado, clientes, rpt } = getFiltradoReporte();
+    if (!corte.length && !armado.length && !clientes.length && !rpt.length) {
+      toast('Sin datos para exportar', 'warn'); return;
+    }
+    const fecha = new Date().toLocaleDateString('es-HN', { day: '2-digit', month: 'long', year: 'numeric' });
+    const periodo = State.repMode === 'all'
+      ? 'Historial completo'
+      : `${State.repDesde ? prodDisp(prodFromISO(State.repDesde)) : 'inicio'} → ${State.repHasta ? prodDisp(prodFromISO(State.repHasta)) : 'hoy'}`;
+    const lamTotal = rpt.reduce((s, r) => s + (parseFloat(r.cantidad_lam) || 0), 0);
+    const rowsC = corte.map((r, i) => `<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td>${escapeHTML(r.maquina||'')}</td><td style="text-align:center;font-weight:700;">${escapeHTML(r.laminas||'—')}</td><td>${escapeHTML(r.operario||'—')}</td><td>${escapeHTML(r.obs||'—')}</td></tr>`).join('');
+    const rowsA = armado.map((r, i) => `<tr><td>${escapeHTML(r.nro||(i+1))}</td><td>${escapeHTML(r.cantidad||'—')}</td><td>${escapeHTML(r.descripcion||'—')}</td><td>${escapeHTML(r.medida||'—')}</td><td>${escapeHTML(r.area||'—')}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.color||'—')}</td><td>${escapeHTML(r.localidad||'—')}</td><td>${escapeHTML(r.armador||'—')}</td><td>${prodDisp(r.fecha)}</td><td>${escapeHTML(r.tiempo||'—')}</td><td><strong>${escapeHTML(r.estatus||'—')}</strong></td></tr>`).join('');
+    const rowsCl = clientes.map((r, i) => {
+      const e = r.estados || {};
+      const mk = (et) => {
+        const st = getEtapaState(e, et);
+        if (st === 'done') return '<span style="color:#0d9488;font-weight:800;">X</span>';
+        if (st === 'pend') return '<span style="color:#d97706;font-weight:800;font-size:9px;background:#fef3c7;padding:1px 4px;border-radius:3px;">PEND</span>';
+        return '<span style="color:#d6d3d1;">·</span>';
+      };
+      return `<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.area||'—')}</td><td style="text-align:center;">${mk('corte')}</td><td style="text-align:center;">${mk('cinta')}</td><td style="text-align:center;">${mk('perforacion')}</td><td style="text-align:center;">${mk('armado')}</td><td style="text-align:center;">${mk('empaque')}</td><td>${escapeHTML(r.obs||'—')}</td></tr>`;
+    }).join('');
+    const rowsR = rpt.map((r, i) => `<tr><td>${i+1}</td><td>${prodDisp(r.fecha)}</td><td><strong>${escapeHTML(r.cliente||'—')}</strong></td><td>${escapeHTML(r.area||'—')}</td><td>${escapeHTML(r.color||'—')}</td><td>${escapeHTML(r.operador||'—')}</td><td>${escapeHTML(r.ciudad||'—')}</td><td style="text-align:center;font-weight:700;">${escapeHTML(r.cantidad_lam||'—')}</td><td>${escapeHTML(r.medida_lam||'—')}</td><td><strong>${escapeHTML(r.estado||'—')}</strong></td></tr>`).join('');
+
+    const win = window.open('', '_blank');
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Reporte Producción</title>
+      <style>
+        *{box-sizing:border-box;margin:0;padding:0;}
+        body{font-family:'Segoe UI',Arial,sans-serif;color:#1c1917;background:#fff;}
+        .cover{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:40px;page-break-after:always;}
+        .cover-accent{width:6px;height:60px;background:linear-gradient(180deg,#0d9488,#134e4a);border-radius:4px;margin:0 auto 24px;}
+        .cover h1{font-size:38px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:#0f766e;margin-bottom:6px;}
+        .cover h2{font-size:18px;font-weight:300;color:#78716c;margin-bottom:28px;}
+        .cover-div{width:60px;height:2px;background:linear-gradient(90deg,#0d9488,#b8860b);margin:20px auto;}
+        .cover-range{font-size:15px;color:#0f766e;font-weight:700;margin-bottom:6px;}
+        .cover-date{font-size:12px;color:#78716c;margin-bottom:32px;}
+        .kpi-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;}
+        .kpi-box{background:#fafaf9;border:1px solid #e7e5e4;border-radius:12px;padding:16px 20px;text-align:center;}
+        .kpi-box .num{font-size:28px;font-weight:900;line-height:1;}
+        .kpi-box .lbl{font-size:9px;color:#78716c;letter-spacing:1px;text-transform:uppercase;margin-top:4px;}
+        .kpi-box.c1 .num{color:#0d9488;}.kpi-box.c2 .num{color:#0891b2;}.kpi-box.c3 .num{color:#d97706;}.kpi-box.c4 .num{color:#b8860b;}.kpi-box.c5 .num{color:#7c3aed;}
+        .page{padding:32px 40px;}
+        .sec-title{display:flex;align-items:center;font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:8px 14px;border-radius:6px;margin:20px 0 10px;}
+        .sec-c{background:#ccfbf1;color:#0f766e;border-left:4px solid #0d9488;}
+        .sec-a{background:#cffafe;color:#155e75;border-left:4px solid #0891b2;}
+        .sec-cl{background:#ffedd5;color:#9a3412;border-left:4px solid #d97706;}
+        .sec-r{background:#fef3c7;color:#713f12;border-left:4px solid #b8860b;}
+        table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:8px;}
+        th{background:#0f766e;color:#fff;padding:7px 8px;text-align:left;font-size:9px;letter-spacing:.5px;text-transform:uppercase;}
+        td{padding:6px 8px;border-bottom:1px solid #e7e5e4;vertical-align:top;}
+        tr:nth-child(even){background:#fafaf9;}
+        .footer{margin-top:40px;padding-top:10px;border-top:1px solid #e7e5e4;display:flex;justify-content:space-between;font-size:10px;color:#a8a29e;}
+        @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.cover{min-height:100vh;}}
+      </style></head><body>
+      <div class="cover">
+        <div class="cover-accent"></div>
+        <h1>Reporte de Producción</h1>
+        <h2>Panel de Control — Módulo Producción</h2>
+        <div class="cover-div"></div>
+        <div class="cover-range">📅 ${periodo}</div>
+        <div class="cover-date">Generado: ${fecha}</div>
+        <div class="kpi-row">
+          <div class="kpi-box c1"><div class="num">${corte.length}</div><div class="lbl">Cortes</div></div>
+          <div class="kpi-box c2"><div class="num">${armado.length}</div><div class="lbl">Armados</div></div>
+          <div class="kpi-box c3"><div class="num">${clientes.length}</div><div class="lbl">En Proceso</div></div>
+          <div class="kpi-box c4"><div class="num">${rpt.length}</div><div class="lbl">Rpt. Prod.</div></div>
+          <div class="kpi-box c5"><div class="num">${lamTotal}</div><div class="lbl">Láminas</div></div>
+        </div>
+      </div>
+      <div class="page">
+        ${corte.length ? `<div class="sec-title sec-c">⚙️ Reporte de Corte por Máquina (${corte.length})</div>
+          <table><thead><tr><th>#</th><th>Fecha</th><th>Máquina/Turno</th><th>Láminas</th><th>Operario</th><th>Obs.</th></tr></thead><tbody>${rowsC}</tbody></table>` : ''}
+        ${armado.length ? `<div class="sec-title sec-a">🔨 Muebles Especiales · Armado (${armado.length})</div>
+          <table><thead><tr><th>N°</th><th>Cant.</th><th>Descrip.</th><th>Medida</th><th>Área</th><th>Cliente</th><th>Color</th><th>Local.</th><th>Armador</th><th>Fecha</th><th>Tiempo</th><th>Estatus</th></tr></thead><tbody>${rowsA}</tbody></table>` : ''}
+        ${clientes.length ? `<div class="sec-title sec-cl">👷 Clientes en Proceso (${clientes.length})</div>
+          <table><thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Área</th><th>Corte</th><th>Cinta</th><th>Perf.</th><th>Armado</th><th>Empaque</th><th>Obs.</th></tr></thead><tbody>${rowsCl}</tbody></table>` : ''}
+        ${rpt.length ? `<div class="sec-title sec-r">📋 Reporte de Producción (${rpt.length})</div>
+          <table><thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Área</th><th>Color</th><th>Operador</th><th>Ciudad</th><th>Cant.</th><th>Medida</th><th>Estado</th></tr></thead><tbody>${rowsR}</tbody></table>` : ''}
+        <div class="footer"><span>Panel de Control — Módulo Producción</span><span>${periodo} · ${fecha}</span></div>
+      </div>
+      <script>window.onload=()=>setTimeout(()=>window.print(),300);<\/script>
+      </body></html>`);
+    win.document.close();
+    toast('✓ Reporte PDF listo', 'ok');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 13. CONTROL: MOSTRAR / OCULTAR HOST DE TAB INTERCEPTADA
+  // ═══════════════════════════════════════════════════════════════════
+  // Para no luchar con React, ponemos un div HOST encima del panel de contenido
+  // de la tab interceptada con position:absolute y mismo bounding box.
+  function getOrCreateHost() {
+    let host = document.getElementById('pp2-host');
+    if (host) return host;
+    host = document.createElement('div');
+    host.id = 'pp2-host';
+    host.style.cssText = 'position:absolute;background:#faf8f5;z-index:10;display:none;overflow-y:auto;border-radius:8px;';
+    document.body.appendChild(host);
+    // Eventos delegados
+    host.addEventListener('click', (ev) => {
+      const t = ev.target;
+      // Toggle en celda de etapa
+      const cell = t.closest('[data-pp2-toggle]');
+      if (cell) {
+        const idx = parseInt(cell.getAttribute('data-pp2-toggle'), 10);
+        const et = cell.getAttribute('data-pp2-etapa');
+        const D = window.PROD_DATA;
+        if (D.clientes && D.clientes[idx]) {
+          const r = D.clientes[idx];
+          if (!r.estados) r.estados = {};
+          r.estados[et] = nextEtapaState(getEtapaState(r.estados, et));
+          saveData();
+          renderActiveTab();
+        }
+        return;
+      }
+      // Modos
+      const sm = t.closest('[data-pp2-semmode]');
+      if (sm) {
+        State.semMode = sm.getAttribute('data-pp2-semmode');
+        if (State.semMode === 'current') { State.semDesde = ''; State.semHasta = ''; }
+        renderActiveTab();
+        return;
+      }
+      const rm = t.closest('[data-pp2-repmode]');
+      if (rm) {
+        State.repMode = rm.getAttribute('data-pp2-repmode');
+        if (State.repMode === 'all') { State.repDesde = ''; State.repHasta = ''; }
+        renderActiveTab();
+        return;
+      }
+      // Acciones
+      const act = t.closest('[data-pp2-action]');
+      if (act) {
+        const a = act.getAttribute('data-pp2-action');
+        if (a === 'add-cliente')  abrirNuevo();
+        if (a === 'edit-cliente') abrirEditar(parseInt(act.getAttribute('data-pp2-idx'), 10));
+        if (a === 'del-cliente')  eliminarCliente(parseInt(act.getAttribute('data-pp2-idx'), 10));
+        if (a === 'pdf-cliente')  exportarPDFCliente();
+        if (a === 'pdf-semana')   exportarPDFSemana();
+        if (a === 'pdf-reporte')  exportarPDFReporte();
+        if (a === 'clear-sem')    { State.semDesde = ''; State.semHasta = ''; renderActiveTab(); }
+        if (a === 'clear-rep')    { State.repDesde = ''; State.repHasta = ''; renderActiveTab(); }
+        return;
+      }
+    });
+    host.addEventListener('change', (ev) => {
+      const t = ev.target;
+      if (t.id === 'pp2-sem-desde') { State.semDesde = t.value; renderActiveTab(); }
+      if (t.id === 'pp2-sem-hasta') { State.semHasta = t.value; renderActiveTab(); }
+      if (t.id === 'pp2-rep-desde') { State.repDesde = t.value; renderActiveTab(); }
+      if (t.id === 'pp2-rep-hasta') { State.repHasta = t.value; renderActiveTab(); }
+    });
+    return host;
+  }
+
+  function positionHostOver(target) {
+    const host = getOrCreateHost();
+    const r = target.getBoundingClientRect();
+    const sy = window.scrollY, sx = window.scrollX;
+    host.style.top    = (r.top + sy) + 'px';
+    host.style.left   = (r.left + sx) + 'px';
+    host.style.width  = r.width + 'px';
+    // Alto mínimo para que se vea bien
+    host.style.minHeight = Math.max(r.height, 400) + 'px';
+    host.style.display = 'block';
+  }
+
+  function showHostOnPanel(panel, renderFn) {
+    if (!panel) return;
+    const host = getOrCreateHost();
+    positionHostOver(panel);
+    renderFn(host);
+  }
+
+  function hideHost() {
+    const host = document.getElementById('pp2-host');
+    if (host) host.style.display = 'none';
+  }
+
+  // Mantener posición sincronizada al scroll/resize
+  function attachHostSync() {
+    const reposition = () => {
+      const host = document.getElementById('pp2-host');
+      if (!host || host.style.display === 'none') return;
+      const tabsInfo = findProduccionTabs();
+      if (!tabsInfo) { hideHost(); return; }
+      const panel = findContentPanel(tabsInfo);
+      if (!panel) { hideHost(); return; }
+      positionHostOver(panel);
+    };
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 14. RENDER GLOBAL POR TAB ACTIVA
+  // ═══════════════════════════════════════════════════════════════════
+  function renderActiveTab() {
+    const tabsInfo = findProduccionTabs();
+    if (!tabsInfo) return;
+    const panel = findContentPanel(tabsInfo);
+    if (!panel) return;
+    const host = getOrCreateHost();
+
+    if (State.activeTab === 'proceso')  { showHostOnPanel(panel, renderClientesEnProceso); removeChartCard(); }
+    else if (State.activeTab === 'semana')   { showHostOnPanel(panel, renderSemana); removeChartCard(); }
+    else if (State.activeTab === 'reporte')  { showHostOnPanel(panel, renderReporte); removeChartCard(); }
+    else if (State.activeTab === 'resumen')  {
+      // En Resumen: dejamos visible el de React y agregamos el chart NUEVO debajo
+      hideHost();
+      ensureChartCardInResumen(panel);
+    }
+    else { hideHost(); removeChartCard(); }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 15. INTERCEPTOR DE TABS
+  // ═══════════════════════════════════════════════════════════════════
+  function bindTabIntercept(tabsInfo) {
+    if (!tabsInfo) return;
+    const T = tabsInfo.tabs;
+
+    const wireTab = (el, key) => {
+      if (!el || el.__pp2Wired) return;
+      el.__pp2Wired = true;
+      // No usamos preventDefault porque queremos que React también marque la tab como activa visualmente.
+      // En la fase de capture, decidimos qué hacer DESPUÉS de que React responda.
+      el.addEventListener('click', () => {
+        State.activeTab = key;
+        // Pequeño delay para que React renderice su panel y podamos posicionar encima
+        setTimeout(renderActiveTab, 50);
+        setTimeout(renderActiveTab, 200);
+        setTimeout(renderActiveTab, 500);
+      });
+    };
+
+    wireTab(T.resumen, 'resumen');
+    wireTab(T.corte, 'corte');
+    wireTab(T.armado, 'armado');
+    wireTab(T.taller, 'taller');
+    wireTab(T.proceso, 'proceso');
+    wireTab(T.semana, 'semana');
+    wireTab(T.reporte, 'reporte');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 16. WATCHER PRINCIPAL
+  // ═══════════════════════════════════════════════════════════════════
+  let _wTimer = null;
+  function startWatcher() {
+    const tick = () => {
+      const tabsInfo = findProduccionTabs();
+      if (!tabsInfo) {
+        if (State.moduleVisible) {
+          State.moduleVisible = false;
+          State.activeTab = null;
+          hideHost();
+          removeChartCard();
+        }
+        return;
+      }
+      State.moduleVisible = true;
+      renombrarTabReporte(tabsInfo);
+      bindTabIntercept(tabsInfo);
+      // Si tenemos una tab interceptada activa, mantén el host posicionado
+      if (State.activeTab) {
+        renderActiveTab();
+      }
+    };
+
+    const obs = new MutationObserver(() => {
+      clearTimeout(_wTimer);
+      _wTimer = setTimeout(tick, 100);
+    });
+    obs.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+    // Ticks iniciales
+    setTimeout(tick, 600);
+    setTimeout(tick, 1500);
+    setTimeout(tick, 3000);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 17. INICIALIZACIÓN
+  // ═══════════════════════════════════════════════════════════════════
+  function init() {
+    injectStyles();
+    listenFirebaseProduccion();
+    startWatcher();
+    attachHostSync();
+
+    // Tag fijo para indicar que el patch está activo
+    if (!document.getElementById('pp2-tag')) {
+      const tag = document.createElement('div');
+      tag.id = 'pp2-tag';
+      tag.className = 'pp2-tag';
+      tag.textContent = 'Producción Patch v2.0';
+      document.body.appendChild(tag);
+    }
+
+    log('v2.0 cargado · esperando navegación a Producción');
+
+    // Debug
+    window.__pp2 = {
+      State,
+      data: () => window.PROD_DATA,
+      tabs: () => findProduccionTabs(),
+      panel: () => { const t = findProduccionTabs(); return t ? findContentPanel(t) : null; },
+      forceTab: (key) => { State.activeTab = key; renderActiveTab(); },
+      version: '2.0.0',
+    };
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+
+
 </body>
 </html>
