@@ -44,13 +44,13 @@
 <script src="app.min.js"></script>
 
 <!-- ============================================================
-     PATCH · DESPACHO CON HERRAJES (Fases 1 + 2 + 3)
+     PATCH · DESPACHO CON HERRAJES v3.2
      ────────────────────────────────────────────────────────────
      Fase 1: Modal Nuevo Despacho con tabla de herrajes
-             desde Inventario + Imprimir Requisición
      Fase 2: Editar despacho con herrajes
-     Fase 3: Salida automática de inventario al guardar
-             (tipo SALIDA_VENTA, permite stock negativo con aviso)
+     Fase 3: Salida automática de inventario (SALIDA_VENTA)
+     Detalle: Clic en fila → ver herrajes enviados/pendientes
+     v3.2 Fix: getCurrentUser() corregida + utility de reparación
      ============================================================ -->
 <script>
 /* ════════════════════════════════════════════════════════════════════════════
@@ -1401,13 +1401,46 @@
   }
 
   function getCurrentUser() {
-    // Intenta deducir el usuario actual del DOM (esquina superior, badge, etc.)
-    // Es opcional, si no se encuentra usamos 'logistica' por defecto.
-    const candidatos = Array.from(document.querySelectorAll('span, div, button'))
-      .map(el => (el.textContent || '').trim())
-      .filter(t => /jorge|admin|jefe|log[ií]stica|ventas|operaciones|producci[óo]n/i.test(t))
-      .slice(0, 5);
-    return candidatos[0] || null;
+    // Estrategia 1: buscar el div específico del header con "X · Interiorshn"
+    // Es la forma más limpia y robusta. Estructura: <div class="text-stone-500 ...">Jorge · Interiorshn</div>
+    try {
+      const candidates = document.querySelectorAll('div.text-stone-500, div[class*="stone-500"]');
+      for (const el of candidates) {
+        const txt = (el.textContent || '').trim();
+        // Patrón estricto: "NOMBRE · Interiorshn" donde NOMBRE no tiene saltos de línea
+        // ni más de 50 caracteres. Esto evita capturar bloques enteros del DOM.
+        if (txt.length < 60 && txt.includes('· Interiorshn')) {
+          // Extraer solo el nombre (antes del " · Interiorshn")
+          const nombre = txt.split('·')[0].trim();
+          if (nombre && nombre.length < 30 && !/\n/.test(nombre)) {
+            // Devolver en lowercase y sin "·" (formato "jorge", "admin", etc.)
+            return nombre.toLowerCase();
+          }
+        }
+      }
+    } catch (e) { /* fallthrough */ }
+
+    // Estrategia 2: buscar el botón Logout que tiene cerca el nombre
+    // (como fallback si el patrón anterior no matchea)
+    try {
+      const sidebar = document.querySelector('aside, nav');
+      if (sidebar) {
+        // Buscar elementos cortos con patrón "X · Interiorshn"
+        const all = sidebar.querySelectorAll('div, span');
+        for (const el of all) {
+          const txt = (el.textContent || '').trim();
+          if (txt.length < 60 && /·\s*Interiorshn/i.test(txt)) {
+            const nombre = txt.split('·')[0].trim();
+            if (nombre && nombre.length < 30 && !/\n/.test(nombre)) {
+              return nombre.toLowerCase();
+            }
+          }
+        }
+      }
+    } catch (e) { /* fallthrough */ }
+
+    // Si nada funciona, devolver null y que el caller use 'logistica' como default
+    return null;
   }
 
   /** Convierte una fecha DD/MM/YY o YYYY-MM-DD a ISO (YYYY-MM-DDT00:00:00.000Z) */
@@ -1752,24 +1785,494 @@
     }
   }, /* capture */ true);
 
+  // ════════════════════════════════════════════════════════════════════════
+  // SECCIÓN 10: VER HERRAJES DE UN DESPACHO (clic en fila)
+  // ────────────────────────────────────────────────────────────────────────
+  // Al hacer clic en la fila de un despacho (no en sus botones), abrir un
+  // modal de SOLO LECTURA mostrando:
+  //  - Herrajes ENVIADOS con sus cantidades
+  //  - Si tiene herrPendDesc y no está marcado entregado: vista naranja con
+  //    el texto del pendiente + botón "✓ Marcar como Entregado"
+  // Replica el comportamiento del index.html original.
+  // ════════════════════════════════════════════════════════════════════════
+
+  function mostrarDetalleHerrajes(despacho, indexEnArray) {
+    if (!despacho) return;
+    cerrarDetalleHerrajes(); // por si ya hay uno abierto
+    injectStyles();
+
+    const productos = getHerrajesProductos();
+    const productoMap = new Map(productos.map(p => [p.id, p]));
+    const herrData = despacho.herrajes || {};
+    const usados = Object.keys(herrData)
+      .filter(pid => (herrData[pid] || 0) > 0)
+      .map(pid => ({ p: productoMap.get(pid), qty: herrData[pid] }))
+      .filter(x => x.p);
+
+    const hasPend = despacho.herrPendDesc &&
+                    String(despacho.herrPendDesc).trim() !== '' &&
+                    !despacho.herrPendEntregado;
+
+    const fechaTxt = formatearFechaCorta(despacho.fecha);
+    const tituloIcon = hasPend ? '⏳' : '🔩';
+    const tituloTxt = hasPend
+      ? `${despacho.cliente} — Herrajes Pendientes`
+      : `${despacho.cliente}${despacho.area ? ' — ' + despacho.area : ''}${fechaTxt ? ' (' + fechaTxt + ')' : ''}`;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'dh-overlay';
+    overlay.id = 'dh-detail-overlay';
+    overlay.addEventListener('click', (ev) => {
+      if (ev.target === overlay) cerrarDetalleHerrajes();
+    });
+
+    const modal = document.createElement('div');
+    modal.className = 'dh-modal';
+    modal.style.maxWidth = '560px';
+
+    let bodyHTML = '';
+
+    // Bloque pendientes (solo si tiene)
+    if (hasPend) {
+      bodyHTML += `
+        <div class="dh-pend-card">
+          <div class="dh-pend-card-title">⏳ Herrajes Pendientes por Entregar</div>
+          <div class="dh-pend-card-text">${escapeHTML(despacho.herrPendDesc)}</div>
+        </div>`;
+    }
+
+    // Bloque herrajes enviados
+    if (usados.length === 0) {
+      if (!hasPend) {
+        bodyHTML += `
+          <div class="dh-detail-empty">
+            <div style="font-size:32px;margin-bottom:8px;">📦</div>
+            <div>Sin herrajes registrados para este despacho.</div>
+            <div style="font-size:11px; color:#a8a29e; margin-top:4px;">
+              Edita el despacho para añadir herrajes.
+            </div>
+          </div>`;
+      }
+    } else {
+      const tituloEnviados = hasPend
+        ? '🔩 Herrajes ENVIADOS en este despacho'
+        : '🔩 Herrajes Enviados';
+      bodyHTML += `
+        <div class="dh-detail-section-title">${tituloEnviados}
+          <span class="dh-detail-count">${usados.length} item${usados.length !== 1 ? 's' : ''}</span>
+        </div>
+        <div class="dh-detail-list">
+          ${usados.map(({p, qty}) => `
+            <div class="dh-detail-row">
+              <div class="dh-detail-row-info">
+                <div class="dh-detail-row-cod">${escapeHTML(p.codigo || '—')}</div>
+                <div class="dh-detail-row-desc">${escapeHTML(p.descripcion || '—')}</div>
+                ${p.presentacion ? `<div class="dh-detail-row-pres">${escapeHTML(p.presentacion)}</div>` : ''}
+              </div>
+              <div class="dh-detail-row-qty">×${qty}</div>
+            </div>`).join('')}
+        </div>`;
+
+      // Total
+      const totalUnidades = usados.reduce((s, x) => s + x.qty, 0);
+      bodyHTML += `
+        <div class="dh-detail-total">
+          Total de unidades: <strong>${totalUnidades}</strong>
+          ${despacho.refRequisicion ? `<span class="dh-detail-req">📋 ${escapeHTML(despacho.refRequisicion)}</span>` : ''}
+        </div>`;
+    }
+
+    // Footer con botón si tiene pendientes
+    let footerHTML = '';
+    if (hasPend && indexEnArray != null) {
+      footerHTML = `
+        <button class="dh-btn dh-btn-ghost" id="dh-detail-cerrar">Cerrar</button>
+        <button class="dh-btn dh-btn-edit-pend" id="dh-detail-editar">✏ Editar despacho</button>
+        <button class="dh-btn dh-btn-pend-ok" id="dh-detail-entregado">✓ Marcar como Entregado</button>`;
+    } else if (indexEnArray != null) {
+      footerHTML = `
+        <button class="dh-btn dh-btn-ghost" id="dh-detail-cerrar">Cerrar</button>
+        <button class="dh-btn dh-btn-edit-pend" id="dh-detail-editar">✏ Editar despacho</button>`;
+    } else {
+      footerHTML = `
+        <button class="dh-btn dh-btn-ghost" id="dh-detail-cerrar">Cerrar</button>`;
+    }
+
+    modal.innerHTML = `
+      <div class="dh-header ${hasPend ? 'dh-header-pend' : ''}">
+        <div class="dh-title">${tituloIcon} ${escapeHTML(tituloTxt)}</div>
+        <button class="dh-close" type="button" aria-label="Cerrar">×</button>
+      </div>
+      <div class="dh-body">
+        ${bodyHTML}
+      </div>
+      <div class="dh-footer">
+        ${footerHTML}
+      </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    // Wire de eventos
+    modal.querySelector('.dh-close').addEventListener('click', cerrarDetalleHerrajes);
+    document.getElementById('dh-detail-cerrar')?.addEventListener('click', cerrarDetalleHerrajes);
+    document.getElementById('dh-detail-editar')?.addEventListener('click', () => {
+      cerrarDetalleHerrajes();
+      // Reusar el flujo de edición
+      abrirModalEditarDespacho(despacho, indexEnArray);
+    });
+    document.getElementById('dh-detail-entregado')?.addEventListener('click', () => {
+      marcarHerrPendEntregado(despacho, indexEnArray);
+    });
+
+    // ESC para cerrar
+    document.addEventListener('keydown', escListenerDetalle);
+  }
+
+  function escListenerDetalle(ev) {
+    if (ev.key === 'Escape') cerrarDetalleHerrajes();
+  }
+
+  function cerrarDetalleHerrajes() {
+    document.getElementById('dh-detail-overlay')?.remove();
+    document.removeEventListener('keydown', escListenerDetalle);
+  }
+
+  /**
+   * Marca herrPendEntregado=true en el despacho y persiste.
+   * Como no tocamos el flujo de React (el campo no es visible en el RowModal),
+   * podemos escribir directamente al state via window._fbSave + localStorage.
+   */
+  async function marcarHerrPendEntregado(despacho, indexEnArray) {
+    try {
+      // 1. Leer el state actual
+      const raw = localStorage.getItem('interiorshn_local_state_v1');
+      if (!raw) {
+        toast('⚠ No se pudo leer el estado local', 'error');
+        return;
+      }
+      const state = JSON.parse(raw);
+      if (!state.main || !Array.isArray(state.main.desp)) {
+        toast('⚠ Estado inconsistente', 'error');
+        return;
+      }
+
+      // 2. Encontrar el despacho real (el indexEnArray puede haber cambiado)
+      let idx = indexEnArray;
+      if (idx == null || !state.main.desp[idx] ||
+          state.main.desp[idx].cliente !== despacho.cliente) {
+        // Buscar por cliente + fecha + area
+        idx = state.main.desp.findIndex(d =>
+          (d.cliente || '') === (despacho.cliente || '') &&
+          (d.fecha || '')   === (despacho.fecha || '')   &&
+          (d.area || '')    === (despacho.area || ''));
+      }
+      if (idx < 0) {
+        toast('⚠ Despacho no encontrado', 'error');
+        return;
+      }
+
+      // 3. Marcar como entregado
+      state.main.desp[idx] = {
+        ...state.main.desp[idx],
+        herrPendEntregado: true,
+        herrPendEntregadoEn: nowISO(),
+      };
+
+      // 4. Persistir en localStorage
+      localStorage.setItem('interiorshn_local_state_v1', JSON.stringify(state));
+
+      // 5. Persistir en Firebase
+      if (typeof window._fbSave === 'function') {
+        try {
+          await window._fbSave('main', state.main);
+        } catch (e) {
+          warn('Firebase save falló al marcar entregado', e);
+          // Los datos están en localStorage, eventualmente se sincronizarán
+        }
+      }
+
+      cerrarDetalleHerrajes();
+      toast('✓ Herrajes marcados como entregados', 'ok');
+
+      // Disparar evento para que React refresque (si está escuchando)
+      // No es necesario: el snapshot de Firebase volverá automáticamente
+    } catch (e) {
+      err('marcarHerrPendEntregado falló', e);
+      toast('⚠ No se pudo marcar como entregado: ' + (e.message || 'error'), 'error');
+    }
+  }
+
+  function formatearFechaCorta(fecha) {
+    if (!fecha) return '';
+    // Aceptar YYYY-MM-DD, ISO, o DD/MM/YY
+    const m1 = String(fecha).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m1) {
+      const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+      return `${parseInt(m1[3])} ${meses[parseInt(m1[2])-1]} ${m1[1].slice(2)}`;
+    }
+    const m2 = String(fecha).match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+    if (m2) return `${m2[1]}/${m2[2]}/${m2[3].slice(-2)}`;
+    return String(fecha).slice(0, 10);
+  }
+
+  // ── INTERCEPTOR DEL CLIC EN UNA FILA DE DESPACHO ──
+  // Listener separado, NO en capture, para no interferir con clics en botones.
+  // Solo activa si el clic NO fue en un button/a/input/select.
+  document.addEventListener('click', (ev) => {
+    // Si mi modal de patch está abierto, no abrir otro encima
+    if (State.open) return;
+    // Si ya hay un modal de detalle abierto, no abrir otro
+    if (document.getElementById('dh-detail-overlay')) return;
+    // Si estamos en flujo automático, ignorar
+    if (window.__dhAutoFlow) return;
+
+    // El target debe NO ser un control interactivo
+    let target = ev.target;
+    let cur = target;
+    while (cur && cur !== document.body) {
+      const tag = cur.tagName;
+      if (tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' ||
+          tag === 'SELECT' || tag === 'TEXTAREA' || tag === 'LABEL') {
+        return; // clic en un control: no abrir
+      }
+      cur = cur.parentElement;
+    }
+
+    // El clic debe estar en una fila <tr> de la tabla de despachos
+    const tr = target.closest ? target.closest('tr') : null;
+    if (!tr) return;
+
+    // No abrir si la fila está en un <thead>
+    if (tr.closest('thead')) return;
+
+    // Necesita tener al menos botón "Editar" o "×" cerca para considerarse
+    // una fila con datos editables (filtra encabezados, filas de totales, etc.)
+    const hasEditButton = Array.from(tr.querySelectorAll('button')).some(b =>
+      /editar/i.test(b.textContent || ''));
+    if (!hasEditButton) return;
+
+    // Identificar el despacho por el contenido de la fila
+    const cliente = tr.querySelector('td:nth-child(2)')?.textContent?.trim();
+    if (!cliente) return;
+
+    const desps = getDespachos();
+    const candidatos = desps
+      .map((d, i) => ({ d, i }))
+      .filter(x => (x.d.cliente || '').trim() === cliente);
+    if (!candidatos.length) return;
+
+    // Si hay múltiples del mismo cliente, usar área y fecha para desambiguar
+    let elegido = candidatos[0];
+    if (candidatos.length > 1) {
+      const area = tr.querySelector('td:nth-child(3)')?.textContent?.trim();
+      const fechaTxt = tr.querySelector('td:nth-child(1)')?.textContent?.trim();
+      const better = candidatos.find(x => {
+        const sameArea = (x.d.area || '').trim() === area;
+        const sameFechaCorta = formatearFechaCorta(x.d.fecha) === fechaTxt;
+        return sameArea && sameFechaCorta;
+      }) || candidatos.find(x => (x.d.area || '').trim() === area);
+      if (better) elegido = better;
+    }
+
+    // Abrir el modal de detalle
+    ev.preventDefault();
+    ev.stopPropagation();
+    mostrarDetalleHerrajes(elegido.d, elegido.i);
+  }, /* capture */ false);
+
+  // ════════════════════════════════════════════════════════════════════════
+  // ESTILOS adicionales para el modal de detalle
+  // ════════════════════════════════════════════════════════════════════════
+  (function injectDetalleStyles() {
+    if (document.getElementById('dh-styles-detalle')) return;
+    const s = document.createElement('style');
+    s.id = 'dh-styles-detalle';
+    s.textContent = `
+      .dh-header.dh-header-pend {
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        border-bottom-color: #fcd34d;
+      }
+      .dh-header.dh-header-pend .dh-title { color: #92400e; }
+      .dh-header.dh-header-pend .dh-close { color: #b45309; }
+      .dh-header.dh-header-pend .dh-close:hover { color: #78350f; }
+
+      .dh-pend-card {
+        background: linear-gradient(135deg, #fff7ed 0%, #fffbeb 100%);
+        border: 1px solid #fdba74; border-left: 4px solid #ea580c;
+        border-radius: 12px; padding: 14px 16px; margin-bottom: 16px;
+      }
+      .dh-pend-card-title {
+        color: #9a3412; font-size: 11px; font-weight: 700;
+        letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 8px;
+      }
+      .dh-pend-card-text {
+        color: #1c1917; font-size: 13px; line-height: 1.55;
+        font-weight: 500;
+      }
+
+      .dh-detail-section-title {
+        color: #0f766e; font-size: 11px; font-weight: 700;
+        letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 10px;
+        display: flex; align-items: center; justify-content: space-between;
+      }
+      .dh-detail-count {
+        background: #ccfbf1; color: #0f766e; border: 1px solid #5eead4;
+        border-radius: 14px; padding: 2px 9px; font-size: 10px;
+      }
+
+      .dh-detail-list {
+        display: flex; flex-direction: column; gap: 4px;
+        background: #f5f5f4; border: 1px solid #e7e5e4; border-radius: 10px;
+        padding: 6px;
+      }
+      .dh-detail-row {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; padding: 9px 12px; background: #ffffff;
+        border-radius: 8px; transition: background .15s;
+      }
+      .dh-detail-row:hover { background: #fafaf9; }
+      .dh-detail-row-info { flex: 1; min-width: 0; }
+      .dh-detail-row-cod {
+        color: #0f766e; font-size: 10px; font-weight: 700;
+        letter-spacing: .5px;
+      }
+      .dh-detail-row-desc {
+        color: #1c1917; font-size: 13px; font-weight: 500;
+        margin-top: 1px; word-wrap: break-word;
+      }
+      .dh-detail-row-pres {
+        color: #78716c; font-size: 10px; margin-top: 2px;
+        font-style: italic;
+      }
+      .dh-detail-row-qty {
+        color: #134e4a; font-size: 18px; font-weight: 700;
+        min-width: 40px; text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .dh-detail-total {
+        margin-top: 14px; padding: 10px 14px;
+        background: #f0fdfa; border: 1px solid #99f6e4;
+        border-radius: 10px; color: #134e4a; font-size: 12px;
+        display: flex; align-items: center; justify-content: space-between;
+        flex-wrap: wrap; gap: 8px;
+      }
+      .dh-detail-total strong {
+        font-size: 15px; color: #0f766e;
+        font-variant-numeric: tabular-nums;
+      }
+      .dh-detail-req {
+        background: #ffffff; color: #0f766e; padding: 3px 9px;
+        border: 1px solid #5eead4; border-radius: 14px;
+        font-size: 11px; font-weight: 600;
+      }
+
+      .dh-detail-empty {
+        text-align: center; padding: 32px 16px;
+        color: #57534e; font-size: 13px;
+      }
+
+      .dh-btn-edit-pend {
+        background: #f0f9ff; color: #075985; border-color: #bae6fd;
+      }
+      .dh-btn-edit-pend:hover { background: #e0f2fe; }
+      .dh-btn-pend-ok {
+        background: #ecfdf5; color: #065f46; border-color: #6ee7b7;
+        font-weight: 700;
+      }
+      .dh-btn-pend-ok:hover { background: #d1fae5; }
+    `;
+    document.head.appendChild(s);
+  })();
+
   // ─────────────────────────────────────────────────────────────────────
   // INICIALIZACIÓN
   // ─────────────────────────────────────────────────────────────────────
 
-  log('Patch v3 (Fases 1+2+3) activo. Inventario detectado:',
+  log('Patch v3.2 (Fases 1+2+3 + Detalle + Fix usuario) activo. Inventario detectado:',
       getHerrajesProductos().length, 'herrajes.');
+
+  /**
+   * UTILIDAD DE REPARACIÓN: arregla movimientos en inventario cuyo usuarioId
+   * tiene texto basura (más de 50 chars, contiene saltos de línea, etc).
+   * Los reemplaza con 'logistica'. Llamar manualmente desde consola si es
+   * necesario. Devuelve cuántos movs se arreglaron.
+   */
+  async function repararUsuariosDañados() {
+    const inv = getInventario();
+    if (!inv?.movimientos) {
+      console.log('[reparar] No hay inventario o movimientos');
+      return 0;
+    }
+    let count = 0;
+    const movs = inv.movimientos.map(m => {
+      const u = String(m.usuarioId || '');
+      const corrupto = u.length > 60 || /\n/.test(u) || /Despacho\s+a.*Despacho\s+a/i.test(u);
+      if (corrupto) {
+        count++;
+        console.log('[reparar] Mov corrupto:', m.id, '· cantidad:', m.cantidad);
+        return { ...m, usuarioId: 'logistica', _usuarioOriginal: u.slice(0, 100) };
+      }
+      return m;
+    });
+
+    // También en auditoría
+    const audi = (inv.auditoria || []).map(a => {
+      const u = String(a.usuarioId || '');
+      const corrupto = u.length > 60 || /\n/.test(u);
+      if (corrupto) {
+        count++;
+        return { ...a, usuarioId: 'logistica', _usuarioOriginal: u.slice(0, 100) };
+      }
+      return a;
+    });
+
+    if (count === 0) {
+      console.log('[reparar] No se encontraron movimientos con usuarioId corrupto.');
+      return 0;
+    }
+
+    const newInv = { ...inv, movimientos: movs, auditoria: audi };
+
+    // Persistir
+    try {
+      const raw = localStorage.getItem('interiorshn_local_state_v1');
+      const state = raw ? JSON.parse(raw) : {};
+      state.inventario = newInv;
+      localStorage.setItem('interiorshn_local_state_v1', JSON.stringify(state));
+    } catch (e) { warn('localStorage falló', e); }
+
+    if (typeof window._fbSave === 'function') {
+      try {
+        await window._fbSave('inventario', newInv);
+        console.log(`[reparar] ✓ ${count} entradas arregladas y guardadas en Firebase`);
+      } catch (e) {
+        warn('Firebase falló (datos quedan en localStorage)', e);
+      }
+    } else {
+      console.log(`[reparar] ✓ ${count} entradas arregladas en localStorage`);
+    }
+
+    toast(`✓ ${count} movimiento(s) reparado(s). Recarga la página para verlo.`, 'ok', 5000);
+    return count;
+  }
 
   // Exponer para debug manual
   window.__dhPatch = {
     abrirModalNuevo: abrirModalNuevoDespacho,
     abrirModalEditar: abrirModalEditarDespacho,
+    mostrarDetalle: mostrarDetalleHerrajes,
+    marcarEntregado: marcarHerrPendEntregado,
+    repararUsuariosDañados: repararUsuariosDañados,
     getState: () => ({ ...State }),
     getHerrajes: getHerrajesProductos,
     getStock: getStockProducto,
     getDespachos: getDespachos,
     revertirMovs: revertirMovimientosDeDespacho,
     config: CONFIG,
-    version: '3.0.0',
+    version: '3.2.0',
   };
 })();
 
