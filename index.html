@@ -43,6 +43,1738 @@
 
 <script src="app.min.js"></script>
 
+<!-- ============================================================
+     PATCH · DESPACHO CON HERRAJES (Fases 1 + 2 + 3)
+     ────────────────────────────────────────────────────────────
+     Fase 1: Modal Nuevo Despacho con tabla de herrajes
+             desde Inventario + Imprimir Requisición
+     Fase 2: Editar despacho con herrajes
+     Fase 3: Salida automática de inventario al guardar
+             (tipo SALIDA_VENTA, permite stock negativo con aviso)
+     ============================================================ -->
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   PATCH · DESPACHO CON HERRAJES (Fases 1 · 2 · 3)
+   ────────────────────────────────────────────────────────────────────────────
+   Extiende el módulo Logística → Despachos del dashboard con:
+
+   FASE 1  ✓ Modal de Nuevo Despacho con 2 pasos (Herrajes + Datos)
+           ✓ Tabla de herrajes leída en vivo desde Inventario (familia HERRAJES)
+           ✓ Botón "Imprimir Requisición" con formato oficial INTERIORS
+           ✓ Persistencia respetando el flujo React + Firebase
+
+   FASE 2  ✓ Editar despacho con herrajes (intercepta el botón Editar de cada fila)
+           ✓ Pre-carga los herrajes/datos existentes al editar
+           ✓ Soporta cambiar herrajes en despachos ya creados
+           ✓ Intercepta "Eliminar" para revertir el descuento de inventario
+
+   FASE 3  ✓ Salida automática de inventario al guardar el despacho
+           ✓ Genera movimientos SALIDA_CONSUMO_PRODUCCION por cada herraje
+           ✓ Trazabilidad: movimientos referencian el despacho y la requisición
+           ✓ Auditoría en inventario.auditoria
+           ✓ Reversión automática al editar (revierte movs viejos, crea nuevos)
+           ✓ Reversión al eliminar despacho
+
+   ARQUITECTURA:
+   ─ Interceptamos clics de "+ Nuevo Despacho", "Editar" y "×" (eliminar)
+   ─ Al guardar, escribimos en los inputs del RowModal de React via "native
+     value setter" y simulamos submit. Así React persiste por su flujo normal.
+   ─ Inyectamos los campos extra (herrajes, herrPendDesc, refMovs, etc.)
+     interceptando window._fbSave y localStorage.setItem antes de la escritura.
+   ─ Para Fase 3, modificamos el documento de inventario añadiendo movimientos
+     y guardando con window._fbSave('inventario', ...).
+   ════════════════════════════════════════════════════════════════════════════ */
+
+(() => {
+  'use strict';
+
+  const NS = '[Despacho-Herrajes]';
+  const log  = (...a) => console.log(NS, ...a);
+  const warn = (...a) => console.warn(NS, ...a);
+  const err  = (...a) => console.error(NS, ...a);
+
+  // ── Configuración de Fase 3 ────────────────────────────────────────────
+  const CONFIG = {
+    // Tipo de movimiento usado para descontar herrajes de un despacho
+    TIPO_SALIDA: 'SALIDA_VENTA',
+    // Permitir guardar aunque algún herraje no tenga stock suficiente
+    // (true = solo advertencia amarilla; false = bloquea con error rojo)
+    PERMITIR_STOCK_NEGATIVO: true,
+    // ID de la ubicación de bodega por defecto (se autodetecta si no existe)
+    UBICACION_DEFAULT_ID: null, // se llena al cargar
+  };
+
+  // ── Estado interno del patch ──────────────────────────────────────────
+  const State = {
+    open: false,
+    step: 1,
+    qtys: {},
+    pendDesc: '',
+    reqProyecto: '',
+    reqArea: 'COCINA',
+    reqSolicitante: '',
+    reqMotivo: 'PROYECTO NUEVO',
+    fecha: '',
+    cliente: '',
+    area: '',
+    color: '',
+    instalador: '',
+    ciudad: 'San Pedro Sula',
+    estado: 'Envio Completo',
+    tipo: 'Muebles/Herrajes',
+    editIndex: null,        // índice del despacho que se está editando (null = nuevo)
+    editOriginal: null,     // copia del despacho original para revertir descuentos
+    refRequisicion: null,   // se asigna al imprimir; se mantiene si edita
+  };
+
+  // ─────────────────────────────────────────────────────────────────────
+  // SECCIÓN 1: ACCESO A INVENTARIO (lectura)
+  // ─────────────────────────────────────────────────────────────────────
+
+  function getInventario() {
+    try {
+      const raw = localStorage.getItem('interiorshn_local_state_v1');
+      if (!raw) return null;
+      return JSON.parse(raw)?.inventario || null;
+    } catch (e) {
+      err('No se pudo leer inventario de localStorage', e);
+      return null;
+    }
+  }
+
+  function getMain() {
+    try {
+      const raw = localStorage.getItem('interiorshn_local_state_v1');
+      if (!raw) return null;
+      return JSON.parse(raw)?.main || null;
+    } catch (e) {
+      err('No se pudo leer main de localStorage', e);
+      return null;
+    }
+  }
+
+  function getDespachos() {
+    const m = getMain();
+    return Array.isArray(m?.desp) ? m.desp : [];
+  }
+
+  function getHerrajesProductos() {
+    const inv = getInventario();
+    if (!inv?.productos?.length) return [];
+    return inv.productos
+      .filter(p => p.familia === 'HERRAJES' && p.activo !== false)
+      .sort((a, b) => (a.codigo || '').localeCompare(b.codigo || ''));
+  }
+
+  function getStockProducto(productoId) {
+    const inv = getInventario();
+    if (!inv?.movimientos?.length) return 0;
+    let stock = 0;
+    for (const mov of inv.movimientos) {
+      if (mov.anulado) continue;
+      if (mov.productoId !== productoId) continue;
+      const T = (typeof window !== 'undefined' && window.TIPOS_MOVIMIENTO) ||
+                (typeof TIPOS_MOVIMIENTO !== 'undefined' ? TIPOS_MOVIMIENTO : null);
+      let signo = 0;
+      if (T && T[mov.tipo]) {
+        signo = T[mov.tipo].signo || 0;
+      } else {
+        signo = String(mov.tipo).startsWith('ENTRADA') ? 1
+              : String(mov.tipo).startsWith('SALIDA')  ? -1 : 0;
+      }
+      stock += signo * (Number(mov.cantidad) || 0);
+    }
+    return stock;
+  }
+
+  function getUbicacionDefault() {
+    if (CONFIG.UBICACION_DEFAULT_ID) return CONFIG.UBICACION_DEFAULT_ID;
+    const inv = getInventario();
+    if (!inv?.ubicaciones?.length) return null;
+    // Preferencia: ubicación activa con id que mencione "bod" (bodega)
+    const ub = inv.ubicaciones.find(u => u.activa && /bod/i.test(u.id))
+            || inv.ubicaciones.find(u => u.activa)
+            || inv.ubicaciones[0];
+    CONFIG.UBICACION_DEFAULT_ID = ub?.id || null;
+    return CONFIG.UBICACION_DEFAULT_ID;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // SECCIÓN 2: UTILIDADES
+  // ─────────────────────────────────────────────────────────────────────
+
+  function newId(prefix) {
+    const nano = Math.random().toString(36).slice(2, 10) +
+                 Date.now().toString(36).slice(-4);
+    return `${prefix}_${nano}`;
+  }
+
+  function nowISO() { return new Date().toISOString(); }
+
+  function escapeHTML(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function escapeAttr(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  function waitFor(predicate, timeout = 2000) {
+    return new Promise(resolve => {
+      const start = Date.now();
+      const tick = () => {
+        const v = predicate();
+        if (v) return resolve(v);
+        if (Date.now() - start >= timeout) return resolve(null);
+        requestAnimationFrame(tick);
+      };
+      tick();
+    });
+  }
+
+  function setNativeValue(el, value) {
+    const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype
+                : el.tagName === 'SELECT'   ? window.HTMLSelectElement.prototype
+                :                              window.HTMLInputElement.prototype;
+    const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+    desc?.set?.call(el, value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function simulateClick(el) {
+    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    el.dispatchEvent(new MouseEvent('mouseup',   { bubbles: true, cancelable: true }));
+    el.dispatchEvent(new MouseEvent('click',     { bubbles: true, cancelable: true }));
+  }
+
+  function toast(msg, kind = 'ok', ms = 2500) {
+    const el = document.createElement('div');
+    el.className = 'dh-toast ' + (kind || '');
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), ms);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // SECCIÓN 3: ESTILOS DEL MODAL
+  // ─────────────────────────────────────────────────────────────────────
+
+  function injectStyles() {
+    if (document.getElementById('dh-styles')) return;
+    const s = document.createElement('style');
+    s.id = 'dh-styles';
+    s.textContent = `
+      .dh-overlay {
+        position: fixed; inset: 0; z-index: 60;
+        background: rgba(0,0,0,.45);
+        display: flex; align-items: flex-start; justify-content: center;
+        padding: 24px 16px; overflow-y: auto;
+        animation: dh-fade .15s ease-out;
+      }
+      @keyframes dh-fade { from { opacity: 0 } to { opacity: 1 } }
+      .dh-modal {
+        background: #ffffff; border-radius: 14px;
+        box-shadow: 0 20px 60px rgba(0,0,0,.25), 0 4px 16px rgba(0,0,0,.1);
+        max-width: 760px; width: 100%; margin: auto;
+        display: flex; flex-direction: column; max-height: calc(100vh - 48px);
+        overflow: hidden;
+      }
+      .dh-header {
+        padding: 16px 22px; border-bottom: 1px solid #e7e5e4;
+        display: flex; align-items: center; justify-content: space-between;
+      }
+      .dh-title { font-weight: 700; color: #1c1917; font-size: 16px; letter-spacing: -.01em; }
+      .dh-close { background: none; border: 0; font-size: 24px; line-height: 1;
+                  color: #a8a29e; cursor: pointer; padding: 4px 8px; }
+      .dh-close:hover { color: #44403c; }
+
+      .dh-stepbar { display: flex; gap: 0; margin: 16px 22px 0 22px;
+                    border: 1px solid #e7e5e4; border-radius: 10px; overflow: hidden; }
+      .dh-step { flex: 1; padding: 9px 0; text-align: center; font-size: 11px;
+                 font-weight: 700; letter-spacing: 1px; cursor: pointer;
+                 background: #fafaf9; color: #78716c; transition: background .15s; }
+      .dh-step.active { background: #0d9488; color: #ffffff; }
+      .dh-step.active.alt { background: #0891b2; }
+
+      .dh-body { padding: 18px 22px; overflow-y: auto; flex: 1; }
+
+      .dh-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .dh-grid-2 .dh-full { grid-column: 1 / -1; }
+
+      .dh-field label {
+        display: block; font-size: 10px; font-weight: 700;
+        letter-spacing: 1.5px; color: #78716c; margin-bottom: 5px;
+        text-transform: uppercase;
+      }
+      .dh-field input, .dh-field select {
+        width: 100%; padding: 8px 10px; font-size: 13px; color: #1c1917;
+        background: #ffffff; border: 1px solid #d6d3d1; border-radius: 8px;
+        outline: none; transition: border-color .15s, box-shadow .15s;
+        font-family: inherit;
+      }
+      .dh-field input:focus, .dh-field select:focus {
+        border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13,148,136,.15);
+      }
+
+      .dh-section {
+        background: #f5f5f4; border: 1px solid #e7e5e4; border-radius: 12px;
+        padding: 14px; margin-top: 14px;
+      }
+      .dh-section-title {
+        color: #0f766e; font-size: 11px; font-weight: 700;
+        letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 10px;
+        display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      }
+      .dh-badge-count {
+        background: #ccfbf1; color: #0f766e; border: 1px solid #5eead4;
+        border-radius: 20px; padding: 2px 10px; font-size: 10px; font-weight: 700;
+      }
+
+      .dh-search {
+        width: 100%; padding: 8px 12px; font-size: 12px;
+        background: #ffffff; border: 1px solid #d6d3d1; border-radius: 8px;
+        outline: none; margin-bottom: 8px; font-family: inherit;
+      }
+      .dh-search:focus { border-color: #0d9488; }
+
+      .dh-table-wrap {
+        max-height: 260px; overflow-y: auto;
+        border: 1px solid #e7e5e4; border-radius: 10px; background: #ffffff;
+      }
+      .dh-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      .dh-table thead th {
+        position: sticky; top: 0; z-index: 1;
+        background: #f5f5f4; padding: 8px 10px; text-align: left;
+        font-size: 10px; letter-spacing: 1px; color: #78716c; font-weight: 700;
+        border-bottom: 1px solid #e7e5e4; text-transform: uppercase;
+      }
+      .dh-table tbody td {
+        padding: 7px 10px; border-bottom: 1px solid #f5f5f4; vertical-align: middle;
+      }
+      .dh-table tbody tr:last-child td { border-bottom: 0; }
+      .dh-table tbody tr.has-qty { background: rgba(13,148,136,.06); }
+      .dh-prod-cod { color: #0f766e; font-weight: 700; font-size: 11px; }
+      .dh-prod-desc { color: #1c1917; font-size: 12px; }
+      .dh-prod-stock { color: #78716c; font-size: 10px; margin-top: 2px; }
+      .dh-prod-stock.low { color: #b45309; font-weight: 700; }
+      .dh-prod-stock.zero { color: #dc2626; font-weight: 700; }
+      .dh-prod-stock.warn { color: #b45309; font-weight: 700; }
+
+      .dh-qty-cell { white-space: nowrap; text-align: center; width: 130px; }
+      .dh-qty-row { display: inline-flex; align-items: center; gap: 4px; }
+      .dh-qty-btn {
+        background: #f5f5f4; border: 1px solid #d6d3d1; color: #44403c;
+        width: 26px; height: 26px; border-radius: 6px; cursor: pointer;
+        font-size: 14px; font-weight: 700; line-height: 1;
+        display: inline-flex; align-items: center; justify-content: center;
+      }
+      .dh-qty-btn:hover { background: #e7e5e4; }
+      .dh-qty-btn.plus { color: #0d9488; }
+      .dh-qty-input {
+        width: 48px; padding: 3px 4px; font-size: 12px; font-weight: 700;
+        text-align: center; color: #0f766e; background: #ffffff;
+        border: 1px solid #d6d3d1; border-radius: 6px; outline: none;
+        font-family: inherit;
+      }
+      .dh-qty-input.has-qty { border-color: #0d9488; background: #f0fdfa; }
+      .dh-qty-input.over { border-color: #dc2626; background: #fef2f2; color: #dc2626; }
+
+      .dh-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; min-height: 22px; }
+      .dh-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        background: #f0fdfa; color: #0f766e; border: 1px solid #5eead4;
+        border-radius: 14px; padding: 3px 4px 3px 10px; font-size: 11px;
+        font-weight: 600;
+      }
+      .dh-chip strong { color: #134e4a; }
+      .dh-chip-x {
+        background: rgba(220,38,38,.1); color: #dc2626;
+        border: 0; border-radius: 50%; width: 18px; height: 18px;
+        cursor: pointer; font-size: 10px; line-height: 1;
+        display: inline-flex; align-items: center; justify-content: center;
+      }
+      .dh-chip-x:hover { background: #dc2626; color: #ffffff; }
+
+      .dh-pend-row {
+        display: flex; align-items: center; gap: 10px;
+        margin-top: 10px; flex-wrap: wrap;
+      }
+      .dh-pend-row label {
+        color: #b45309; font-size: 10px; font-weight: 700;
+        letter-spacing: 1px; text-transform: uppercase;
+      }
+      .dh-pend-row input {
+        flex: 1; min-width: 200px; padding: 7px 10px; font-size: 12px;
+        background: #ffffff; border: 1px solid #fcd34d; border-radius: 8px;
+        outline: none; color: #1c1917; font-family: inherit;
+      }
+      .dh-pend-row input:focus { border-color: #d97706; }
+
+      .dh-empty { padding: 20px; text-align: center; color: #a8a29e; font-size: 12px; }
+
+      .dh-footer {
+        padding: 14px 22px; border-top: 1px solid #e7e5e4;
+        display: flex; align-items: center; justify-content: flex-end;
+        gap: 8px; flex-wrap: wrap; background: #fafaf9;
+      }
+      .dh-btn {
+        padding: 8px 14px; font-size: 12px; font-weight: 700;
+        border-radius: 8px; cursor: pointer; border: 1px solid transparent;
+        transition: background .15s, border-color .15s; font-family: inherit;
+      }
+      .dh-btn-ghost { background: #ffffff; color: #57534e; border-color: #d6d3d1; }
+      .dh-btn-ghost:hover { background: #f5f5f4; }
+      .dh-btn-primary { background: #0d9488; color: #ffffff; }
+      .dh-btn-primary:hover { background: #0f766e; }
+      .dh-btn-print { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+      .dh-btn-print:hover { background: #fde68a; }
+      .dh-btn-save { background: #059669; color: #ffffff; }
+      .dh-btn-save:hover { background: #047857; }
+
+      .dh-toast {
+        position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+        background: #1c1917; color: #ffffff; padding: 10px 18px; border-radius: 10px;
+        font-size: 13px; z-index: 9999; box-shadow: 0 10px 30px rgba(0,0,0,.3);
+        animation: dh-toast-in .2s ease-out; max-width: 90vw;
+      }
+      @keyframes dh-toast-in {
+        from { opacity: 0; transform: translate(-50%, 10px); }
+        to   { opacity: 1; transform: translate(-50%, 0); }
+      }
+      .dh-toast.error { background: #991b1b; }
+      .dh-toast.warn  { background: #92400e; }
+      .dh-toast.ok    { background: #065f46; }
+      .dh-toast.info  { background: #1e40af; }
+
+      /* Edit-mode header pill */
+      .dh-edit-pill {
+        display: inline-block; padding: 2px 8px; margin-left: 8px;
+        background: #fef3c7; color: #92400e; border: 1px solid #fcd34d;
+        border-radius: 20px; font-size: 10px; font-weight: 700; letter-spacing: 1px;
+      }
+
+      /* Mientras hacemos auto-flow con React, ocultamos el modal de React */
+      body.dh-autoflow div.fixed.inset-0[class*="bg-black"] {
+        opacity: 0 !important;
+        pointer-events: none !important;
+      }
+
+      /* Overlay de "guardando..." */
+      .dh-saving-overlay {
+        position: fixed; inset: 0; z-index: 70;
+        background: rgba(255,255,255,.6); backdrop-filter: blur(2px);
+        display: flex; align-items: center; justify-content: center;
+      }
+      .dh-saving-card {
+        background: #ffffff; padding: 18px 28px; border-radius: 12px;
+        box-shadow: 0 12px 36px rgba(0,0,0,.2); display: flex;
+        align-items: center; gap: 12px; font-size: 13px; color: #1c1917;
+      }
+      .dh-spinner {
+        width: 18px; height: 18px; border: 2px solid #d6d3d1;
+        border-top-color: #0d9488; border-radius: 50%;
+        animation: dh-spin .8s linear infinite;
+      }
+      @keyframes dh-spin { to { transform: rotate(360deg) } }
+    `;
+    document.head.appendChild(s);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // SECCIÓN 4: MODAL UI
+  // ─────────────────────────────────────────────────────────────────────
+
+  function renderModal() {
+    closeModal();
+    State.open = true;
+    injectStyles();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'dh-overlay';
+    overlay.id = 'dh-overlay';
+    overlay.addEventListener('click', (ev) => {
+      if (ev.target === overlay) closeModal();
+    });
+
+    const isEdit = State.editIndex != null;
+    const titleText = isEdit
+      ? `✏ Editar Despacho <span class="dh-edit-pill">EDITANDO #${State.editIndex + 1}</span>`
+      : '+ Nuevo Despacho';
+
+    const modal = document.createElement('div');
+    modal.className = 'dh-modal';
+    modal.innerHTML = `
+      <div class="dh-header">
+        <div class="dh-title" id="dh-title">${titleText}</div>
+        <button class="dh-close" type="button" aria-label="Cerrar">×</button>
+      </div>
+      <div class="dh-stepbar">
+        <div class="dh-step ${State.step === 1 ? 'active' : ''}" data-step="1">PASO 1 — HERRAJES</div>
+        <div class="dh-step alt ${State.step === 2 ? 'active' : ''}" data-step="2">PASO 2 — DATOS DEL DESPACHO</div>
+      </div>
+      <div class="dh-body" id="dh-body"></div>
+      <div class="dh-footer" id="dh-footer"></div>
+    `;
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    modal.querySelector('.dh-close').addEventListener('click', closeModal);
+    modal.querySelectorAll('.dh-step').forEach(el => {
+      el.addEventListener('click', () => goStep(parseInt(el.dataset.step, 10)));
+    });
+
+    renderBody();
+    renderFooter();
+    document.addEventListener('keydown', escListener);
+  }
+
+  function escListener(ev) {
+    if (ev.key === 'Escape') closeModal();
+  }
+
+  function closeModal() {
+    State.open = false;
+    document.getElementById('dh-overlay')?.remove();
+    document.removeEventListener('keydown', escListener);
+  }
+
+  function goStep(step) {
+    State.step = step;
+    document.querySelectorAll('.dh-step').forEach(el => {
+      const s = parseInt(el.dataset.step, 10);
+      el.classList.toggle('active', s === step);
+    });
+    renderBody();
+    renderFooter();
+  }
+
+  function renderBody() {
+    const body = document.getElementById('dh-body');
+    if (!body) return;
+    body.innerHTML = State.step === 1 ? bodyPaso1HTML() : bodyPaso2HTML();
+    if (State.step === 1) wireBodyPaso1();
+    else                  wireBodyPaso2();
+  }
+
+  function bodyPaso1HTML() {
+    return `
+      <div class="dh-grid-2">
+        <div class="dh-field">
+          <label>Proyecto (para requisición)</label>
+          <input id="dh-req-proyecto" type="text" placeholder="Ej: TERRALTA E-13" value="${escapeAttr(State.reqProyecto)}" />
+        </div>
+        <div class="dh-field">
+          <label>Área</label>
+          <select id="dh-req-area">
+            ${['COCINA','CLOSET','BAÑO','SALA','OFICINA','OTRO']
+              .map(o => `<option ${State.reqArea===o?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </div>
+        <div class="dh-field">
+          <label>Solicitante</label>
+          <input id="dh-req-sol" type="text" placeholder="Nombre" value="${escapeAttr(State.reqSolicitante)}" />
+        </div>
+        <div class="dh-field">
+          <label>Motivo</label>
+          <input id="dh-req-mot" type="text" value="${escapeAttr(State.reqMotivo)}" />
+        </div>
+      </div>
+
+      <div class="dh-section">
+        <div class="dh-section-title">
+          <span>🔩 HERRAJES UTILIZADOS</span>
+          <span class="dh-badge-count" id="dh-sel-count">0 seleccionados</span>
+        </div>
+        <input class="dh-search" id="dh-search" type="text" placeholder="🔍 Filtrar por código o descripción…" autocomplete="off" />
+        <div class="dh-table-wrap">
+          <table class="dh-table">
+            <thead><tr>
+              <th style="width:60%">Herraje</th>
+              <th style="text-align:center;width:40%">Cantidad</th>
+            </tr></thead>
+            <tbody id="dh-tbody"></tbody>
+          </table>
+        </div>
+        <div class="dh-chips" id="dh-chips"></div>
+        <div class="dh-pend-row">
+          <label>⏳ Pendientes por entregar:</label>
+          <input id="dh-pend" type="text" placeholder="Ej: 3x Bisagra amortiguada, 1x Jaladera…" value="${escapeAttr(State.pendDesc)}" />
+        </div>
+      </div>
+    `;
+  }
+
+  function wireBodyPaso1() {
+    const $ = (id) => document.getElementById(id);
+    $('dh-req-proyecto').addEventListener('input', e => State.reqProyecto = e.target.value);
+    $('dh-req-area').addEventListener('change', e => State.reqArea = e.target.value);
+    $('dh-req-sol').addEventListener('input', e => State.reqSolicitante = e.target.value);
+    $('dh-req-mot').addEventListener('input', e => State.reqMotivo = e.target.value);
+    $('dh-pend').addEventListener('input', e => State.pendDesc = e.target.value);
+    $('dh-search').addEventListener('input', renderHerrajesTabla);
+    renderHerrajesTabla();
+    renderHerrajesChips();
+  }
+
+  function renderHerrajesTabla() {
+    const tbody = document.getElementById('dh-tbody');
+    if (!tbody) return;
+    const search = (document.getElementById('dh-search')?.value || '').toLowerCase().trim();
+    const productos = getHerrajesProductos();
+
+    if (!productos.length) {
+      tbody.innerHTML = `<tr><td colspan="2" class="dh-empty">
+        ⚠️ No hay herrajes en el inventario.<br/>
+        <span style="font-size:11px;">Ve al módulo Inventario → Catálogo → Familia HERRAJES y agrégalos.</span>
+      </td></tr>`;
+      return;
+    }
+
+    const filtered = search
+      ? productos.filter(p =>
+          (p.codigo||'').toLowerCase().includes(search) ||
+          (p.descripcion||'').toLowerCase().includes(search))
+      : productos;
+
+    if (!filtered.length) {
+      tbody.innerHTML = `<tr><td colspan="2" class="dh-empty">Sin coincidencias para "${escapeHTML(search)}"</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(p => {
+      const qty = State.qtys[p.id] || 0;
+      // Stock CON el ajuste por edición: si estamos editando, sumar las cantidades
+      // que originalmente había en este despacho (se van a revertir al guardar).
+      let stockEfectivo = getStockProducto(p.id);
+      if (State.editOriginal?.herrajes?.[p.id]) {
+        stockEfectivo += State.editOriginal.herrajes[p.id];
+      }
+      const exceso = qty > stockEfectivo;
+      const stockClass = stockEfectivo <= 0 ? 'zero'
+                       : (stockEfectivo < (p.stockMinimo || 0)) ? 'low'
+                       : '';
+      const stockTxt = stockEfectivo <= 0
+        ? '⚠ Sin stock'
+        : `Stock: ${stockEfectivo.toLocaleString('es-HN')}${qty > 0 ? ` (después: ${(stockEfectivo - qty).toLocaleString('es-HN')})` : ''}`;
+
+      return `
+        <tr class="${qty > 0 ? 'has-qty' : ''}">
+          <td>
+            <div class="dh-prod-cod">${escapeHTML(p.codigo || '—')}</div>
+            <div class="dh-prod-desc">${escapeHTML(p.descripcion || '—')}</div>
+            <div class="dh-prod-stock ${exceso ? 'warn' : stockClass}">${exceso ? '⚠ ' : ''}${stockTxt}${p.presentacion ? ' · ' + escapeHTML(p.presentacion) : ''}</div>
+          </td>
+          <td class="dh-qty-cell">
+            <div class="dh-qty-row">
+              <button type="button" class="dh-qty-btn" data-act="dec" data-pid="${p.id}">−</button>
+              <input type="number" min="0" step="1" value="${qty}"
+                     class="dh-qty-input ${qty > 0 ? 'has-qty' : ''} ${exceso ? 'over' : ''}"
+                     data-pid="${p.id}" />
+              <button type="button" class="dh-qty-btn plus" data-act="inc" data-pid="${p.id}">+</button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('.dh-qty-btn').forEach(b => {
+      b.addEventListener('click', () => {
+        const pid = b.dataset.pid;
+        const delta = b.dataset.act === 'inc' ? 1 : -1;
+        const cur = State.qtys[pid] || 0;
+        setQty(pid, Math.max(0, cur + delta));
+      });
+    });
+    tbody.querySelectorAll('.dh-qty-input').forEach(input => {
+      input.addEventListener('input', () => {
+        const pid = input.dataset.pid;
+        setQty(pid, parseInt(input.value, 10) || 0, /*skipRedraw=*/true);
+      });
+      input.addEventListener('blur', () => {
+        renderHerrajesTabla();
+        renderHerrajesChips();
+      });
+    });
+  }
+
+  function setQty(pid, val, skipRedraw) {
+    if (val > 0) State.qtys[pid] = val;
+    else delete State.qtys[pid];
+    if (!skipRedraw) renderHerrajesTabla();
+    renderHerrajesChips();
+  }
+
+  function renderHerrajesChips() {
+    const chips = document.getElementById('dh-chips');
+    const count = document.getElementById('dh-sel-count');
+    if (!chips || !count) return;
+    const productos = getHerrajesProductos();
+    const map = new Map(productos.map(p => [p.id, p]));
+    const seleccionados = Object.keys(State.qtys)
+      .map(pid => ({ p: map.get(pid), qty: State.qtys[pid] }))
+      .filter(x => x.p);
+
+    count.textContent = seleccionados.length === 1
+      ? '1 seleccionado'
+      : `${seleccionados.length} seleccionados`;
+
+    if (!seleccionados.length) { chips.innerHTML = ''; return; }
+
+    chips.innerHTML = seleccionados.map(({ p, qty }) => `
+      <span class="dh-chip">
+        ${escapeHTML(p.codigo || '')} · ${escapeHTML(p.descripcion || '')}
+        <strong>×${qty}</strong>
+        <button class="dh-chip-x" type="button" data-pid="${p.id}" aria-label="Quitar">×</button>
+      </span>`).join('');
+
+    chips.querySelectorAll('.dh-chip-x').forEach(b => {
+      b.addEventListener('click', () => setQty(b.dataset.pid, 0));
+    });
+  }
+
+  function bodyPaso2HTML() {
+    return `
+      <div class="dh-grid-2">
+        <div class="dh-field">
+          <label>Fecha</label>
+          <input id="dh-fecha" type="date" value="${escapeAttr(State.fecha)}" />
+        </div>
+        <div class="dh-field">
+          <label>Ciudad</label>
+          <select id="dh-ciudad">
+            ${['San Pedro Sula','Tegucigalpa','Cortes']
+              .map(o => `<option ${State.ciudad===o?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </div>
+        <div class="dh-field dh-full">
+          <label>Cliente *</label>
+          <input id="dh-cliente" type="text" placeholder="Nombre del cliente / proyecto" value="${escapeAttr(State.cliente)}" />
+        </div>
+        <div class="dh-field">
+          <label>Área</label>
+          <input id="dh-area" type="text" placeholder="Cocina, Closet, Baños…" value="${escapeAttr(State.area)}" />
+        </div>
+        <div class="dh-field">
+          <label>Color</label>
+          <input id="dh-color" type="text" placeholder="Blanco 3/4, Roble Eternity…" value="${escapeAttr(State.color)}" />
+        </div>
+        <div class="dh-field">
+          <label>Instalador</label>
+          <input id="dh-inst" type="text" value="${escapeAttr(State.instalador)}" />
+        </div>
+        <div class="dh-field">
+          <label>Estado</label>
+          <select id="dh-estado">
+            ${['Envio Completo','Parcial','Pendiente','En ruta','Instalado','En bodega','Reposición']
+              .map(o => `<option ${State.estado===o?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <div class="dh-section" style="background:#f0f9ff; border-color:#bae6fd;">
+        <div class="dh-section-title" style="color:#075985;">
+          <span>📋 Resumen de Herrajes (Paso 1)</span>
+        </div>
+        <div id="dh-resumen-herrajes" style="font-size:12px; color:#1c1917;"></div>
+      </div>
+    `;
+  }
+
+  function wireBodyPaso2() {
+    const $ = (id) => document.getElementById(id);
+    $('dh-fecha').addEventListener('input', e => State.fecha = e.target.value);
+    $('dh-ciudad').addEventListener('change', e => State.ciudad = e.target.value);
+    $('dh-cliente').addEventListener('input', e => State.cliente = e.target.value);
+    $('dh-area').addEventListener('input', e => State.area = e.target.value);
+    $('dh-color').addEventListener('input', e => State.color = e.target.value);
+    $('dh-inst').addEventListener('input', e => State.instalador = e.target.value);
+    $('dh-estado').addEventListener('change', e => State.estado = e.target.value);
+    renderResumenHerrajes();
+  }
+
+  function renderResumenHerrajes() {
+    const cont = document.getElementById('dh-resumen-herrajes');
+    if (!cont) return;
+    const productos = getHerrajesProductos();
+    const map = new Map(productos.map(p => [p.id, p]));
+    const items = Object.keys(State.qtys)
+      .map(pid => ({ p: map.get(pid), qty: State.qtys[pid] }))
+      .filter(x => x.p);
+    if (!items.length) {
+      cont.innerHTML = '<em style="color:#78716c;">Sin herrajes seleccionados. Vuelve al Paso 1 si necesitas agregar.</em>';
+      return;
+    }
+    cont.innerHTML = `
+      <ul style="margin:0; padding-left: 18px; line-height: 1.6;">
+        ${items.map(({p, qty}) => `<li><strong>×${qty}</strong> ${escapeHTML(p.codigo || '')} · ${escapeHTML(p.descripcion || '')}</li>`).join('')}
+      </ul>
+      ${State.pendDesc ? `<div style="margin-top:8px;color:#b45309;"><strong>⏳ Pendiente:</strong> ${escapeHTML(State.pendDesc)}</div>` : ''}
+    `;
+  }
+
+  function renderFooter() {
+    const f = document.getElementById('dh-footer');
+    if (!f) return;
+    const isEdit = State.editIndex != null;
+    if (State.step === 1) {
+      f.innerHTML = `
+        <button class="dh-btn dh-btn-ghost" id="dh-cancel">Cancelar</button>
+        <button class="dh-btn dh-btn-print" id="dh-print">🖨 Imprimir Requisición</button>
+        <button class="dh-btn dh-btn-primary" id="dh-next">Siguiente → Datos del despacho</button>
+      `;
+      f.querySelector('#dh-cancel').addEventListener('click', closeModal);
+      f.querySelector('#dh-print').addEventListener('click', imprimirRequisicion);
+      f.querySelector('#dh-next').addEventListener('click', () => goStep(2));
+    } else {
+      f.innerHTML = `
+        <button class="dh-btn dh-btn-ghost" id="dh-back">← Volver a Herrajes</button>
+        <button class="dh-btn dh-btn-ghost" id="dh-cancel">Cancelar</button>
+        <button class="dh-btn dh-btn-save" id="dh-save">${isEdit ? '✓ Guardar cambios' : '✓ Guardar Despacho'}</button>
+      `;
+      f.querySelector('#dh-back').addEventListener('click', () => goStep(1));
+      f.querySelector('#dh-cancel').addEventListener('click', closeModal);
+      f.querySelector('#dh-save').addEventListener('click', guardarDespacho);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // SECCIÓN 5: IMPRIMIR REQUISICIÓN
+  // ─────────────────────────────────────────────────────────────────────
+
+  function imprimirRequisicion() {
+    const productos = getHerrajesProductos();
+    const map = new Map(productos.map(p => [p.id, p]));
+    const items = Object.keys(State.qtys)
+      .map(pid => ({ p: map.get(pid), qty: State.qtys[pid] }))
+      .filter(x => x.p && x.qty > 0);
+
+    if (!items.length) {
+      toast('⚠ Agrega al menos un herraje con cantidad', 'warn');
+      return;
+    }
+
+    const sol   = State.reqSolicitante || '—';
+    const proy  = State.reqProyecto || '—';
+    const area  = State.reqArea || 'COCINA';
+    const mot   = (State.reqMotivo || 'PROYECTO NUEVO').toUpperCase();
+    const fecha = new Date().toLocaleDateString('es-HN', { day:'2-digit', month:'2-digit', year:'numeric' });
+    // Si ya tenemos un refRequisicion (del despacho que se está editando), úsalo;
+    // si no, generamos uno nuevo y lo persistimos al guardar.
+    if (!State.refRequisicion) {
+      State.refRequisicion = 'REQ-' + Date.now().toString().slice(-6);
+    }
+    const reqNum = State.refRequisicion;
+
+    const rows = items.map((r, i) => `
+      <tr>
+        <td class="num">${i+1}</td>
+        <td><strong>${escapeHTML(r.p.codigo || '')}</strong></td>
+        <td>${escapeHTML((r.p.descripcion || '').toUpperCase())}</td>
+        <td class="pres">${escapeHTML(r.p.presentacion || r.p.unidadBase || '—')}</td>
+        <td class="qty">${r.qty}</td>
+      </tr>`).join('');
+
+    const win = window.open('', '_blank', 'width=900,height=1100');
+    if (!win) {
+      toast('⚠ Permite ventanas emergentes para imprimir', 'warn');
+      return;
+    }
+
+    win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Requisición ${reqNum}</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; padding: 28px 32px; background:#fff; color:#111; font-size: 12px; }
+  .logo-wrap { text-align:center; margin-bottom: 8px; }
+  .logo-box { display:inline-block; border:2px solid #111; padding:6px 30px; font-size:22px; font-weight:700; letter-spacing:5px; }
+  .logo-box span { border-bottom:2px solid #111; padding-bottom:1px; }
+  .doc-title { background:#c8c8c8; text-align:center; font-size:16px; font-weight:700; letter-spacing:2px; padding:9px 0; border:1px solid #999; }
+  .hdr { width:100%; border-collapse:collapse; }
+  .hdr td { border:1px solid #999; padding:6px 9px; background:#d4d4d4; font-size:11px; }
+  .lbl { font-weight:700; text-transform:uppercase; width:90px; white-space:nowrap; }
+  .val { background:#fff; font-size:12px; }
+  .val-bold { background:#fff; font-size:12px; font-weight:600; }
+  .motivo-row { border:1px solid #999; border-top:none; background:#d4d4d4; text-align:center; padding:8px; font-size:13px; font-weight:700; letter-spacing:1px; }
+  .legal { border:1px solid #999; border-top:none; text-align:center; padding:8px 12px; font-size:10px; color:#333; font-style:italic; margin-bottom: 12px; }
+  .items-table { width:100%; border-collapse:collapse; margin-bottom:16px; }
+  .items-table th { background:#d4d4d4; border:1px solid #999; padding:8px 10px; font-size:10px; letter-spacing:.8px; text-align:left; font-weight:700; text-transform:uppercase; }
+  .items-table td { border:1px solid #ccc; padding:7px 10px; }
+  .items-table tr:nth-child(even) td { background:#f8f8f8; }
+  .num { text-align:center; width:38px; color:#555; font-size:10px; }
+  .qty { text-align:center; font-weight:700; width:70px; }
+  .pres { text-align:center; width:130px; font-size: 11px; }
+  .signatures { display:grid; grid-template-columns:1fr 1fr 1fr; gap:30px; margin-top:36px; }
+  .sig-box { text-align:center; }
+  .sig-line { border-top:1px solid #555; padding-top:6px; font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; }
+  .pend-box { border:1px dashed #b45309; background:#fffbeb; padding:8px 12px; margin-bottom: 12px; font-size: 11px; color:#92400e; border-radius: 4px; }
+  @media print { body { padding: 18px; } @page { margin: 1.2cm; } }
+</style>
+</head><body onload="window.print()">
+  <div class="logo-wrap"><div class="logo-box">I<span>N</span>TERIORS</div></div>
+  <div style="text-align:center;font-size:9px;color:#666;letter-spacing:1px;margin-bottom:10px;">SISTEMA DE REQUISICIONES · LOGÍSTICA</div>
+  <div class="doc-title">REQUISICIÓN DE HERRAJES</div>
+  <table class="hdr">
+    <tr>
+      <td class="lbl">SOLICITANTE</td><td class="val" colspan="3">${escapeHTML(sol)}</td>
+      <td class="lbl" style="width:60px;">FECHA</td><td class="val" style="width:90px;">${escapeHTML(fecha)}</td>
+      <td class="lbl" style="width:100px;">N° REQUISICIÓN</td><td style="background:#fff;font-size:11px;text-align:right;width:90px;font-weight:700;">${escapeHTML(reqNum)}</td>
+    </tr>
+    <tr><td class="lbl">ÁREA</td><td class="val" colspan="7">${escapeHTML(area)}</td></tr>
+    <tr><td class="lbl">PROYECTO</td><td class="val-bold" colspan="7">${escapeHTML(proy)}</td></tr>
+  </table>
+  <div class="motivo-row">MOTIVO &nbsp;&nbsp; ${escapeHTML(mot)}</div>
+  <div class="legal">Por medio de lo siguiente, se hace constancia de la entrega de los siguientes herrajes en perfectas condiciones.</div>
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th class="num">ITEM</th>
+        <th style="width:90px;">CÓDIGO</th>
+        <th>DESCRIPCIÓN</th>
+        <th class="pres">PRESENTACIÓN</th>
+        <th class="qty">CANTIDAD</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+  ${State.pendDesc ? `<div class="pend-box"><strong>⏳ HERRAJES PENDIENTES POR ENTREGAR:</strong> ${escapeHTML(State.pendDesc)}</div>` : ''}
+  <div style="border:1px solid #ccc;padding:8px;font-size:10px;color:#555;font-style:italic;text-align:center;margin-bottom:6px;">
+    Cualquier daño o extravío de los suministros será responsabilidad de la persona que lo recibió.
+  </div>
+  <div class="signatures">
+    <div class="sig-box"><br><br><div class="sig-line">AUTORIZA (Jefe de Área)</div></div>
+    <div class="sig-box"><br><br><div class="sig-line">SOLICITANTE</div></div>
+    <div class="sig-box"><br><br><div class="sig-line">JEFE DE BODEGA</div></div>
+  </div>
+</body></html>`);
+    win.document.close();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // SECCIÓN 6: PERSISTENCIA — DESPACHOS (vía RowModal de React)
+  // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * Punto de entrada al guardar. Valida, calcula los movimientos de inventario
+   * (Fase 3), y delega la persistencia al flujo de React.
+   */
+  async function guardarDespacho() {
+    if (!State.cliente || !String(State.cliente).trim()) {
+      toast('⚠ Ingresa el nombre del cliente', 'warn');
+      goStep(2);
+      const c = document.getElementById('dh-cliente');
+      if (c) { c.focus(); c.style.borderColor = '#dc2626'; }
+      return;
+    }
+    if (!State.fecha) {
+      toast('⚠ Ingresa la fecha del despacho', 'warn');
+      goStep(2);
+      return;
+    }
+
+    // Generar refRequisicion si no existe
+    if (!State.refRequisicion && Object.keys(State.qtys).length > 0) {
+      State.refRequisicion = 'REQ-' + Date.now().toString().slice(-6);
+    }
+
+    // Construir el objeto despacho final
+    const despacho = {
+      ...(State.editOriginal || {}),
+      fecha: State.fecha,
+      cliente: String(State.cliente).trim(),
+      area: String(State.area || '').trim(),
+      color: String(State.color || '').trim(),
+      instalador: String(State.instalador || '').trim(),
+      ciudad: State.ciudad,
+      estado: State.estado,
+      tipo: State.tipo || (State.editOriginal?.tipo) || 'Muebles/Herrajes',
+      // Campos extra (Fase 1)
+      herrajes:        { ...State.qtys },
+      herrPendDesc:    State.pendDesc || '',
+      reqProyecto:     State.reqProyecto || '',
+      reqArea:         State.reqArea || '',
+      reqSolicitante:  State.reqSolicitante || '',
+      reqMotivo:       State.reqMotivo || '',
+      refRequisicion:  State.refRequisicion || '',
+    };
+    // Limpiar __idx que podría venir del editOriginal
+    delete despacho.__idx;
+    delete despacho.__kind;
+
+    const editIdx = State.editIndex;
+    const editOriginal = State.editOriginal;
+
+    // FASE 3: calcular el plan de movimientos de inventario
+    const planInventario = calcularPlanInventario(editOriginal, despacho);
+
+    // Si hay advertencias de stock, mostrarlas pero seguir
+    if (planInventario.advertencias.length > 0 && !CONFIG.PERMITIR_STOCK_NEGATIVO) {
+      toast('⚠ Stock insuficiente: ' + planInventario.advertencias[0], 'error', 4500);
+      return;
+    }
+
+    closeModal();
+    showSavingOverlay(editIdx != null ? 'Guardando cambios…' : 'Guardando despacho…');
+
+    try {
+      // Persistir despacho via React
+      await persistirDespachoViaReact(despacho, editIdx);
+
+      // FASE 3: aplicar el plan de inventario
+      if (planInventario.tieneCambios) {
+        await aplicarPlanInventario(planInventario, despacho);
+      }
+
+      hideSavingOverlay();
+
+      const numHerrajes = Object.keys(despacho.herrajes).length;
+      const accion = editIdx != null ? 'actualizado' : 'guardado';
+      let msg = `✓ Despacho ${accion}`;
+      if (numHerrajes > 0) {
+        msg += ` con ${numHerrajes} herraje(s)`;
+      }
+      if (planInventario.advertencias.length > 0) {
+        toast(msg, 'ok');
+        setTimeout(() => {
+          toast('⚠ ' + planInventario.advertencias[0], 'warn', 5000);
+        }, 1200);
+      } else if (planInventario.tieneCambios) {
+        toast(msg + ' · Inventario actualizado', 'ok', 3500);
+      } else {
+        toast(msg, 'ok');
+      }
+    } catch (e) {
+      hideSavingOverlay();
+      err('Falló el guardado', e);
+      toast('⚠ Falló el guardado: ' + (e.message || 'error desconocido'), 'error', 5000);
+    }
+  }
+
+  function showSavingOverlay(msg = 'Guardando…') {
+    hideSavingOverlay();
+    const div = document.createElement('div');
+    div.className = 'dh-saving-overlay';
+    div.id = 'dh-saving-overlay';
+    div.innerHTML = `
+      <div class="dh-saving-card">
+        <div class="dh-spinner"></div>
+        <span>${escapeHTML(msg)}</span>
+      </div>`;
+    document.body.appendChild(div);
+  }
+  function hideSavingOverlay() {
+    document.getElementById('dh-saving-overlay')?.remove();
+  }
+
+  /**
+   * Persiste el despacho usando el RowModal de React invisible.
+   * Soporta tanto NUEVO como EDIT.
+   */
+  async function persistirDespachoViaReact(despacho, editIdx) {
+    const restoreFb = instalarInterceptorFbSave(despacho);
+    const restoreLs = instalarInterceptorLocalStorage(despacho);
+
+    let reactBtn;
+    if (editIdx == null) {
+      // NUEVO: clic en botón "+ Nuevo Despacho"
+      reactBtn = encontrarBotonNuevoDespacho();
+    } else {
+      // EDIT: clic en el botón "Editar" de la fila correspondiente
+      reactBtn = encontrarBotonEditarPorIndice(editIdx);
+    }
+
+    if (!reactBtn) {
+      restoreFb(); restoreLs();
+      throw new Error(editIdx != null
+        ? `No encontré el botón Editar de la fila ${editIdx + 1}. ¿Está visible en la tabla?`
+        : 'No encontré el botón "+ Nuevo Despacho"');
+    }
+
+    window.__dhAutoFlow = { despacho, editIdx };
+    document.body.classList.add('dh-autoflow');
+
+    simulateClick(reactBtn);
+
+    const modalReact = await waitFor(() => {
+      const heads = Array.from(document.querySelectorAll('h3'));
+      const re = editIdx != null ? /editar despacho/i : /nuevo despacho/i;
+      const h = heads.find(x => re.test(x.textContent));
+      if (!h) return null;
+      const root = h.closest('.bg-white.rounded-xl, [class*="rounded-xl"]');
+      return root && root.querySelector('form') ? root : null;
+    }, 2500);
+
+    if (!modalReact) {
+      delete window.__dhAutoFlow;
+      document.body.classList.remove('dh-autoflow');
+      restoreFb(); restoreLs();
+      throw new Error('El modal de React no apareció a tiempo');
+    }
+
+    rellenarRowModal(modalReact, despacho);
+
+    const form = modalReact.querySelector('form');
+    if (!form) {
+      delete window.__dhAutoFlow;
+      document.body.classList.remove('dh-autoflow');
+      restoreFb(); restoreLs();
+      throw new Error('Form del RowModal no encontrado');
+    }
+
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) simulateClick(submitBtn);
+    else if (typeof form.requestSubmit === 'function') form.requestSubmit();
+    else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+
+    await sleep(500);
+
+    delete window.__dhAutoFlow;
+    document.body.classList.remove('dh-autoflow');
+    restoreFb();
+    restoreLs();
+  }
+
+  function encontrarBotonNuevoDespacho() {
+    const buttons = Array.from(document.querySelectorAll('button'));
+    return buttons.find(b => {
+      const t = (b.textContent || '').trim();
+      const cls = b.className || '';
+      return /nuevo despacho/i.test(t) && /\+/.test(t) && /emerald|green|teal/i.test(cls);
+    }) || null;
+  }
+
+  /**
+   * Encuentra el botón "Editar" correspondiente al despacho en el índice dado.
+   * Estrategia: contar filas de la tabla que tengan botón "Editar" en
+   * la columna de acciones, en orden visual.
+   *
+   * NOTA: el índice puede no coincidir 1:1 con el orden visual si hay filtros
+   * activos en la tabla. Por eso usamos también una segunda heurística:
+   * buscar la fila cuyo cliente+fecha+area coincidan con State.editOriginal.
+   */
+  function encontrarBotonEditarPorIndice(idx) {
+    const orig = State.editOriginal;
+    if (!orig) return null;
+
+    // Estrategia 1: buscar por contenido (más robusta)
+    const rows = Array.from(document.querySelectorAll('tr'));
+    for (const tr of rows) {
+      const txt = (tr.textContent || '').trim();
+      if (!txt.includes(orig.cliente)) continue;
+      // Confirmar que es la fila correcta verificando area también
+      if (orig.area && !txt.includes(orig.area)) continue;
+      const editBtn = Array.from(tr.querySelectorAll('button'))
+        .find(b => /editar/i.test(b.textContent || ''));
+      if (editBtn) return editBtn;
+    }
+    return null;
+  }
+
+  function rellenarRowModal(root, d) {
+    const labelToValue = {
+      'fecha':       d.fecha,
+      'cliente':     d.cliente,
+      'área':        d.area,
+      'area':        d.area,
+      'color':       d.color,
+      'instalador':  d.instalador,
+      'ciudad':      d.ciudad,
+      'estado':      d.estado,
+    };
+    const wrappers = root.querySelectorAll('div');
+    wrappers.forEach(wr => {
+      const lbl = wr.querySelector(':scope > label');
+      if (!lbl) return;
+      const text = (lbl.textContent || '').trim().toLowerCase();
+      const val = labelToValue[text];
+      if (val == null) return;
+      const input = wr.querySelector('input, select, textarea');
+      if (!input) return;
+      setNativeValue(input, val);
+    });
+  }
+
+  /**
+   * Intercepta window._fbSave para inyectar campos extra en el despacho que
+   * React acaba de actualizar.
+   */
+  function instalarInterceptorFbSave(d) {
+    const original = window._fbSave;
+    if (typeof original !== 'function') return () => {};
+    let hecho = false;
+    window._fbSave = async function(docKey, payload) {
+      try {
+        if (!hecho && docKey === 'main' && payload && Array.isArray(payload.desp)) {
+          const idx = encontrarIndiceDespacho(payload.desp, d);
+          if (idx >= 0) {
+            payload.desp[idx] = inyectarCamposExtra(payload.desp[idx], d);
+            hecho = true;
+            log('Campos extra inyectados en _fbSave (idx', idx, ')');
+          }
+        }
+      } catch (e) {
+        warn('Interceptor _fbSave error', e);
+      }
+      return original.apply(this, arguments);
+    };
+    return () => { window._fbSave = original; };
+  }
+
+  function instalarInterceptorLocalStorage(d) {
+    const original = localStorage.setItem.bind(localStorage);
+    let hecho = false;
+    const wrapped = function(key, value) {
+      try {
+        if (!hecho && key === 'interiorshn_local_state_v1') {
+          const parsed = JSON.parse(value);
+          if (parsed?.main && Array.isArray(parsed.main.desp)) {
+            const idx = encontrarIndiceDespacho(parsed.main.desp, d);
+            if (idx >= 0) {
+              parsed.main.desp[idx] = inyectarCamposExtra(parsed.main.desp[idx], d);
+              hecho = true;
+              value = JSON.stringify(parsed);
+              log('Campos extra inyectados en localStorage (idx', idx, ')');
+            }
+          }
+        }
+      } catch (e) {
+        warn('Interceptor localStorage error', e);
+      }
+      return original(key, value);
+    };
+    localStorage.setItem = wrapped;
+    return () => { localStorage.setItem = original; };
+  }
+
+  function encontrarIndiceDespacho(arr, d) {
+    // Si estamos editando, buscar el despacho que corresponde a editOriginal
+    // pero que ya tiene los nuevos datos (cliente/fecha/area que pusimos).
+    // Sino (nuevo), el último que coincide y NO tiene herrajes.
+    const isEdit = State.editIndex != null;
+    if (isEdit) {
+      // En edit, el despacho ya estaba en el array y React lo "actualiza" (mismo idx).
+      // Como el RowModal hace n[t] = i con t = __idx, podemos buscar por nuevo dato.
+      for (let i = 0; i < arr.length; i++) {
+        const x = arr[i];
+        if (!x) continue;
+        if ((x.cliente || '').trim() === (d.cliente || '').trim() &&
+            (x.fecha   || '').trim() === (d.fecha   || '').trim() &&
+            (x.area    || '').trim() === (d.area    || '').trim()) {
+          return i;
+        }
+      }
+    } else {
+      for (let i = arr.length - 1; i >= 0; i--) {
+        const x = arr[i];
+        if (!x) continue;
+        if ((x.cliente || '').trim() === (d.cliente || '').trim() &&
+            (x.fecha   || '').trim() === (d.fecha   || '').trim() &&
+            (x.area    || '').trim() === (d.area    || '').trim() &&
+            !x.herrajes) {
+          return i;
+        }
+      }
+    }
+    return arr.length > 0 ? arr.length - 1 : -1;
+  }
+
+  function inyectarCamposExtra(existente, d) {
+    return {
+      ...existente,
+      herrajes:        d.herrajes || {},
+      herrPendDesc:    d.herrPendDesc || '',
+      reqProyecto:     d.reqProyecto || '',
+      reqArea:         d.reqArea || '',
+      reqSolicitante:  d.reqSolicitante || '',
+      reqMotivo:       d.reqMotivo || '',
+      refRequisicion:  d.refRequisicion || existente.refRequisicion || '',
+      // refMovs se setea en aplicarPlanInventario
+      refMovs:         d.refMovs || existente.refMovs || [],
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // SECCIÓN 7: FASE 3 — DESCUENTO AUTOMÁTICO DE INVENTARIO
+  // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * Calcula qué movimientos de inventario hay que crear/anular para reflejar
+   * el nuevo estado del despacho.
+   *
+   * - Si es NUEVO: crear movimientos SALIDA por cada herraje con cantidad > 0
+   * - Si es EDIT: anular los movimientos viejos (referenciados en refMovs)
+   *               y crear los nuevos
+   *
+   * Devuelve { tieneCambios, movsAnular, movsCrear, advertencias }
+   */
+  function calcularPlanInventario(editOriginal, despacho) {
+    const plan = {
+      tieneCambios: false,
+      movsAnular: [],          // IDs de movs a marcar anulados
+      movsCrear: [],           // movimientos nuevos a añadir
+      advertencias: [],        // warnings sobre stock insuficiente
+    };
+    const productos = getHerrajesProductos();
+    const productoMap = new Map(productos.map(p => [p.id, p]));
+    const ubicacionId = getUbicacionDefault();
+
+    // 1. Movimientos viejos a anular (solo si editamos)
+    if (editOriginal?.refMovs?.length) {
+      plan.movsAnular = [...editOriginal.refMovs];
+      plan.tieneCambios = true;
+    }
+
+    // 2. Calcular movimientos nuevos
+    const nuevos = despacho.herrajes || {};
+    const productoIds = Object.keys(nuevos).filter(pid => nuevos[pid] > 0);
+
+    if (productoIds.length === 0 && plan.movsAnular.length === 0) {
+      // Sin herrajes nuevos y sin viejos que anular
+      return plan;
+    }
+
+    if (productoIds.length === 0) {
+      // Solo anular viejos (caso: edit y se quitaron todos los herrajes)
+      plan.tieneCambios = true;
+      return plan;
+    }
+
+    // Para validar stock, simular: stock actual + lo que vamos a anular
+    const stockActual = {};
+    for (const pid of productoIds) {
+      let s = getStockProducto(pid);
+      // Sumar lo que regresará al inventario al anular movs viejos
+      if (editOriginal?.herrajes?.[pid]) {
+        s += editOriginal.herrajes[pid];
+      }
+      stockActual[pid] = s;
+    }
+
+    const fecha = nowISO();
+    const fechaDespacho = despacho.fecha || nowISO().slice(0, 10);
+    // Convertir despacho.fecha (DD/MM/YY o YYYY-MM-DD) a ISO
+    const fechaISO = toIsoDate(fechaDespacho);
+    const obs = `Despacho a ${despacho.cliente || '—'}${despacho.area ? ' · ' + despacho.area : ''}${despacho.refRequisicion ? ' · ' + despacho.refRequisicion : ''}`;
+
+    for (const pid of productoIds) {
+      const cantidad = nuevos[pid];
+      const prod = productoMap.get(pid);
+      if (!prod) {
+        plan.advertencias.push(`Producto ${pid} no encontrado en inventario, se omite`);
+        continue;
+      }
+      // Stock check
+      if (stockActual[pid] < cantidad) {
+        plan.advertencias.push(
+          `${prod.codigo} ${prod.descripcion}: stock=${stockActual[pid]}, solicitado=${cantidad} (déficit ${cantidad - stockActual[pid]})`
+        );
+      }
+      const mov = {
+        id: newId('mov'),
+        fecha: fechaISO || fecha,
+        tipo: CONFIG.TIPO_SALIDA,
+        productoId: pid,
+        ubicacionId: ubicacionId,
+        cantidad: cantidad,
+        costoUnitario: Number(prod.costoPromedio) || Number(prod.ultimoCosto) || 0,
+        costoTotal: cantidad * (Number(prod.costoPromedio) || Number(prod.ultimoCosto) || 0),
+        observacion: obs,
+        usuarioId: getCurrentUser() || 'logistica',
+        rol: 'logistica',
+        anulado: false,
+        // Refs para trazabilidad
+        refDespacho: {
+          cliente: despacho.cliente || '',
+          fecha: despacho.fecha || '',
+          area: despacho.area || '',
+        },
+        refRequisicion: despacho.refRequisicion || '',
+      };
+      plan.movsCrear.push(mov);
+    }
+
+    plan.tieneCambios = plan.movsAnular.length > 0 || plan.movsCrear.length > 0;
+    return plan;
+  }
+
+  function getCurrentUser() {
+    // Intenta deducir el usuario actual del DOM (esquina superior, badge, etc.)
+    // Es opcional, si no se encuentra usamos 'logistica' por defecto.
+    const candidatos = Array.from(document.querySelectorAll('span, div, button'))
+      .map(el => (el.textContent || '').trim())
+      .filter(t => /jorge|admin|jefe|log[ií]stica|ventas|operaciones|producci[óo]n/i.test(t))
+      .slice(0, 5);
+    return candidatos[0] || null;
+  }
+
+  /** Convierte una fecha DD/MM/YY o YYYY-MM-DD a ISO (YYYY-MM-DDT00:00:00.000Z) */
+  function toIsoDate(s) {
+    if (!s) return null;
+    const m1 = String(s).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m1) return `${m1[1]}-${m1[2]}-${m1[3]}T00:00:00.000Z`;
+    const m2 = String(s).match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+    if (m2) {
+      const yy = m2[3].length === 2 ? `20${m2[3]}` : m2[3];
+      return `${yy}-${m2[2]}-${m2[1]}T00:00:00.000Z`;
+    }
+    return null;
+  }
+
+  /**
+   * Aplica el plan calculado: muta inventario.movimientos y guarda.
+   * Además, actualiza el despacho con la lista de IDs de los nuevos movs
+   * (refMovs) para soportar reversión futura.
+   */
+  async function aplicarPlanInventario(plan, despacho) {
+    const inv = getInventario();
+    if (!inv) {
+      throw new Error('No se pudo leer el inventario');
+    }
+    const movs = Array.isArray(inv.movimientos) ? [...inv.movimientos] : [];
+
+    // 1. Anular movimientos viejos
+    let cAnulados = 0;
+    if (plan.movsAnular.length) {
+      const anularSet = new Set(plan.movsAnular);
+      for (let i = 0; i < movs.length; i++) {
+        if (anularSet.has(movs[i].id) && !movs[i].anulado) {
+          movs[i] = { ...movs[i], anulado: true, anuladoEn: nowISO(), anuladoPor: 'patch_despacho_edit' };
+          cAnulados++;
+        }
+      }
+    }
+
+    // 2. Añadir movimientos nuevos
+    movs.push(...plan.movsCrear);
+
+    // 3. Audit log
+    const audit = {
+      id: newId('aud'),
+      ts: nowISO(),
+      usuarioId: getCurrentUser() || 'logistica',
+      rol: 'logistica',
+      accion: plan.movsAnular.length ? 'EDIT_DESPACHO_HERRAJES' : 'CREATE_DESPACHO_HERRAJES',
+      entidad: 'movimientos',
+      entidadId: despacho.refRequisicion || '',
+      antes: { movsAnulados: plan.movsAnular.length },
+      despues: { movsCreados: plan.movsCrear.length },
+    };
+    const auditoria = [audit, ...(inv.auditoria || [])].slice(0, 5000);
+
+    const newInv = { ...inv, movimientos: movs, auditoria };
+
+    // 4. Persistir
+    // 4a. localStorage
+    try {
+      const raw = localStorage.getItem('interiorshn_local_state_v1');
+      const state = raw ? JSON.parse(raw) : {};
+      state.inventario = newInv;
+      // Bypass del interceptor que está activo
+      const realSetItem = Object.getPrototypeOf(localStorage).setItem ||
+                          Storage.prototype.setItem;
+      realSetItem.call(localStorage, 'interiorshn_local_state_v1', JSON.stringify(state));
+    } catch (e) {
+      warn('localStorage de inventario falló', e);
+    }
+
+    // 4b. Firebase
+    if (typeof window._fbSave === 'function') {
+      // Guardar bypaseando el interceptor que también está activo
+      // Como el interceptor solo actúa en docKey === 'main', llamar a 'inventario' es seguro
+      try {
+        await window._fbSave('inventario', newInv);
+      } catch (e) {
+        warn('Firebase _fbSave inventario falló', e);
+        // No lanzar, los datos quedaron en localStorage
+      }
+    }
+
+    // 5. Actualizar despacho con refMovs
+    despacho.refMovs = plan.movsCrear.map(m => m.id);
+    await actualizarRefMovsEnDespacho(despacho);
+
+    log(`Inventario actualizado: ${plan.movsCrear.length} salidas creadas, ${cAnulados} movs viejos anulados`);
+  }
+
+  /**
+   * Actualiza el array desp en main para añadir refMovs al despacho recién
+   * guardado. Necesitamos hacer este "post-procesamiento" porque refMovs
+   * solo se conoce DESPUÉS de aplicar el plan.
+   */
+  async function actualizarRefMovsEnDespacho(despacho) {
+    try {
+      const raw = localStorage.getItem('interiorshn_local_state_v1');
+      if (!raw) return;
+      const state = JSON.parse(raw);
+      if (!state.main || !Array.isArray(state.main.desp)) return;
+      const idx = encontrarIndiceDespacho(state.main.desp, despacho);
+      if (idx < 0) return;
+      state.main.desp[idx] = {
+        ...state.main.desp[idx],
+        refMovs: despacho.refMovs || [],
+      };
+      const realSetItem = Object.getPrototypeOf(localStorage).setItem ||
+                          Storage.prototype.setItem;
+      realSetItem.call(localStorage, 'interiorshn_local_state_v1', JSON.stringify(state));
+      if (typeof window._fbSave === 'function') {
+        try { await window._fbSave('main', state.main); }
+        catch (e) { warn('No se pudo actualizar refMovs en Firebase', e); }
+      }
+    } catch (e) {
+      warn('actualizarRefMovsEnDespacho falló', e);
+    }
+  }
+
+  /**
+   * Manejo del eliminar: revierte los movimientos asociados al despacho
+   * que se está eliminando.
+   */
+  async function revertirMovimientosDeDespacho(despacho) {
+    const refMovs = despacho?.refMovs;
+    if (!refMovs?.length) return; // Sin movs, nada que revertir
+
+    const inv = getInventario();
+    if (!inv) return;
+
+    const movs = [...(inv.movimientos || [])];
+    const set = new Set(refMovs);
+    let revertidos = 0;
+    for (let i = 0; i < movs.length; i++) {
+      if (set.has(movs[i].id) && !movs[i].anulado) {
+        movs[i] = { ...movs[i], anulado: true, anuladoEn: nowISO(), anuladoPor: 'patch_despacho_delete' };
+        revertidos++;
+      }
+    }
+    if (revertidos === 0) return;
+
+    const audit = {
+      id: newId('aud'),
+      ts: nowISO(),
+      usuarioId: getCurrentUser() || 'logistica',
+      rol: 'logistica',
+      accion: 'DELETE_DESPACHO_HERRAJES',
+      entidad: 'movimientos',
+      entidadId: despacho.refRequisicion || '',
+      despues: { movsAnulados: revertidos },
+    };
+    const auditoria = [audit, ...(inv.auditoria || [])].slice(0, 5000);
+    const newInv = { ...inv, movimientos: movs, auditoria };
+
+    // Persistir
+    try {
+      const raw = localStorage.getItem('interiorshn_local_state_v1');
+      const state = raw ? JSON.parse(raw) : {};
+      state.inventario = newInv;
+      localStorage.setItem('interiorshn_local_state_v1', JSON.stringify(state));
+    } catch (e) {}
+    if (typeof window._fbSave === 'function') {
+      try { await window._fbSave('inventario', newInv); } catch (e) {}
+    }
+    log(`Eliminación: ${revertidos} movimientos anulados`);
+    toast(`✓ Inventario restaurado (${revertidos} salidas anuladas)`, 'ok', 3000);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // SECCIÓN 8: APERTURA DEL MODAL (NEW Y EDIT)
+  // ─────────────────────────────────────────────────────────────────────
+
+  function abrirModalNuevoDespacho() {
+    State.step = 1;
+    State.qtys = {};
+    State.pendDesc = '';
+    State.reqProyecto = '';
+    State.reqArea = 'COCINA';
+    State.reqSolicitante = '';
+    State.reqMotivo = 'PROYECTO NUEVO';
+    State.fecha = new Date().toISOString().slice(0, 10);
+    State.cliente = '';
+    State.area = '';
+    State.color = '';
+    State.instalador = '';
+    State.ciudad = 'San Pedro Sula';
+    State.estado = 'Envio Completo';
+    State.tipo = 'Muebles/Herrajes';
+    State.editIndex = null;
+    State.editOriginal = null;
+    State.refRequisicion = null;
+    renderModal();
+  }
+
+  function abrirModalEditarDespacho(despacho, index) {
+    State.step = 1;
+    State.qtys = { ...(despacho.herrajes || {}) };
+    State.pendDesc = despacho.herrPendDesc || '';
+    State.reqProyecto = despacho.reqProyecto || '';
+    State.reqArea = despacho.reqArea || 'COCINA';
+    State.reqSolicitante = despacho.reqSolicitante || '';
+    State.reqMotivo = despacho.reqMotivo || 'PROYECTO NUEVO';
+    State.fecha = toIsoDateInput(despacho.fecha) || '';
+    State.cliente = despacho.cliente || '';
+    State.area = despacho.area || '';
+    State.color = despacho.color || '';
+    State.instalador = despacho.instalador || '';
+    State.ciudad = despacho.ciudad || 'San Pedro Sula';
+    State.estado = despacho.estado || 'Envio Completo';
+    State.tipo = despacho.tipo || 'Muebles/Herrajes';
+    State.editIndex = index;
+    State.editOriginal = { ...despacho };
+    State.refRequisicion = despacho.refRequisicion || null;
+    renderModal();
+  }
+
+  function toIsoDateInput(s) {
+    if (!s) return '';
+    const m1 = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m1) return `${m1[1]}-${m1[2]}-${m1[3]}`;
+    const m2 = String(s).match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+    if (m2) {
+      const yy = m2[3].length === 2 ? `20${m2[3]}` : m2[3];
+      return `${yy}-${m2[2]}-${m2[1]}`;
+    }
+    return '';
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // SECCIÓN 9: INTERCEPTORES DE CLICS (NEW / EDIT / DELETE)
+  // ─────────────────────────────────────────────────────────────────────
+
+  // Cache para detectar el despacho que se está eliminando justo cuando React
+  // muestra el modal de confirmación (necesitamos el dato antes de borrar).
+  let _pendingDelete = null;
+
+  document.addEventListener('click', (ev) => {
+    if (window.__dhAutoFlow) return;
+
+    let target = ev.target;
+    while (target && target !== document.body) {
+      if (target.tagName === 'BUTTON') break;
+      target = target.parentElement;
+    }
+    if (!target || target.tagName !== 'BUTTON') return;
+    const text = (target.textContent || '').trim();
+    const cls = target.className || '';
+
+    // ── Caso 1: "+ Nuevo Despacho" ──
+    if (/nuevo despacho/i.test(text)) {
+      const looksLikeAddButton = /emerald|green|teal/i.test(cls) && /\+/.test(text);
+      if (!looksLikeAddButton) {
+        const parentBar = target.closest('div');
+        const grand = parentBar?.parentElement;
+        const nearbyText = (grand?.textContent || '').toLowerCase();
+        if (!/clic.*ver herrajes|herrajes/i.test(nearbyText)) return;
+      }
+      ev.preventDefault();
+      ev.stopPropagation();
+      ev.stopImmediatePropagation();
+      abrirModalNuevoDespacho();
+      return;
+    }
+
+    // ── Caso 2: "Editar" en una fila de la tabla de despachos ──
+    if (/^editar$/i.test(text) && /brand-700|amber/i.test(cls)) {
+      // Verificar que está dentro de una fila <tr> de la tabla de despachos
+      const tr = target.closest('tr');
+      if (!tr) return;
+      // Heurística: la fila debe tener un botón × también (Eliminar)
+      const hasDelete = tr.querySelector('button')?.textContent?.includes('×') ||
+                        Array.from(tr.querySelectorAll('button')).some(b =>
+                          (b.textContent || '').trim() === '×');
+      if (!hasDelete) return;
+      // Capturar el texto de la fila para identificar el despacho
+      const cliente = tr.querySelector('td:nth-child(2)')?.textContent?.trim();
+      if (!cliente) return;
+      // Buscar el despacho en el array
+      const desps = getDespachos();
+      const candidatos = desps
+        .map((d, i) => ({ d, i }))
+        .filter(x => (x.d.cliente || '').trim() === cliente);
+      if (!candidatos.length) {
+        warn('No encontré el despacho en getDespachos() para cliente:', cliente);
+        return;
+      }
+      // Si hay múltiples, usar área también
+      let elegido = candidatos[0];
+      if (candidatos.length > 1) {
+        const area = tr.querySelector('td:nth-child(3)')?.textContent?.trim();
+        const fecha = tr.querySelector('td:nth-child(1)')?.textContent?.trim();
+        const better = candidatos.find(x =>
+          (x.d.area || '').trim() === area || (x.d.fecha || '').trim() === fecha);
+        if (better) elegido = better;
+      }
+
+      ev.preventDefault();
+      ev.stopPropagation();
+      ev.stopImmediatePropagation();
+      abrirModalEditarDespacho(elegido.d, elegido.i);
+      return;
+    }
+
+    // ── Caso 3: "×" Eliminar despacho ──
+    // El botón abre un ModalConfirm de React. Necesitamos capturar qué despacho
+    // se va a eliminar para revertir sus movimientos AL CONFIRMAR.
+    if (text === '×' && /rose-700|red/i.test(cls)) {
+      const tr = target.closest('tr');
+      if (!tr) return;
+      const cliente = tr.querySelector('td:nth-child(2)')?.textContent?.trim();
+      if (!cliente) return;
+      const desps = getDespachos();
+      const found = desps.find(d => (d.cliente || '').trim() === cliente);
+      if (found) {
+        _pendingDelete = { ...found };
+        log('Pending delete capturado:', cliente);
+      }
+      return; // dejar que React muestre el modal de confirmación
+    }
+
+    // ── Caso 4: Confirmar la eliminación en el ModalConfirm ──
+    if (/^eliminar$/i.test(text) && /rose|red/i.test(cls)) {
+      // Esto es el botón "Eliminar" del ModalConfirm (no el × de la fila).
+      // Si _pendingDelete está seteado, revertir movimientos después de que
+      // React procese el clic.
+      if (_pendingDelete) {
+        const toRevert = { ..._pendingDelete };
+        _pendingDelete = null;
+        // No interceptar — dejar que React elimine. Después revertimos.
+        setTimeout(() => {
+          revertirMovimientosDeDespacho(toRevert).catch(e =>
+            warn('Reversión falló', e));
+        }, 600);
+      }
+      return;
+    }
+
+    // ── Caso 5: cualquier "Cancelar" del ModalConfirm — limpiar pending ──
+    if (/^cancelar$/i.test(text)) {
+      _pendingDelete = null;
+    }
+  }, /* capture */ true);
+
+  // ─────────────────────────────────────────────────────────────────────
+  // INICIALIZACIÓN
+  // ─────────────────────────────────────────────────────────────────────
+
+  log('Patch v3 (Fases 1+2+3) activo. Inventario detectado:',
+      getHerrajesProductos().length, 'herrajes.');
+
+  // Exponer para debug manual
+  window.__dhPatch = {
+    abrirModalNuevo: abrirModalNuevoDespacho,
+    abrirModalEditar: abrirModalEditarDespacho,
+    getState: () => ({ ...State }),
+    getHerrajes: getHerrajesProductos,
+    getStock: getStockProducto,
+    getDespachos: getDespachos,
+    revertirMovs: revertirMovimientosDeDespacho,
+    config: CONFIG,
+    version: '3.0.0',
+  };
+})();
+
+</script>
+
 <!-- ==========================================================
      FIREBASE · Live sync (bridge por eventos · no toca React)
      ========================================================== -->
