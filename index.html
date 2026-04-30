@@ -2538,7 +2538,9 @@
           clientes_taller: Array.isArray(payload.clientes_taller) ? payload.clientes_taller : [],
           rpt:             Array.isArray(payload.rpt)             ? payload.rpt             : [],
         };
-        if (State.moduleVisible) renderActiveView();
+        if (State.moduleVisible && window.__pp3 && typeof window.__pp3.renderActiveView === 'function') {
+          window.__pp3.renderActiveView();
+        }
       } catch (e) { warn('parse payload fail', e); }
     });
   }
@@ -3258,6 +3260,8 @@
     if (typeof Chart === 'undefined') return;
     // Gráfico turno-máquina: usar la función reutilizable
     drawChartTurnoMaquina(D.corte || [], 'pp3-chart-tm', 'chartTurnoMaquina');
+
+    const palette = ['#0d9488', '#0891b2', '#b8860b', '#d97706', '#7c3aed'];
 
     // ── Cortes por máquina (existente) ──
     const mc = {};
@@ -4560,6 +4564,14 @@
       </div>
       ${renderGroup('VISTAS',   grouped['VISTAS'])}
       ${renderGroup('GESTIÓN',  grouped['GESTIÓN'])}
+      <div class="pp3-sb-group">
+        <div class="pp3-sb-group-title">PRODUCCIÓN · ENLACES</div>
+        <button class="pp3-sb-item" data-pp3-act="goto-expedientes" title="Salir a la vista de Expedientes (flujo) del dashboard">
+          <span class="pp3-sb-icon">📁</span>
+          <span>Expedientes (flujo)</span>
+          <span style="margin-left:auto;font-size:10px;opacity:.7;">↗</span>
+        </button>
+      </div>
       <div class="pp3-sb-foot">
         <div class="pp3-sb-foot-dot"></div>
         En vivo · Firebase
@@ -4637,6 +4649,24 @@
         const act = a.getAttribute('data-pp3-act');
         const idx = parseInt(a.getAttribute('data-pp3-idx'), 10);
         if (act === 'back')           hideHost();
+        else if (act === 'goto-expedientes') {
+          // Cierra el host y navega al módulo Expedientes (flujo) del dashboard real
+          hideHost();
+          setTimeout(() => {
+            // Buscar en el sidebar de React un botón/link que diga "Expedientes"
+            const sidebarItems = [...document.querySelectorAll('button, a')];
+            const expBtn = sidebarItems.find(el => {
+              if (el.closest && el.closest('#pp3-host')) return false;
+              const txt = (el.textContent || '').trim().toLowerCase();
+              return /expedientes/i.test(txt) && txt.length < 50;
+            });
+            if (expBtn) {
+              expBtn.click();
+            } else {
+              alert('No encontré el botón "Expedientes (flujo)" en el sidebar. Búscalo manualmente en el menú lateral.');
+            }
+          }, 100);
+        }
         else if (act === 'add-corte')   abrirNuevo('corte');
         else if (act === 'add-armado')  abrirNuevo('armado');
         else if (act === 'add-taller')  abrirNuevo('taller');
@@ -4739,6 +4769,9 @@
     State.moduleVisible = true;
     if (!State.activeView) State.activeView = 'resumen';
     renderActiveView();
+    // Polling: detectar cambios en PROD_DATA y re-renderizar
+    // Esto cubre el caso donde React carga los datos DESPUÉS del montaje del host
+    startDataPolling();
   }
 
   function hideHost() {
@@ -4746,6 +4779,35 @@
     if (host) host.classList.remove('open');
     document.body.classList.remove('pp3-locked');
     State.moduleVisible = false;
+    stopDataPolling();
+  }
+
+  // Polling que vigila cambios en PROD_DATA (por si React los actualiza)
+  let _dataPollTimer = null;
+  let _lastDataSig = '';
+  function dataSignature() {
+    const D = window.PROD_DATA || {};
+    return [
+      (D.corte || []).length,
+      (D.armado || []).length,
+      (D.clientes || []).length,
+      (D.clientes_taller || []).length,
+      (D.rpt || []).length,
+    ].join(':');
+  }
+  function startDataPolling() {
+    stopDataPolling();
+    _lastDataSig = dataSignature();
+    _dataPollTimer = setInterval(() => {
+      const sig = dataSignature();
+      if (sig !== _lastDataSig) {
+        _lastDataSig = sig;
+        if (State.moduleVisible) renderActiveView();
+      }
+    }, 500);
+  }
+  function stopDataPolling() {
+    if (_dataPollTimer) { clearInterval(_dataPollTimer); _dataPollTimer = null; }
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -4822,6 +4884,7 @@
     Object.assign(window.__pp3, {
       show: showHost, hide: hideHost,
       forceView: (key) => { State.activeView = key; if (!State.moduleVisible) showHost(); else renderActiveView(); },
+      renderActiveView,
       data: () => window.PROD_DATA,
       version: '3.0.0',
     });
