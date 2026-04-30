@@ -44,14 +44,14 @@
 <script src="app.min.js"></script>
 
 <!-- ============================================================
-     PATCH · DESPACHO CON HERRAJES v3.3
+     PATCH · DESPACHO CON HERRAJES v3.4
      ────────────────────────────────────────────────────────────
      Fase 1: Modal Nuevo Despacho con tabla de herrajes
      Fase 2: Editar despacho con herrajes
      Fase 3: Salida automática de inventario (SALIDA_VENTA)
      Detalle: Clic en fila → ver herrajes enviados/pendientes
-     v3.3: Fix robusto del usuarioId (NO toca DOM) + AUTO-reparación
-           al cargar (sin acción del usuario)
+     v3.4: Detección de filas mejorada (busca por nombre de cliente)
+           + Visual feedback (cursor pointer + hover) en filas
      ============================================================ -->
 <script>
 /* ════════════════════════════════════════════════════════════════════════════
@@ -2067,47 +2067,162 @@
       cur = cur.parentElement;
     }
 
-    // El clic debe estar en una fila <tr> de la tabla de despachos
+    // El clic debe estar en una fila <tr> de una tabla
     const tr = target.closest ? target.closest('tr') : null;
     if (!tr) return;
 
     // No abrir si la fila está en un <thead>
     if (tr.closest('thead')) return;
 
-    // Necesita tener al menos botón "Editar" o "×" cerca para considerarse
-    // una fila con datos editables (filtra encabezados, filas de totales, etc.)
-    const hasEditButton = Array.from(tr.querySelectorAll('button')).some(b =>
-      /editar/i.test(b.textContent || ''));
-    if (!hasEditButton) return;
+    // Validación: la fila debe tener al menos 4 celdas (las tablas pequeñas
+    // de filtros, KPIs, etc. tienen menos columnas y no nos interesan)
+    const cells = tr.querySelectorAll('td');
+    if (cells.length < 4) return;
 
-    // Identificar el despacho por el contenido de la fila
-    const cliente = tr.querySelector('td:nth-child(2)')?.textContent?.trim();
-    if (!cliente) return;
-
+    // Identificar qué celda tiene el cliente. Estrategia:
+    // 1. Buscar la PRIMERA celda cuyo texto coincida con un cliente conocido
+    //    de los despachos. Esto es lo más robusto: no depende de qué columna
+    //    sea (que puede variar por orden de columnas, vista, etc.)
     const desps = getDespachos();
+    if (!desps.length) return;
+
+    // Conjunto de clientes (para búsqueda rápida)
+    const clientesSet = new Set(desps.map(d => (d.cliente || '').trim()).filter(Boolean));
+
+    let clienteEncontrado = null;
+    for (let i = 0; i < cells.length; i++) {
+      const txt = (cells[i].textContent || '').trim();
+      if (clientesSet.has(txt)) {
+        clienteEncontrado = txt;
+        break;
+      }
+    }
+
+    if (!clienteEncontrado) {
+      // No es una fila de despachos
+      return;
+    }
+
+    // Ahora desambiguar: filtrar por cliente y luego por fecha o área
     const candidatos = desps
       .map((d, i) => ({ d, i }))
-      .filter(x => (x.d.cliente || '').trim() === cliente);
+      .filter(x => (x.d.cliente || '').trim() === clienteEncontrado);
+
     if (!candidatos.length) return;
 
-    // Si hay múltiples del mismo cliente, usar área y fecha para desambiguar
     let elegido = candidatos[0];
     if (candidatos.length > 1) {
-      const area = tr.querySelector('td:nth-child(3)')?.textContent?.trim();
-      const fechaTxt = tr.querySelector('td:nth-child(1)')?.textContent?.trim();
-      const better = candidatos.find(x => {
-        const sameArea = (x.d.area || '').trim() === area;
-        const sameFechaCorta = formatearFechaCorta(x.d.fecha) === fechaTxt;
-        return sameArea && sameFechaCorta;
-      }) || candidatos.find(x => (x.d.area || '').trim() === area);
-      if (better) elegido = better;
+      // Recoger todos los textos de las celdas para hacer match con fecha y área
+      const cellTexts = Array.from(cells).map(c => (c.textContent || '').trim());
+
+      // Buscar candidato cuyo área Y fecha coincidan con alguna celda de la fila
+      const matchExacto = candidatos.find(x => {
+        const area = (x.d.area || '').trim();
+        const fechaCorta = formatearFechaCorta(x.d.fecha);
+        return cellTexts.includes(area) && cellTexts.includes(fechaCorta);
+      });
+      if (matchExacto) {
+        elegido = matchExacto;
+      } else {
+        // Fallback: solo área
+        const matchArea = candidatos.find(x => {
+          const area = (x.d.area || '').trim();
+          return area && cellTexts.includes(area);
+        });
+        if (matchArea) elegido = matchArea;
+      }
     }
+
+    log('Clic en fila → abriendo detalle:', elegido.d.cliente, elegido.d.area);
 
     // Abrir el modal de detalle
     ev.preventDefault();
     ev.stopPropagation();
     mostrarDetalleHerrajes(elegido.d, elegido.i);
   }, /* capture */ false);
+
+  // ── VISUAL FEEDBACK: añadir cursor pointer a las filas de despachos ──
+  // El dashboard de React no marca las filas como clickeables, pero ahora sí lo son.
+  // Usamos un MutationObserver que detecta filas nuevas en el DOM y las marca.
+  (function setupRowVisualFeedback() {
+    const styleId = 'dh-row-cursor-style';
+    if (!document.getElementById(styleId)) {
+      const s = document.createElement('style');
+      s.id = styleId;
+      s.textContent = `
+        tbody tr.dh-clickable { cursor: pointer; transition: background-color .12s; }
+        tbody tr.dh-clickable:hover { background-color: #f0fdfa !important; }
+      `;
+      document.head.appendChild(s);
+    }
+
+    let lastDespCount = 0;
+    let clientesCache = new Set();
+    function refreshClientesCache() {
+      const desps = getDespachos();
+      if (desps.length !== lastDespCount) {
+        lastDespCount = desps.length;
+        clientesCache = new Set(desps.map(d => (d.cliente || '').trim()).filter(Boolean));
+      }
+    }
+
+    function marcarFilas() {
+      refreshClientesCache();
+      if (clientesCache.size === 0) return;
+      // Buscar todas las filas de tablas y marcar las que tienen un cliente conocido
+      const trs = document.querySelectorAll('tbody tr');
+      for (const tr of trs) {
+        if (tr.classList.contains('dh-clickable')) continue;
+        if (tr.classList.contains('dh-clickable-checked')) continue;
+        const cells = tr.querySelectorAll('td');
+        if (cells.length < 4) {
+          tr.classList.add('dh-clickable-checked');
+          continue;
+        }
+        let isDespacho = false;
+        for (const c of cells) {
+          const txt = (c.textContent || '').trim();
+          if (clientesCache.has(txt)) {
+            isDespacho = true;
+            break;
+          }
+        }
+        if (isDespacho) tr.classList.add('dh-clickable');
+        tr.classList.add('dh-clickable-checked');
+      }
+    }
+
+    // Re-marcar cada vez que cambie el DOM (filtros, paginación, etc.)
+    const observer = new MutationObserver(() => {
+      // Throttle: solo re-marcar después de un pequeño delay
+      clearTimeout(observer._t);
+      observer._t = setTimeout(marcarFilas, 200);
+    });
+
+    // Esperar a que body esté disponible
+    function start() {
+      if (document.body) {
+        observer.observe(document.body, { childList: true, subtree: true });
+        marcarFilas();
+      } else {
+        setTimeout(start, 100);
+      }
+    }
+    start();
+
+    // Re-evaluar cuando cambian los despachos en localStorage (Firebase sync)
+    setInterval(() => {
+      const desps = getDespachos();
+      if (desps.length !== lastDespCount) {
+        // Limpiar marcas para re-procesar
+        document.querySelectorAll('.dh-clickable-checked').forEach(el => {
+          el.classList.remove('dh-clickable-checked');
+          el.classList.remove('dh-clickable');
+        });
+        marcarFilas();
+      }
+    }, 3000);
+  })();
 
   // ════════════════════════════════════════════════════════════════════════
   // ESTILOS adicionales para el modal de detalle
@@ -2338,7 +2453,7 @@
   // LOG INICIAL + AUTO-REPARACIÓN + LISTENER + EXPOSICIÓN PÚBLICA
   // ─────────────────────────────────────────────────────────────────────
 
-  log('Patch v3.3 (Fases 1+2+3 + Detalle + Auto-Fix usuario) activo. Inventario detectado:',
+  log('Patch v3.4 (Detección de filas mejorada + visual feedback) activo. Inventario detectado:',
       getHerrajesProductos().length, 'herrajes.');
 
   // Auto-reparación al cargar: arregla movimientos dañados sin que el usuario
@@ -2368,7 +2483,7 @@
     getDespachos: getDespachos,
     revertirMovs: revertirMovimientosDeDespacho,
     config: CONFIG,
-    version: '3.3.0',
+    version: '3.4.0',
   };
 })();
 
