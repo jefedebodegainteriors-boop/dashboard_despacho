@@ -44,14 +44,14 @@
 <script src="app.min.js"></script>
 
 <!-- ============================================================
-     PATCH · DESPACHO CON HERRAJES v3.4
+     PATCH · DESPACHO CON HERRAJES v3.5
      ────────────────────────────────────────────────────────────
      Fase 1: Modal Nuevo Despacho con tabla de herrajes
      Fase 2: Editar despacho con herrajes
      Fase 3: Salida automática de inventario (SALIDA_VENTA)
      Detalle: Clic en fila → ver herrajes enviados/pendientes
-     v3.4: Detección de filas mejorada (busca por nombre de cliente)
-           + Visual feedback (cursor pointer + hover) en filas
+     v3.5: Cache de Firebase via evento `db-update` + fallback DOM
+           (necesario porque main no se guarda en localStorage)
      ============================================================ -->
 <script>
 /* ════════════════════════════════════════════════════════════════════════════
@@ -132,31 +132,122 @@
   // SECCIÓN 1: ACCESO A INVENTARIO (lectura)
   // ─────────────────────────────────────────────────────────────────────
 
+  // ─────────────────────────────────────────────────────────────────────
+  // SECCIÓN 1: ACCESO A INVENTARIO Y MAIN (lectura)
+  // ─────────────────────────────────────────────────────────────────────
+  //
+  // Estrategia robusta para acceder a los datos:
+  //  1. Cache interno alimentado por el evento `db-update` que Firebase
+  //     dispara cuando llegan datos en vivo. Esta es la fuente PRIMARIA.
+  //  2. Fallback a localStorage (para modo offline o entre cargas).
+  //
+  // De esta forma funciona tanto si el usuario tiene Firebase activo
+  // (que NO escribe a localStorage hasta el primer setItem) como en
+  // modo offline.
+  // ─────────────────────────────────────────────────────────────────────
+
+  const _cache = {
+    main: null,           // último payload de 'main' recibido
+    inventario: null,     // último payload de 'inventario' recibido
+    produccion: null,
+    operaciones: null,
+  };
+
+  // Listener global para capturar TODOS los snapshots de Firebase
+  document.addEventListener('db-update', (ev) => {
+    const detail = ev.detail;
+    if (!detail || !detail.key || !detail.payload) return;
+    if (detail.key in _cache) {
+      _cache[detail.key] = detail.payload;
+      // Para debug
+      if (detail.key === 'main' && Array.isArray(detail.payload.desp)) {
+        // log(`Cache 'main' actualizado: ${detail.payload.desp.length} despachos`);
+      }
+    }
+  });
+
   function getInventario() {
+    // Cache primero
+    if (_cache.inventario) return _cache.inventario;
+    // Fallback localStorage
     try {
       const raw = localStorage.getItem('interiorshn_local_state_v1');
       if (!raw) return null;
       return JSON.parse(raw)?.inventario || null;
     } catch (e) {
-      err('No se pudo leer inventario de localStorage', e);
+      err('No se pudo leer inventario', e);
       return null;
     }
   }
 
   function getMain() {
+    // Cache primero
+    if (_cache.main) return _cache.main;
+    // Fallback localStorage
     try {
       const raw = localStorage.getItem('interiorshn_local_state_v1');
       if (!raw) return null;
       return JSON.parse(raw)?.main || null;
     } catch (e) {
-      err('No se pudo leer main de localStorage', e);
+      err('No se pudo leer main', e);
       return null;
     }
   }
 
   function getDespachos() {
     const m = getMain();
-    return Array.isArray(m?.desp) ? m.desp : [];
+    if (Array.isArray(m?.desp) && m.desp.length > 0) return m.desp;
+
+    // Último fallback: parsear las filas visibles del DOM
+    // Esto es útil cuando el cache aún no se ha llenado y localStorage está vacío
+    return getDespachosFromDOM();
+  }
+
+  /**
+   * Lee los despachos visibles parseando la tabla del DOM.
+   * Útil como fallback cuando no tenemos cache ni localStorage.
+   * Solo recupera campos básicos (cliente, area, fecha, ciudad, etc.) — los
+   * herrajes NO están en el DOM, así que el modal mostrará "sin herrajes".
+   */
+  function getDespachosFromDOM() {
+    const desps = [];
+    const tablas = document.querySelectorAll('table');
+    for (const tabla of tablas) {
+      // Detectar si es la tabla de despachos por sus headers
+      const headers = Array.from(tabla.querySelectorAll('thead th'))
+        .map(th => (th.textContent || '').trim().toLowerCase());
+      const idxFecha = headers.findIndex(h => h === 'fecha');
+      const idxCliente = headers.findIndex(h => h === 'cliente');
+      const idxArea = headers.findIndex(h => h === 'área' || h === 'area');
+      // Necesita al menos fecha + cliente para considerarse tabla de despachos
+      if (idxFecha < 0 || idxCliente < 0) continue;
+      const idxColor = headers.findIndex(h => h === 'color');
+      const idxInst = headers.findIndex(h => h === 'instalador');
+      const idxCiudad = headers.findIndex(h => h === 'ciudad');
+      const idxTipo = headers.findIndex(h => h === 'tipo');
+      const idxEstado = headers.findIndex(h => h === 'estado');
+
+      const trs = tabla.querySelectorAll('tbody tr');
+      for (const tr of trs) {
+        const tds = tr.querySelectorAll('td');
+        if (tds.length < 2) continue;
+        const cliente = (tds[idxCliente]?.textContent || '').trim();
+        if (!cliente) continue;
+        desps.push({
+          fecha: (tds[idxFecha]?.textContent || '').trim(),
+          cliente: cliente,
+          area: idxArea >= 0 ? (tds[idxArea]?.textContent || '').trim() : '',
+          color: idxColor >= 0 ? (tds[idxColor]?.textContent || '').trim() : '',
+          instalador: idxInst >= 0 ? (tds[idxInst]?.textContent || '').trim() : '',
+          ciudad: idxCiudad >= 0 ? (tds[idxCiudad]?.textContent || '').trim() : '',
+          tipo: idxTipo >= 0 ? (tds[idxTipo]?.textContent || '').trim() : '',
+          estado: idxEstado >= 0 ? (tds[idxEstado]?.textContent || '').trim() : '',
+          herrajes: {}, // No disponibles desde el DOM
+          _fromDOM: true,
+        });
+      }
+    }
+    return desps;
   }
 
   function getHerrajesProductos() {
@@ -1824,7 +1915,19 @@
   // ════════════════════════════════════════════════════════════════════════
 
   function mostrarDetalleHerrajes(despacho, indexEnArray) {
-    if (!despacho) return;
+    if (!despacho) {
+      err('mostrarDetalleHerrajes llamado sin despacho');
+      return;
+    }
+    log('Abriendo detalle:', {
+      cliente: despacho.cliente,
+      area: despacho.area,
+      fecha: despacho.fecha,
+      herrajes: despacho.herrajes,
+      herrPendDesc: despacho.herrPendDesc,
+      herrPendEntregado: despacho.herrPendEntregado,
+      indexEnArray
+    });
     cerrarDetalleHerrajes(); // por si ya hay uno abierto
     injectStyles();
 
@@ -2453,7 +2556,7 @@
   // LOG INICIAL + AUTO-REPARACIÓN + LISTENER + EXPOSICIÓN PÚBLICA
   // ─────────────────────────────────────────────────────────────────────
 
-  log('Patch v3.4 (Detección de filas mejorada + visual feedback) activo. Inventario detectado:',
+  log('Patch v3.5 (Cache Firebase + fallback DOM) activo. Inventario detectado:',
       getHerrajesProductos().length, 'herrajes.');
 
   // Auto-reparación al cargar: arregla movimientos dañados sin que el usuario
@@ -2483,7 +2586,7 @@
     getDespachos: getDespachos,
     revertirMovs: revertirMovimientosDeDespacho,
     config: CONFIG,
-    version: '3.4.0',
+    version: '3.5.0',
   };
 })();
 
